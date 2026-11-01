@@ -701,7 +701,7 @@ def check_rows(a, units_n):
             ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
             ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
             ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
-            ('cpu', 'Engine', cloud.label(a['engine'] or (config.model_name() if config.local_model_enabled() else 'claude:' + cloud.CLAUDE_MODELS[0][0])))]
+            ('cpu', 'Engine', cloud.label(a['engine'] or (config.model_name() if config.local_model_enabled() else 'claude:' + cloud.CLAUDE_MODELS[0][0] if cloud.available() or not cloud.login_available() else 'claudecode:' + cloud.LOGIN_MODELS[0][0])))]
 
 
 def check_context(a, step):
@@ -732,7 +732,7 @@ def check_context(a, step):
         if not local:
             ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
         ctx['local_enabled'] = local
-        ctx['engine'] = a['engine'] or (config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0])
+        ctx['engine'] = a['engine'] or (config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0] if cloud.available() or not cloud.login_available() else 'claudecode:' + cloud.LOGIN_MODELS[0][0])
         ctx['model_server_up'] = bool(models) if local else True
         ctx['cloud_ready'] = cloud.available()
         ctx['login_offered'] = cloud.login_offered()

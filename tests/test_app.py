@@ -3450,6 +3450,20 @@ class Workplaces(AppCase):
             r = self.post(aid, 'step/4', channel=place)
             self.assertEqual((r.headers['location'], self.store.get_analysis(aid)['channel']), (f'/analysis/{aid}/step/5', place))
 
+    def test_the_one_click_starts_for_your_claude_login_need_no_ollama_and_no_key(self):
+        mac = (ROOT / 'run_claude_mac.command').read_text()
+        windows = (ROOT / 'run_claude_windows.bat').read_text()
+        for script in (mac, windows):
+            self.assertIn('FELIXA_NO_LOCAL_MODEL=1', script)
+            self.assertIn('claude', script)
+            self.assertIsNone(re.search(r'\bollama\s+(list|pull|serve|run)|where ollama|command -v ollama', script.lower()))      # it never calls Ollama
+            self.assertIn('https://claude.com/claude-code', script)
+            self.assertNotIn('FELIXA_ANTHROPIC_API_KEY=sk', script)
+        self.assertIn('unset ANTHROPIC_API_KEY FELIXA_ANTHROPIC_API_KEY', mac)                       # it uses the login, not a key left in the shell
+        self.assertTrue(os.access(ROOT / 'run_claude_mac.command', os.X_OK))
+        if shutil.which('bash'):
+            self.assertEqual(subprocess.run(['bash', '-n', str(ROOT / 'run_claude_mac.command')], capture_output=True).returncode, 0)
+
     def test_the_old_success_metric_step_is_gone(self):
         aid = self.new_analysis()
         for text in (self.client.get(f'/analysis/{aid}/step/4').text, self.client.get(f'/analysis/{aid}/workspace').text):
@@ -3581,7 +3595,7 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/check/6').text
         for needle in ('qwen2.5:7b', 'llama3.2:3b', 'Default', 'model calls for 76 messages', '3.2B parameters', 'About', 'Cost: none'):
             self.assertIn(needle, page)
-        self.assertEqual(page.count('name="engine"'), 8)                                 # two local models and three Claude models
+        self.assertEqual(page.count('name="engine"'), 5)                                 # two local models and the three of your Claude login: no key, so no key section
         self.fake.models_used.clear()
         job = self.run_job(aid, path='check/6', engine='llama3.2:3b')
         self.assertEqual(job['status'], 'complete', job)
@@ -3649,6 +3663,9 @@ class Workplaces(AppCase):
 
     def test_claude_engines_are_listed_but_off_until_the_server_has_a_key(self):
         self.no_claude_env()
+        patched = mock.patch.dict(os.environ, {'FELIXA_CLAUDE_LOGIN': '0'})                        # a server: no personal login to fall back on
+        patched.start()
+        self.addCleanup(patched.stop)
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/check/6').text
         for needle in ('Claude, in the cloud', 'Free while testing', 'Claude Haiku 5.5', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'FELIXA_ANTHROPIC_API_KEY',
@@ -3660,6 +3677,26 @@ class Workplaces(AppCase):
         self.assertIn('not set up on this server', flash(r))
         self.assertIsNone(self.store.latest_job(aid))
         self.assertFalse(self.client.get('/health').json()['claude_ready'])
+
+    def test_the_key_section_is_left_out_when_there_is_no_key_and_your_login_is_there(self):
+        aid = self.with_chat()
+        self.no_claude_env()
+        self.fake_claude()
+        os.environ.pop('FELIXA_ANTHROPIC_API_KEY', None)
+        page = self.client.get(f'/analysis/{aid}/check/6').text
+        self.assertNotIn('Claude, in the cloud', page)
+        self.assertNotIn('FELIXA_ANTHROPIC_API_KEY', page)
+        self.assertNotIn('Claude is not set up on this server yet', page)
+        self.assertIn('Your Claude login', page)
+        with self.claude_env():                                                                       # with a key, both are offered
+            both = self.client.get(f'/analysis/{aid}/check/6').text
+            self.assertIn('Claude, in the cloud', both)
+            self.assertIn('Your Claude login', both)
+        with mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1'}):                            # the one-click start: only your login, chosen from the start
+            only = self.client.get(f'/analysis/{aid}/check/6').text
+            self.assertRegex(only, r'name="engine" value="claudecode:haiku" checked')
+            self.assertEqual(only.count('name="engine"'), 3)
+            self.assertIn('Claude Haiku (your Claude login)', only)
 
     def test_claude_needs_the_box_ticked_and_a_known_model_before_anything_is_sent(self):
         aid = self.with_chat()

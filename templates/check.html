@@ -53,10 +53,11 @@
 {% if local_enabled and not model_server_up %}<div class="notice warn">The model server is not answering. Start Ollama, then reload this page.</div>{% endif %}
 <form method="post"><fieldset class="group"><legend class="sr-only">Engine</legend>
 {% if local_enabled %}<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>{% endif %}
-<h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
+{% if cloud_ready or not login_offered %}<h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
 <p class="small-note">Claude runs on Anthropic's servers, through the key set on this server, so it costs you nothing while you test. It reads more carefully and answers faster than a small local model, but your messages leave this computer to be read.{% if not incognito %} Turn on Incognito (step 3) first if the messages hold names.{% endif %}</p>
 {% if not cloud_ready %}<div class="notice warn">Claude is not set up on this server yet. Set <code>FELIXA_ANTHROPIC_API_KEY</code> and restart the app to turn it on.</div>{% endif %}
 <div class="engine-list">{% for e in engines if e.kind == 'cloud' %}{{ engine_card(e) }}{% endfor %}</div>
+{% endif %}
 {% if login_offered %}<h2 class="mini-h">Your Claude login <em class="badge">Testing, no key</em></h2>
 <p class="small-note">This asks the Claude Code program on this computer, signed in as you, so no key is needed. It is slower, because the program starts again for every step, and it counts against your own Claude usage. Your messages go to Anthropic to be read, as with the cloud engines. It works only while this app runs on your own computer.</p>
 {% if not login_ready %}<div class="notice warn">Claude Code was not found on this computer. Install <a href="https://claude.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a>, run <code>claude</code> once in a terminal to sign in, then reload this page.</div>{% endif %}
