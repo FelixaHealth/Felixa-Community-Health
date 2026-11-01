@@ -1,0 +1,35 @@
+{% from "_icons.html" import icon %}<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{{ product }}{% endblock %}</title>
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
+</head><body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+<a class="brand" href="/"><img class="brand-logo" src="/static/logo_wide.png" alt="Felixa Community Health" width="142" height="52"></a>
+<nav class="topnav" aria-label="Site">
+<button class="navlink" type="button" data-help-open>{{ icon('help') }}<span>How to read this</span></button>
+<a class="navlink" href="/new">{{ icon('plus') }}<span>New workplace</span></a>
+<button class="navlink" type="button" id="theme-toggle" aria-pressed="false">{{ icon('moon') }}<span>Theme</span></button>
+</nav>
+</header>
+<div class="privacy-bar no-print">{{ icon('lock') }}<span><strong>Runs on your computer.</strong> Nothing leaves it unless you choose a cloud engine and tick the box.</span></div>
+<main class="page" id="main">
+{% if msg %}<div class="flash" id="flash" role="alert" tabindex="-1">{{ msg }}</div>{% endif %}
+{% block content %}{% endblock %}
+</main>
+<button class="help-fab no-print" type="button" data-help-open>{{ icon('chat') }}<span>Help</span></button>
+<dialog class="help-dialog no-print" id="help-dialog" aria-labelledby="help-title">
+<div class="help-head"><h2 id="help-title">How to read this</h2><button class="icon-btn" type="button" data-help-close aria-label="Close">{{ icon('close') }}</button></div>
+<div class="help-body">
+<h3>What it does</h3>
+<p>Felixa Community Health reads how people in a community or team talk to each other and shows how healthy the conversation feels. You describe your workplace once, then run a new check whenever you have new messages.</p>
+<h3>What you see</h3>
+<p>Each message is scored from 0 to 3 for 13 tones, such as polite, encouraging, sarcastic or rude. Vibe Check adds an overall friendliness score out of 10, quotes the messages that need attention, and shows whether the mood is rising or falling over time.</p>
+<h3>Where your messages go</h3>
+<p>A model on this computer reads them and they stay in this app's database until you delete them. Only if you choose a Claude engine and tick the box do they go to Anthropic, and only to be read. Turn on Incognito first to take names out.</p>
+<h3>How much to trust it</h3>
+<p>A language model makes the judgement calls, and trained human raters have not yet checked them. Use the results to start a conversation, never to judge a person.</p>
+</div></dialog>
+<script src="/static/app.js?v={{ asset_v }}" defer></script>
+</body></html>

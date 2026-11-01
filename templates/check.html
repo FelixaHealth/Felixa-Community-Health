@@ -1,0 +1,66 @@
+{% extends "base.html" %}{% from "_icons.html" import icon, dropzone %}{% block title %}Felixa Community Health — New check, step {{ step }} of {{ last }}{% endblock %}
+{% macro engine_card(e) %}<label class="engine"><input type="radio" name="engine" value="{{ e.name }}" {% if e.name == engine %}checked{% endif %} {% if not e.installed %}disabled{% endif %}><span><b>{{ e.label }}</b>{% if e.default %} <em class="badge">Default</em>{% endif %}<small>{{ e.size }}{% if e.kind == 'local' and not e.installed %} · not downloaded: run <code>ollama pull {{ e.name }}</code>{% elif e.kind == 'cloud' and not e.installed %} · needs a key on the server{% endif %}</small></span>
+<span class="est"><strong>{{ e.estimate.text }}</strong><small>{{ '{:,}'.format(e.estimate.total) }} model calls for {{ '{:,}'.format(e.estimate.messages) }} messages</small></span></label>{% endmacro %}
+{% block content %}
+<div class="shell three">{% include "_rail.html" %}
+<section class="question-card">
+<div class="eyebrow">New check · Step {{ step }} of {{ last }}</div>
+{% if step == 1 %}
+<h1>Add what people have said</h1><p class="lead">Bring in the messages you want checked, in whichever way is easiest. You can use more than one.</p>
+<div class="tabs">
+<input class="tab-radio" type="radio" name="tab" id="t-file" checked><input class="tab-radio" type="radio" name="tab" id="t-paste"><input class="tab-radio" type="radio" name="tab" id="t-voice"><input class="tab-radio" type="radio" name="tab" id="t-link">
+<div class="tab-bar" role="presentation"><label for="t-file">{{ icon('upload') }} File</label><label for="t-paste">{{ icon('file') }} Paste text</label><label for="t-voice">{{ icon('mic') }} Voice</label><label for="t-link">{{ icon('link') }} From a link</label></div>
+<div class="tab-panels">
+<div class="tab-panel" id="p-file"><form method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="check">{{ dropzone() }}
+<p class="small-note">Chat exports, spreadsheets, transcripts and documents: {{ extensions }}. A CSV needs a text, comment, content, message or transcript column. A channel or source column splits one file into separate sources. A file identical to one already added is skipped. A file may be up to {{ max_file_mb }} MB, and one upload {{ max_upload_mb }} MB in all.</p><button class="btn primary">Add files</button></form></div>
+<div class="tab-panel" id="p-paste"><form method="post" action="/analysis/{{ a.id }}/add-text"><input type="hidden" name="back" value="check"><label class="field">Paste messages, one per line<textarea name="raw_text" placeholder="Paste a chat, comments or replies here…"></textarea></label><button class="btn primary">Add text</button></form></div>
+<div class="tab-panel" id="p-voice"><form method="post" action="/analysis/{{ a.id }}/add-voice" enctype="multipart/form-data"><input type="hidden" name="back" value="check">{{ dropzone(name='files', accept=audio, title='Drop a recording here, or click to choose', chips=['MP3', 'WAV', 'M4A', 'OGG', 'FLAC'], icon_name='mic') }}
+<p class="small-note">{% if voice_ok %}Recordings are turned into text on this computer, then checked like any other message.{% else %}Turning speech into text needs an add-on that is not installed on this computer yet: <code>pip install faster-whisper</code>. Until then, add a transcript as a file or paste it.{% endif %}</p><button class="btn primary" {% if not voice_ok %}disabled{% endif %}>Add recordings</button></form></div>
+<div class="tab-panel" id="p-link"><form method="post" action="/analysis/{{ a.id }}/add-link"><input type="hidden" name="back" value="check"><label class="field">Web addresses, one per line (up to 5)<textarea name="links" placeholder="https://example.com/community/thread"></textarea></label>
+<p class="small-note">Felixa Community Health fetches each public page from the internet and reads the text the page contains. That is the only time it connects outside this computer. Comments that a page loads with scripts after it opens (YouTube, Reddit, Instagram, Facebook, X) are not in that text, so they are not read. Comments written into the page itself, as on most forums and blogs, are read, but as plain lines of text with no names or times. Pages behind a login, such as Discord or WhatsApp, cannot be read from a link: export those and add the file.</p><button class="btn primary">Read these pages</button></form></div>
+</div></div>
+{% include "_file_check.html" %}
+{% if evidence %}<h2 class="mini-h">Added so far</h2>
+<div class="table-wrap"><table><caption class="sr-only">Messages added</caption><thead><tr><th scope="col">Source</th><th scope="col">Messages</th><th scope="col">Dates</th></tr></thead><tbody>{% for e in evidence %}<tr><td>{{ e.source_label }}</td><td>{{ '{:,}'.format(e.n) }}</td><td>{% if e.first_ts %}{{ e.first_ts[:10] }}{% if e.last_ts and e.last_ts[:10] != e.first_ts[:10] %} – {{ e.last_ts[:10] }}{% endif %}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/workspace">{{ icon('back') }} Cancel</a>{% if units_n %}<a class="btn primary" href="/analysis/{{ a.id }}/check/2">Next {{ icon('arrow') }}</a>{% else %}<span class="hint">Add messages to continue.</span><span class="btn primary disabled" aria-disabled="true">Next {{ icon('arrow') }}</span>{% endif %}</div>
+{% elif step == 2 %}
+<h1>How many messages should it read?</h1><p class="lead">{% if units_n %}You added {{ '{:,}'.format(units_n) }} message{{ '' if units_n == 1 else 's' }}. When Felixa reads fewer than all of them, it picks them evenly across the whole upload, so the sample covers the whole period.{% else %}Add messages first, then choose how many to read.{% endif %}</p>
+<form method="post"><fieldset class="group"><legend class="sr-only">Number of messages to read</legend><div class="option-grid">{% set explicit = a.check_volume is not none %}{% for v in volumes %}<label class="option"><input type="radio" name="volume" value="{{ v }}" required {% if (explicit and a.check_volume == v) or (not explicit and v == volume) %}checked{% endif %}><span><b>{{ '{:,}'.format(v) }} messages</b><small>{% if v <= 100 %}Quick look{% elif v <= 300 %}Balanced{% elif v <= 1000 %}Thorough{% else %}Very thorough, takes a long time{% endif %}</small></span></label>{% endfor %}
+<label class="option"><input type="radio" name="volume" value="all" required {% if a.check_volume == 0 or (not explicit and volume >= units_n) %}checked{% endif %}><span><b>All {{ '{:,}'.format(units_n) }}</b><small>Everything you added</small></span></label>
+<label class="option custom"><input type="radio" name="volume" value="custom" required {% if custom %}checked{% endif %}><span><b>Choose a number</b><small>From {{ volume_min }} to {{ '{:,}'.format(volume_max) }}</small></span><input class="num" type="number" name="volume_custom" min="{{ volume_min }}" max="{{ volume_max }}" step="1" inputmode="numeric" value="{{ custom }}" placeholder="For example 250" aria-label="Number of messages to read"></label></div></fieldset>
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/1">{{ icon('back') }} Back</a><button class="btn primary" {% if not units_n %}disabled{% endif %}>Next {{ icon('arrow') }}</button></div></form>
+{% elif step == 3 %}
+<h1>Hide people's names?</h1><p class="lead">Incognito mode takes names out of the messages before anything reads them.</p>
+<form method="post"><fieldset class="group"><legend class="sr-only">Hide people's names</legend><div class="option-grid">
+<label class="option"><input type="radio" name="incognito" value="off" required {% if not incognito %}checked{% endif %}><span><b>Off</b><small>Messages are read as they are</small></span></label>
+<label class="option"><input type="radio" name="incognito" value="on" {% if incognito %}checked{% endif %}><span><b>On: remove names</b><small>Speakers become Member 1, Member 2…</small></span></label></div></fieldset>
+<p class="small-note">Incognito replaces the name at the start of each chat line, @mentions and email addresses, and it does so in the saved messages too, for good. A name typed inside a sentence cannot be found reliably and stays, and so do file and channel names, so rename a file that has a person's name in it before adding it.</p>
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/2">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
+{% elif step == 4 %}
+<h1>Which dates should it look at?</h1><p class="lead">{% if dates %}Your messages run from {{ dates[0] }} to {{ dates[1] }} (UTC). {% endif %}Leave both blank to use every message. Messages with no readable date are always kept.</p>
+<form method="post"><div class="periods"><fieldset class="group"><legend class="field-legend">From</legend><div class="when"><label class="field">Date<input type="date" name="period_start" value="{{ period_form.start[0] }}"></label><label class="field">Time <em>optional</em><input type="time" name="period_start_time" value="{{ period_form.start[1] }}"></label></div></fieldset>
+<fieldset class="group"><legend class="field-legend">To</legend><div class="when"><label class="field">Date<input type="date" name="period_end" value="{{ period_form.end[0] }}"></label><label class="field">Time <em>optional</em><input type="time" name="period_end_time" value="{{ period_form.end[1] }}"></label></div></fieldset></div>
+<input type="hidden" name="tz_offset" value="0">
+<p class="small-note">Times are in your own time zone (<span id="tz-label">UTC</span>) and the report states them in UTC. To check one episode or one evening, set both dates and both times. Leave the times blank to use whole days.</p>
+{% if period_text %}<p class="small-note">{{ period_text }}</p>{% endif %}
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/3">{{ icon('back') }} Back</a><span class="btn-row"><button class="btn" name="all_dates" value="1" formnovalidate>Use all dates</button><button class="btn primary">Next {{ icon('arrow') }}</button></span></div></form>
+{% elif step == 5 %}
+<h1>How sensitive should the check be?</h1><p class="lead">This sets the bar for what counts as unfriendly.</p>
+<form method="post"><fieldset class="group"><legend class="sr-only">Sensitivity</legend><div class="option-grid one">{% for key, label, help in sens_options %}<label class="option"><input type="radio" name="vibe_sensitivity" value="{{ key }}" required {% if sensitivity == key %}checked{% endif %}><span><b>{{ label }}</b><small>{{ help }}</small></span></label>{% endfor %}</div></fieldset>
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/4">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
+{% else %}
+<h1>Pick an engine</h1><p class="lead">The engine is the language model that reads your messages. Pick one that runs on this computer, or Claude in the cloud. A bigger one reads more carefully and takes longer.</p>
+{% if not model_server_up %}<div class="notice warn">The model server is not answering. Start Ollama, then reload this page.</div>{% endif %}
+<form method="post"><fieldset class="group"><legend class="sr-only">Engine</legend>
+<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>
+<h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
+<p class="small-note">Claude runs on Anthropic's servers, through the key set on this server, so it costs you nothing while you test. It reads more carefully and answers faster than a small local model, but your messages leave this computer to be read.{% if not incognito %} Turn on Incognito (step 3) first if the messages hold names.{% endif %}</p>
+{% if not cloud_ready %}<div class="notice warn">Claude is not set up on this server yet. Set <code>FELIXA_ANTHROPIC_API_KEY</code> and restart the app to turn it on.</div>{% endif %}
+<div class="engine-list">{% for e in engines if e.kind == 'cloud' %}{{ engine_card(e) }}{% endfor %}</div>
+<label class="consent"><input type="checkbox" name="cloud_ok" value="1" {% if cloud_ok %}checked{% endif %}><span>I understand that my messages are sent to Anthropic to be read when I choose a Claude engine. Nothing else leaves this computer.</span></label>
+</fieldset>
+<p class="small-note">Estimates come from typical speeds, so your computer or connection may be faster or slower. Cost: none while testing. The run goes on in the background and you can leave the page.</p>
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/5">{{ icon('back') }} Back</a><button class="btn primary" {% if busy or not units_n or (not model_server_up and not cloud_ready) %}disabled{% endif %}>Run check {{ icon('arrow') }}</button></div></form>
+{% endif %}
+</section>
+{% include "_setup.html" %}</div>{% endblock %}

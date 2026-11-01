@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Felixa Community Health — {{ a.person_name }} report{% endblock %}
+{% block content %}
+{# The brand header is hidden by its class: a rule on `header` is less specific than `.topbar{display:flex}` and loses, so it printed. #}
+<style>.report-cover{border-top:5px solid #F27435}.report-nav{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0 8px}.report-content{max-width:1000px;margin:auto}@media print{.topbar,.report-nav,.no-print,.skip{display:none!important}.panel{border:0;box-shadow:none}.report-content{max-width:none}}</style>
+<div class="report-content">
+<section class="panel report-cover"><div class="eyebrow">Felixa Community Health</div><h1>{{ a.person_name }}</h1><p class="lead">Communication behaviour report</p><div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}</div>{% if a.user_name %}<p class="small-note">Looked after by {{ a.user_name }}{% if a.user_role %}, {{ a.user_role }}{% endif %}</p>{% endif %}<p class="small-note">Analysis {{ aid }} · {{ generated }}{% if summary_line %} · {{ summary_line }}{% endif %}</p>
+{% if period_text %}<p class="small-note">{{ period_text }}</p>{% endif %}
+{% if goals or a.goal_text %}<p><strong>What we set out to find out:</strong> {{ goals|join(', ') }}{% if goals and a.goal_text %} · {% endif %}{{ a.goal_text or '' }}</p>{% endif %}
+<div class="report-nav no-print"><a class="btn primary" href="/analysis/{{ aid }}/report.pdf">Download PDF</a><a class="btn" href="/analysis/{{ aid }}/export">Export CSV</a><a class="btn" href="/analysis/{{ aid }}/workspace">Back to workplace</a></div></section>
+{% include "_results.html" %}
+<section class="panel how"><div class="eyebrow">Method</div><h2>How this report works</h2>{% for heading, text in how %}<h3>{{ heading }}</h3><p>{{ text }}</p>{% endfor %}{% if a.model_used %}<p class="small-note">Model: {{ a.model_used }}.</p>{% endif %}</section>
+</div>{% endblock %}

@@ -1,0 +1,1172 @@
+"""Felixa Community Health: web app.
+
+Upload or paste any communication. Felixa Community Health rates 13 observable communication signals, writes
+evidence-linked guidance, and runs Vibe Check: friendliness, sentiment, toxicity, flagged messages,
+trend and forecast. Everything runs on a local Ollama model; no cloud API or key is used.
+"""
+import base64
+import csv
+import datetime
+import hashlib
+import io
+import json
+import logging
+import math
+import os
+import re
+import secrets
+import tempfile
+import threading
+import time
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Annotated, List, Optional
+from urllib.parse import quote, unquote
+
+from fastapi.exceptions import RequestValidationError
+from fastapi import Depends, FastAPI, File, Form, Path as PathParam, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.formparsers import MultiPartException
+
+import analysis
+import config
+import pipeline
+import report
+import report_export
+import store
+import cloud
+import linkfetch
+import voice
+import workplace
+from model import local_model_ready, local_models
+import vibe_check
+from vibe_check import SENSITIVITY_LABELS, ingest
+from vibe_check.common import long_date, parse_ts
+
+log = logging.getLogger('bei')
+BASE_DIR = config.BASE_DIR
+app = FastAPI(title=config.PRODUCT, docs_url=None, redoc_url=None, openapi_url=None)
+
+SESSION_COOKIE = '__Host-felixa_session'
+SESSION_SECONDS = 8 * 60 * 60
+MAX_QUEUED_JOBS = 5
+
+
+# ---- sign-in -----------------------------------------------------------------------
+class Throttled(Exception):
+    """A client has sent too many wrong passwords and has to wait; `wait` is the seconds that are left."""
+
+    def __init__(self, wait):
+        super().__init__(wait)
+        self.wait = wait
+
+
+class SignIn:
+    """What the server remembers about signing in, kept in one place so that the sign-in form and HTTP Basic obey the same rules.
+    Guessing: attempt() is the only place a username and password are compared. A client (an address) may send a few wrong passwords;
+    from the fifth in a row each one makes it wait longer (WAITS) before it is looked at again, and while it waits attempt() raises
+    Throttled without comparing anything, so that a right guess is not told from a wrong one. Nothing sleeps: a throttled request is
+    answered at once, so a flood of bad sign-ins cannot tie up the threads that serve everyone else. Only time clears a client's count
+    (FORGET_SECONDS without a wrong password), not a sign-in that works: behind a shared address, a script using Basic could otherwise
+    send one between the guesses of someone else.
+    Sessions: the cookie holds a random token and nothing computed from the password, and the server keeps the only record of it (a
+    hash of the token, and when it ends). Signing out deletes the record, and a cookie that someone captured says nothing about the
+    password. The records are in memory, so a restart signs everyone out, as the job queue already needs the app to be one process."""
+
+    WAITS = (0, 0, 0, 0, 2, 4, 8, 16, 32, 64, 128, 256, 300)       # seconds to wait after the 1st, 2nd ... wrong password in a row; the last repeats
+    FORGET_SECONDS = 15 * 60
+    MAX_CLIENTS = 10_000                                           # clients with wrong passwords remembered; the quietest are forgotten first
+    MAX_SESSIONS = 10_000                                          # sessions kept; the oldest end first
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.lock = threading.Lock()
+        self.failures = OrderedDict()       # client -> (wrong passwords in a row, when the last came); the longest quiet first
+        self.sessions = OrderedDict()       # sha256 of a session token -> when it ends; the oldest first, so the ended ones come first too
+
+    def attempt(self, client, username, password):
+        """True when the username and password are the configured ones. Raises Throttled while the client has to wait."""
+        expected = os.getenv('FELIXA_PASSWORD', '')
+        with self.lock:
+            now = self.clock()
+            count, last = self.failures.get(client, (0, 0.0))
+            if count and now - last > self.FORGET_SECONDS:
+                count = 0
+            wait = last + self.WAITS[count - 1] - now if count else 0
+            if wait > 0:
+                raise Throttled(math.ceil(wait))
+            signed_in = bool(expected) & secrets.compare_digest(username.encode(), os.getenv('FELIXA_USERNAME', 'felixa').encode()) \
+                & secrets.compare_digest(password.encode(), expected.encode())
+            if not signed_in:
+                self.failures.pop(client, None)                    # put back last, so the table stays in order of the last wrong password
+                if len(self.failures) >= self.MAX_CLIENTS:
+                    self.failures.popitem(last=False)
+                self.failures[client] = (min(count + 1, len(self.WAITS)), now)
+            return signed_in
+
+    @staticmethod
+    def session_key(token):
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def start_session(self):
+        """Records a new session and returns the token for its cookie."""
+        token = secrets.token_urlsafe(32)
+        with self.lock:
+            now = self.clock()
+            while self.sessions and (len(self.sessions) >= self.MAX_SESSIONS or next(iter(self.sessions.values())) <= now):
+                self.sessions.popitem(last=False)
+            self.sessions[self.session_key(token)] = now + SESSION_SECONDS
+        return token
+
+    def valid_session(self, token):
+        with self.lock:
+            ends = self.sessions.get(self.session_key(token))
+            return ends is not None and ends > self.clock()
+
+    def end_session(self, token):
+        with self.lock:
+            self.sessions.pop(self.session_key(token), None)
+
+
+sign_in = SignIn()
+
+
+def client_of(request):
+    """The address that stands for the sender of a request in the count of wrong passwords. Behind a proxy it is the proxy's, unless
+    uvicorn is told to trust the proxy's X-Forwarded-For (FORWARDED_ALLOW_IPS), which it then puts in request.client itself."""
+    return request.client.host if request.client else ''
+
+
+def basic_credentials(request):
+    """The (username, password) of an Authorization: Basic header, or None when there is none or it is malformed."""
+    try:
+        scheme, token = request.headers.get('authorization', '').split(' ', 1)
+        username, password = base64.b64decode(token, validate=True).decode().split(':', 1)
+    except (ValueError, UnicodeError):
+        return None
+    return (username, password) if scheme.lower() == 'basic' else None
+
+
+LOGIN_SCRIPT = """if (window.isSecureContext === false) {document.getElementById('plain-http').hidden = false;
+    document.getElementById('username').setAttribute('aria-describedby', 'plain-http');}"""
+
+
+def login_page(error=False, wait=0):
+    """The sign-in page: after a wrong password with `error`, and with `wait` (seconds) when the client has to wait before another try.
+    The session cookie is Secure and __Host- prefixed, which a browser keeps only on an https page or at a localhost address. Opened over
+    plain http at a LAN address or a host name, the right password was accepted and the browser then dropped the cookie, so the form came
+    back with no word of why. Whether the browser will keep it is exactly window.isSecureContext, which the server cannot know (behind a
+    proxy that ends https it sees http), so every version of the page carries a notice that a script shows when that is false."""
+    notice = ''
+    if wait:
+        notice = f'Too many incorrect attempts. Please try again in {wait} second{"" if wait == 1 else "s"}.'
+    elif error:
+        notice = 'Incorrect username or password. Please try again.'
+    message = f'<p role="alert" style="color:#a32121">{notice}</p>' if notice else ''
+    return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in | Felixa Community Health</title>
+    <style>body{margin:0;background:#f3f5f8;color:#172b4d;font:17px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+    main{box-sizing:border-box;background:white;border-radius:20px;padding:40px;width:min(440px,92vw);box-shadow:0 12px 50px #152b4d12}
+    h1{letter-spacing:.14em;margin:0 0 8px}p{line-height:1.5;color:#556274}label{display:block;margin:22px 0 8px}
+    input,button{box-sizing:border-box;width:100%;padding:13px;font:inherit;border-radius:8px;border:1px solid #c8d0dc}
+    button{margin-top:26px;background:#193761;color:white;border:0;cursor:pointer}input:focus{outline:2px solid #527eb7}
+    #plain-http{background:#fff4e0;color:#6b4300;padding:12px 16px;border-radius:8px;font-size:15px}</style></head>
+    <body><main><h1>Felixa Community Health</h1><p>Sign in to your workplace.</p>
+    <p id="plain-http" role="alert" hidden>Sign-in needs a secure connection. This page is open over plain http, so your browser would not keep
+    your sign-in and you would land back here. Open the app over https, or on the computer that runs it at http://127.0.0.1 (same port).</p>""" + message + """
+    <form method="post" action="/login"><label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required autofocus>
+    <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button></form></main>
+    <script>""" + LOGIN_SCRIPT + """</script></body></html>""",
+                        status_code=429 if wait else 401 if error else 200, headers={'Retry-After': str(wait)} if wait else None)
+
+
+@app.get('/login', response_class=HTMLResponse)
+def login_get():
+    return login_page()
+
+
+@app.post('/login')
+def login_post(request: Request, username: str = Form(''), password: str = Form('')):
+    try:
+        signed_in = sign_in.attempt(client_of(request), username, password)
+    except Throttled as slow:
+        return login_page(wait=slow.wait)
+    if not signed_in:
+        return login_page(error=True)
+    response = RedirectResponse('/', status_code=303)
+    response.set_cookie(SESSION_COOKIE, sign_in.start_session(), max_age=SESSION_SECONDS, secure=True, httponly=True, samesite='strict', path='/')
+    return response
+
+
+@app.post('/logout')
+def logout(request: Request):
+    sign_in.end_session(request.cookies.get(SESSION_COOKIE, ''))
+    response = RedirectResponse('/login', status_code=303)
+    response.delete_cookie(SESSION_COOKIE, secure=True, httponly=True, samesite='strict', path='/')
+    return response
+
+
+# Scripts may only come from this origin's /static files, plus the one inline script of the sign-in page (named by its hash, since
+# /static needs a sign-in). Inline styles stay allowed: the report and sign-in pages carry their own <style>.
+def script_hash(text):
+    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
+
+
+# The Vibe Check charts ship their own small script inline (the hover tooltips); it is allowed by its hash, so nothing else inline can run.
+CSP = ("default-src 'self'; script-src 'self' " + script_hash(LOGIN_SCRIPT) + ' ' + script_hash(vibe_check.JS) + "; "
+       "style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+
+
+def harden(response, path, request=None):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'same-origin'
+    response.headers['Content-Security-Policy'] = CSP
+    if request is not None and request.headers.get('x-forwarded-proto', request.url.scheme).split(',')[0].strip().lower() == 'https':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000'
+    if not path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+LOCAL_HOSTS = {'127.0.0.1', 'localhost', '[::1]'}
+HOST_HEADER = re.compile(r'(\[[0-9a-f:]+\]|[a-z0-9.-]+)(?::\d{1,5})?')
+
+
+def unexpected_host(request):
+    """True when the Host header names something other than this computer or a name in FELIXA_ALLOWED_HOSTS. Without a password
+    that is how DNS rebinding looks: a hostile site whose name now points at 127.0.0.1. The raw header is parsed here because
+    libraries read a malformed one differently."""
+    match = HOST_HEADER.fullmatch(request.headers.get('host', '').lower())
+    allowed = LOCAL_HOSTS | {h.strip().lower() for h in os.getenv('FELIXA_ALLOWED_HOSTS', '').split(',') if h.strip()}
+    return not match or match.group(1) not in allowed
+
+
+def cross_site(request):
+    """True for a write that a page on another site started. A browser says so in Sec-Fetch-Site and Origin. An Origin of
+    'null' (sandboxed frames, https-to-http form posts) matches no host, so it is refused too. Scripts such as curl send
+    neither header and pass."""
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return False
+    if request.headers.get('sec-fetch-site', 'same-origin') not in ('same-origin', 'none'):
+        return True
+    host = request.headers.get('host', '').lower()
+    origin = request.headers.get('origin', '').lower()
+    return bool(origin) and origin not in ('http://' + host, 'https://' + host)
+
+
+# ---- request size ------------------------------------------------------------------------
+UPLOAD_PATH = re.compile(r'/analysis/\d+/(?:upload|raw-csv|add-voice)')
+PASTE_PATH = re.compile(r'/analysis/\d+/add-text')
+
+
+def body_limit(path):
+    """The most bytes the body of a request to this path may hold: MAX_UPLOAD_FILES files of the full size and the form fields that go
+    with them on the routes that take files, one field as large as a file (what read_paste accepts) on the paste route, a small form
+    on every other. A path that matches neither pattern (a trailing slash, say) gets the smallest limit, so a mistake here refuses
+    too much, never too little. Read when called, like the settings it is made of, so a test can patch them."""
+    if UPLOAD_PATH.fullmatch(path):
+        return config.MAX_UPLOAD_BYTES * config.MAX_UPLOAD_FILES + config.MAX_FORM_BYTES
+    if PASTE_PATH.fullmatch(path):
+        return config.MAX_UPLOAD_BYTES + config.MAX_FORM_BYTES
+    return config.MAX_FORM_BYTES
+
+
+class BodyTooLarge(MultiPartException):
+    """Raised into the app when a body of undeclared length passes its limit while the app is reading it. A MultiPartException because the
+    Starlette that requirements.txt pins closes the files it has spooled only on an error of that kind: any other leaves a half-received
+    file open, and unlinked on disk, until the next garbage collection."""
+
+
+async def refuse_body(scope, receive, send, close=False):
+    """Sends the 413 for BodyLimit. The connection is closed after it only when a body was cut off in mid-stream, to stop the sender: a
+    browser that declared too large a body is let finish sending it (the server reads and drops what is left), because a connection
+    closed under a sender can reset before the sender has read the answer."""
+    text = (f'That request is too large. A file may be up to {config.MAX_UPLOAD_BYTES // 1_000_000} MB and one upload '
+            f'{config.MAX_UPLOAD_BYTES * config.MAX_UPLOAD_FILES // 1_000_000} MB in all; save a long paste as a .txt file and import it.')
+    await HTMLResponse(text, status_code=413, headers={'Connection': 'close'} if close else None)(scope, receive, send)
+
+
+class BodyLimit:
+    """Answers a request whose body is too large with a 413 before anything reads it. Starlette parses a form before the route runs and
+    spools every file in it to disk, so the 15 MB check in ingest_files came after a 400 MB upload had been received in full. /login,
+    which anyone can reach, parses a form as well, and the Starlette that requirements.txt pins buffers an urlencoded field in memory
+    without a limit. A body with a declared length over its limit is refused unread. A body with none (chunked, so not a browser's) is
+    counted as the app reads it and cut off at the limit; FastAPI turns that failed read into a 400 of its own, so whatever the app
+    answers after the cut is dropped and the 413 is sent in its place.
+    It is added before the sign-in middleware, which makes it the innermost, and must stay inside it. That middleware answers a visitor
+    without reading the body and lets /login, which is open to everyone, through to be covered here. It is also a BaseHTTPMiddleware,
+    which wraps an error raised from the receive() beneath it in an ExceptionGroup: with BodyLimit outside it, the form parser would get
+    that group in place of the error, and the pinned Starlette would not close the files it had spooled. It adds the security headers to
+    the 413 as well."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http':
+            return await self.app(scope, receive, send)
+        limit = body_limit(scope['path'])
+        declared = Request(scope).headers.get('content-length', '')
+        if declared.isdecimal() and int(declared) > limit:
+            return await refuse_body(scope, receive, send)
+        seen, cut = 0, False
+
+        async def counted():
+            nonlocal seen, cut
+            message = await receive()
+            seen += len(message.get('body', b''))
+            if seen > limit:
+                cut = True
+                raise BodyTooLarge('The request body is too large.')
+            return message
+
+        async def unless_cut(message):
+            if not cut:
+                await send(message)
+
+        try:
+            await self.app(scope, counted, unless_cut)
+        except Exception:                                   # BodyTooLarge, or what a layer of the app made of it
+            if not cut:
+                raise
+        if cut:
+            await refuse_body(scope, receive, send, close=True)
+
+
+app.add_middleware(BodyLimit)
+
+
+@app.middleware('http')
+async def protect_online_workspace(request: Request, call_next):
+    path = request.url.path
+    if path == '/health':
+        return harden(await call_next(request), path, request)
+    if cross_site(request):
+        return harden(HTMLResponse('Invalid request origin.', status_code=403), path, request)
+    password = os.getenv('FELIXA_PASSWORD', '')
+    if not password:
+        if os.getenv('FELIXA_REQUIRE_AUTH') == '1':
+            return harden(HTMLResponse('Set FELIXA_PASSWORD before opening this workspace.', status_code=503), path, request)
+        if unexpected_host(request):
+            return harden(HTMLResponse('Unexpected host name. Without a password this workspace answers only to localhost names. '
+                                       'To open it under another name, list that name in FELIXA_ALLOWED_HOSTS.', status_code=400), path, request)
+        return harden(await call_next(request), path, request)
+    valid = sign_in.valid_session(request.cookies.get(SESSION_COOKIE, ''))
+    given = None if valid else basic_credentials(request)
+    if given:
+        try:
+            valid = sign_in.attempt(client_of(request), *given)
+        except Throttled as slow:
+            return harden(login_page(wait=slow.wait), path, request)
+    if not valid and path != '/login':
+        return harden(RedirectResponse('/login', status_code=303), path, request)
+    return harden(await call_next(request), path, request)
+
+
+# ---- templates and helpers -----------------------------------------------------------
+app.mount('/static', StaticFiles(directory=BASE_DIR / 'static'), name='static')
+templates = Jinja2Templates(directory=str(BASE_DIR / 'templates'))
+templates.env.globals.update(
+    product=config.PRODUCT, product_long=config.PRODUCT_LONG, version=config.VERSION, with_problems=pipeline.WITH_PROBLEMS,
+    max_file_mb=config.MAX_UPLOAD_BYTES // 1_000_000, max_upload_mb=config.MAX_UPLOAD_BYTES * config.MAX_UPLOAD_FILES // 1_000_000,
+    asset_v=hashlib.sha1(b''.join((BASE_DIR / 'static' / f).read_bytes() for f in ('style.css', 'app.js'))).hexdigest()[:8])
+
+store.init_db()
+store.interrupt_stale_jobs()
+config.sweep_uploads()
+
+
+def redirect(url, msg=None):
+    response = RedirectResponse(url, status_code=303)
+    if msg:     # a one-shot flash cookie, not a URL parameter: nobody can link to a message and a reload does not repeat it
+        response.set_cookie('flash', quote(msg), max_age=60, httponly=True, samesite='lax')
+    return response
+
+
+def render(request, name, **context):
+    flash = request.cookies.get('flash')
+    response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None, **context})
+    if flash:
+        response.delete_cookie('flash')
+    return response
+
+
+class PageError(Exception):
+    def __init__(self, status, heading, message, back=None):
+        self.status, self.heading, self.message, self.back = status, heading, message, back
+
+
+def not_found():
+    raise PageError(404, 'Analysis not found', 'This analysis does not exist. It may have been removed, or the link may be mistyped.')
+
+
+def error_response(request, status, heading, message, back=None):
+    accept = request.headers.get('accept', '')
+    if 'application/json' in accept and 'text/html' not in accept:
+        return JSONResponse({'detail': message}, status_code=status)
+    return templates.TemplateResponse(request=request, name='error.html', status_code=status, context={
+        'request': request, 'status': status, 'heading': heading, 'message': message, 'back': back})
+
+
+@app.exception_handler(PageError)
+def page_error_handler(request, exc):
+    return error_response(request, exc.status, exc.heading, exc.message, exc.back)
+
+
+@app.exception_handler(StarletteHTTPException)
+def http_error_handler(request, exc):
+    if exc.status_code == 404:
+        return error_response(request, 404, 'Page not found', 'There is nothing at this address.')
+    if exc.status_code == 405:
+        return error_response(request, 405, 'Not available this way', 'This address cannot be opened like that.')
+    return error_response(request, exc.status_code, 'Something went wrong', str(exc.detail))
+
+
+@app.exception_handler(RequestValidationError)
+def validation_error_handler(request, exc):
+    if any(e.get('loc', ('',))[0] == 'path' for e in exc.errors()):
+        return error_response(request, 404, 'Page not found', 'That address is not valid.')
+    return error_response(request, 422, 'We could not read that request', 'Some of the information sent was missing or not valid.')
+
+
+AnalysisId = Annotated[int, PathParam(ge=1, le=2 ** 63 - 1)]                       # SQLite integers are 64-bit; a larger id cannot exist, so it is a 404
+
+
+def report_context(aid, what):
+    ctx = report.build(aid)
+    if not ctx:
+        not_found()
+    if not ctx['has_results']:
+        raise PageError(404, 'No results yet', f'Run a check on the workplace page to create this {what}.',
+                        back=(f'/analysis/{aid}/workspace', 'Open the workspace'))
+    return ctx
+
+
+# ---- creating a workplace ----------------------------------------------------------------
+ENV_NAMES = [name for name, _ in workplace.ENVIRONMENTS]
+SETUP_LAST = len(workplace.SETUP_STEPS)
+
+
+def setup_rows(a):
+    """What the right-hand panel shows while a workplace is being set up: (icon, label, value) for each answer so far."""
+    goals = [g for g in json.loads(a['goals_json'] or '[]') if g] + ([a['goal_text']] if a['goal_text'] else [])
+    you = ', '.join(x for x in (a['user_name'], a['user_role']) if x)
+    return [('users', 'Environment', a['subject_type']), ('target', 'Workplace', a['person_name']), ('gauge', 'Area', a['person_role']),
+            ('chat', 'Chat', a['channel']), ('person', 'You', you), ('check', 'Goals', '; '.join(goals))]
+
+
+def setup_context(a, step):
+    env, env_other = workplace.split_choice(a['subject_type'], ENV_NAMES)
+    area, area_other = workplace.split_choice(a['person_role'], workplace.AREAS)
+    channel, channel_other = workplace.split_choice(a['channel'], workplace.CHANNELS)
+    role, role_other = workplace.split_choice(a['user_role'], workplace.USER_ROLES)
+    goals = [g for g in json.loads(a['goals_json'] or '[]') if g]
+    return {'a': a, 'step': step, 'steps': workplace.SETUP_STEPS, 'last': SETUP_LAST, 'environments': workplace.ENVIRONMENTS,
+            'areas': workplace.AREAS, 'channels': workplace.CHANNELS, 'discord_url': workplace.DISCORD_BOT_URL, 'roles': workplace.USER_ROLES, 'goal_options': workplace.GOAL_OPTIONS,
+            'env': env, 'env_other': env_other, 'area': area, 'area_other': area_other, 'channel': channel, 'channel_other': channel_other,
+            'role': role, 'role_other': role_other, 'goals': goals, 'goal_other': a['goal_text'] or '',
+            'summary_title': 'Your workplace', 'summary_rows': setup_rows(a),
+            'rail': wizard_rail(a['id'], workplace.SETUP_STEPS, f'/analysis/{a["id"]}/step', step,
+                                foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{a["id"]}/workspace'} if a['status'] != 'draft' else None)}
+
+
+@app.get('/', response_class=HTMLResponse)
+def index(request: Request):
+    return render(request, 'index.html', workplaces=[{**w, 'when': long_date(w['updated_at']), 'facts': [x for x in (w['subject_type'], w['person_role'], w['channel']) if x]}
+                                                     for w in store.workplaces()])
+
+
+@app.get('/new')
+def new_workplace():
+    return redirect(f'/analysis/{store.create_analysis()}/step/1')
+
+
+@app.get('/analysis/{aid}/step/{step}', response_class=HTMLResponse)
+def onboarding_get(request: Request, aid: AnalysisId, step: int):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    if not 1 <= step <= SETUP_LAST:
+        raise PageError(404, 'Step not found', f'There is no step {step}. Setting up a workplace has steps 1 to {SETUP_LAST}.',
+                        back=(f'/analysis/{aid}/step/1', 'Go to step 1'))
+    return render(request, 'onboarding.html', **setup_context(a, step))
+
+
+def setup_saved(aid, step, error, **fields):
+    """Saves one step and moves on, or goes back to the step with what was wrong."""
+    if error:
+        return redirect(f'/analysis/{aid}/step/{step}', error)
+    store.update_analysis(aid, **fields)
+    return redirect(f'/analysis/{aid}/step/{step + 1}')
+
+
+@app.post('/analysis/{aid}/step/1')
+async def step1(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    value, error = workplace.pick(await request.form(), 'environment', ENV_NAMES, 'what kind of place this is')
+    return setup_saved(aid, 1, error, subject_type=value)
+
+
+@app.post('/analysis/{aid}/step/2')
+async def step2(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    name = ' '.join(str((await request.form()).get('workplace_name', '')).split())[:200]
+    return setup_saved(aid, 2, '' if name else 'Give the workplace a name.', person_name=name)
+
+
+@app.post('/analysis/{aid}/step/3')
+async def step3(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    value, error = workplace.pick(await request.form(), 'area', workplace.AREAS, 'the area it works in')
+    return setup_saved(aid, 3, error, person_role=value)
+
+
+@app.post('/analysis/{aid}/step/4')
+async def step4(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    value, error = workplace.pick(await request.form(), 'channel', workplace.CHANNELS, 'where people talk')
+    return setup_saved(aid, 4, error, channel=value)
+
+
+@app.post('/analysis/{aid}/step/5')
+async def step5(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    form = await request.form()
+    name = ' '.join(str(form.get('user_name', '')).split())[:120]
+    role, error = workplace.pick(form, 'user_role', workplace.USER_ROLES, 'your role')
+    return setup_saved(aid, 5, ('' if name else 'Tell us your name.') or error, user_name=name, user_role=role)
+
+
+@app.post('/analysis/{aid}/step/6')
+async def step6(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    goals, other, error = workplace.read_goals(await request.form())
+    if error:
+        return redirect(f'/analysis/{aid}/step/6', error)
+    store.update_analysis(aid, goals_json=json.dumps(goals), goal_text=other, status='ready')
+    return redirect(f'/analysis/{aid}/workspace', 'Your workplace is ready. Press New to run the first check.')
+
+
+def unit_total(units):
+    """How many units a reader returned, for a message: '12,000', or '50,000+' when it stopped at its ceiling and the source may hold more."""
+    return f'{len(units):,}' + ('+' if len(units) >= ingest.MAX_READ_UNITS else '')
+
+
+REPEATED_FILE = 'identical to a file already imported'
+LABEL_CHARS = 80                    # longest label an upload keeps: Vibe Check shows a source name at this width (see run_vibe_check)
+
+
+def file_label(raw: str) -> str:
+    """What an uploaded file is called in the evidence table and the reports, and the source its units are scored under: its own name,
+    in any script, without a folder part (a script or an old browser may send a whole path), without control or invisible format
+    characters (a bidirectional override among them), with one space for each run of white space, and cut to LABEL_CHARS with its
+    extension kept. It is only shown and used to group units: the bytes are read from a randomly named temporary copy, so the name never
+    has to be safe as a file name. Turning every character outside A-Z, a-z and 0-9 into '_' made labels unreadable and gave different
+    files one name (any two Chinese names of the same length, 'team chat' and 'team_chat'), so they were scored as one source."""
+    name = re.split(r'[\\/]', raw)[-1]
+    name = ' '.join(''.join(ch for ch in name if ch.isprintable() or ch.isspace()).split())
+    if len(name) > LABEL_CHARS:                                                 # cut the stem, not the extension
+        suffix = Path(name).suffix
+        stem, suffix = name[:len(name) - len(suffix)], suffix[:16].rstrip()     # an "extension" longer than that is no extension; this keeps room for the stem
+        name = stem[:LABEL_CHARS - len(suffix)].rstrip() + suffix
+    return name or 'upload'
+
+
+UNREADABLE = {                                  # what a file of each kind is likely to be when its reader gives up; no full stop, upload_message adds it
+    '.pdf': 'could not be read; it may be damaged, password-protected or not really a PDF',
+    '.docx': 'could not be read; it may be damaged, password-protected or not really a Word (.docx) file',
+    '.json': 'could not be read; it may be damaged or not really a JSON file',
+    '.csv': 'could not be read; it may be damaged or not really a CSV file',
+    '': 'could not be read; it may be damaged',
+}
+
+
+def ingest_files(aid, files) -> tuple:
+    """Reads uploads into communication units. Returns (units_added, problems). Files are parsed from a temporary copy that is
+    deleted straight away, so nothing the user uploaded stays on disk. `problems` also names what the reader or the per-analysis
+    limit left out of a file, so a file taken only in part is not reported as a plain success. A file whose bytes are those of a file
+    already imported into the analysis is left out as well, or every message in it would be stored, rated and counted twice."""
+    added_total, problems = 0, []
+    for f in files:
+        raw_name = (f.filename or '').strip()
+        if not raw_name:
+            continue
+        name = file_label(raw_name)
+        ext = Path(name).suffix.lower()
+        if ext not in config.UPLOAD_EXTENSIONS:
+            problems.append(f'{name}: unsupported type (use {", ".join(config.UPLOAD_EXTENSIONS)})')
+            continue
+        data = f.file.read(config.MAX_UPLOAD_BYTES + 1)
+        if not data:
+            problems.append(f'{name}: the file is empty')
+            continue
+        if len(data) > config.MAX_UPLOAD_BYTES:
+            problems.append(f'{name}: larger than {config.MAX_UPLOAD_BYTES // 1_000_000} MB')
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        if store.has_upload(aid, digest):                                       # the usual repeat is caught here, before the file is read
+            problems.append(f'{name}: {REPEATED_FILE}')
+            continue
+        with tempfile.NamedTemporaryFile(dir=config.upload_dir(), prefix=config.UPLOAD_PREFIX, suffix=ext, delete=False) as tmp:
+            tmp.write(data)
+        notes = []
+        try:
+            units = ingest.units_from_file(tmp.name, label=name, clean=False, notes=notes)
+        except Exception as e:
+            log.warning('could not read upload %s: %s: %s', name, type(e).__name__, e)
+            # An UnsupportedFileError carries a message written for the user. Any other exception is a reader's own (PdfStreamError,
+            # BadZipFile, JSONDecodeError ...), whose name says nothing to the person who uploaded the file: it is logged, and the
+            # person is told what is likely wrong with that kind of file.
+            reason = str(e).rstrip('.') if isinstance(e, ingest.UnsupportedFileError) else UNREADABLE.get(ext, UNREADABLE[''])
+            problems.append(f'{name}: {reason}')
+            continue
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+        problems.extend(f'{name}: {note}' for note in notes)                    # what the reader left out (rows or pages beyond its ceiling)
+        if not units:
+            problems.append(f'{name}: no readable text found')
+            continue
+        added = store.add_upload(aid, name, units, digest)
+        if added is None:                                                       # the same file, sent at the same moment, was stored first
+            problems.append(f'{name}: {REPEATED_FILE}')
+            continue
+        added_total += added
+        if added < len(units):                                                  # what the per-analysis limit left out
+            problems.append(f'{name}: stored {added:,} of {unit_total(units)} units (limit {config.max_units():,} per analysis)')
+    return added_total, problems
+
+
+def upload_message(added, problems):
+    parts = [f'Imported {added:,} communication unit{"" if added == 1 else "s"}.'] if added else []
+    return ' '.join(parts + [('Skipped: ' if i == 0 else '') + p + '.' for i, p in enumerate(problems)]) or 'Choose a file to upload.'
+
+
+# ---- workspace -------------------------------------------------------------------------
+def wizard_rail(aid, steps, base, current, foot=None):
+    """The left-hand list of steps: each with a state (on, done or todo), and the item below the rule."""
+    items = [{'num': n, 'label': label, 'href': f'{base}/{n}', 'state': 'on' if n == current else 'done' if n < current else 'todo'} for n, label in steps]
+    return {'steps': items, 'foot': foot}
+
+
+def workplace_rail(aid, on):
+    items = [{'icon': 'eye', 'label': 'Overview', 'href': f'/analysis/{aid}/workspace', 'state': 'on' if on == 'overview' else 'todo'},
+             {'icon': 'plus', 'label': 'New check', 'href': f'/analysis/{aid}/workspace#new', 'state': 'todo'},
+             {'icon': 'target', 'label': 'Edit workplace', 'href': f'/analysis/{aid}/step/1', 'state': 'todo'}]
+    return {'steps': items, 'foot': None}
+
+
+@app.get('/analysis/{aid}/workspace', response_class=HTMLResponse)
+def workspace(request: Request, aid: AnalysisId):
+    ctx = report.build(aid)
+    if not ctx:
+        return not_found()
+    a = ctx['a']
+    return render(request, 'workspace.html', **ctx, local_model_ready=local_model_ready(), job=store.latest_job(aid), model=config.model_name(),
+                  rail=workplace_rail(aid, 'overview'),
+                  summary_title='Your workplace', summary_rows=setup_rows(a))
+
+
+# ---- a new check ----------------------------------------------------------------------------
+CHECK_LAST = len(workplace.CHECK_STEPS)
+
+
+def check_destination(aid, back):
+    """Where a form that adds messages sends the person afterwards: back into the New check, or to the workplace page."""
+    return f'/analysis/{aid}/check/1' if back == 'check' else f'/analysis/{aid}/workspace'
+
+
+def bound_label(bound):
+    """A review-period bound for the summary panel: a day, or a minute in UTC."""
+    return f'{bound:%Y-%m-%d %H:%M} UTC' if isinstance(bound, datetime.datetime) else bound.isoformat()
+
+
+def check_rows(a, units_n):
+    volume = a['check_volume']
+    period = store.period_of(a)
+    span = ' to '.join(bound_label(d) if d else 'any date' for d in period) if any(period) else 'All dates'
+    return [('upload', 'Messages', f'{units_n:,} added' if units_n else ''),
+            ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
+            ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
+            ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
+            ('cpu', 'Engine', cloud.label(a['engine'] or config.model_name()))]
+
+
+def check_context(a, step):
+    aid = a['id']
+    period = store.period_coverage(a)
+    units_n = store.count_units(aid)
+    in_scope = period['kept'] if period else units_n
+    evidence = store.evidence_by_source(aid)
+    volume = a['check_volume'] if a['check_volume'] is not None else workplace.DEFAULT_VOLUME
+    stamps = sorted(x for x in (parse_ts(e[k]) for e in evidence for k in ('first_ts', 'last_ts') if e[k]) if x)
+    timed = any(x.time() != datetime.time.min for x in stamps)
+    label = lambda x: f'{x:%Y-%m-%d %H:%M}' if timed else f'{x:%Y-%m-%d}'      # noqa: E731
+    ctx = {'a': a, 'step': step, 'steps': workplace.CHECK_STEPS, 'last': CHECK_LAST, 'units_n': units_n, 'in_scope': in_scope, 'evidence': evidence,
+           'volumes': [v for v in workplace.VOLUMES if v < units_n], 'volume': volume, 'volume_min': workplace.VOLUME_MIN, 'volume_max': config.max_units(),
+           'custom': a['check_volume'] if a['check_volume'] and a['check_volume'] not in workplace.VOLUMES else '', 'discord_url': workplace.DISCORD_BOT_URL, 'incognito': bool(a['incognito']),
+           'dates': (label(stamps[0]), label(stamps[-1])) if stamps else None, 'period_form': period_form(a), 'period_text': report.period_text(period),
+           'sens_options': [(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
+           'sensitivity': a['vibe_sensitivity'] or 'medium', 'extensions': ', '.join(config.UPLOAD_EXTENSIONS),
+           'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': a['channel'] == 'Discord',
+           'rail': wizard_rail(aid, workplace.CHECK_STEPS, f'/analysis/{aid}/check', step,
+                               foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{aid}/workspace'}),
+           'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}
+    if step == CHECK_LAST:
+        models = local_models()
+        ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available())
+        ctx['engine'] = a['engine'] or config.model_name()
+        ctx['model_server_up'] = bool(models)
+        ctx['cloud_ready'] = cloud.available()
+        ctx['cloud_ok'] = bool(a['cloud_ok'])
+    return ctx
+
+
+@app.post('/analysis/{aid}/check/new')
+def check_new(aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', 'Wait for the current task to finish before starting a new check.')
+    store.new_check(aid)
+    return redirect(f'/analysis/{aid}/check/1')
+
+
+@app.get('/analysis/{aid}/check/{step}', response_class=HTMLResponse)
+def check_get(request: Request, aid: AnalysisId, step: int):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    if not 1 <= step <= CHECK_LAST:
+        raise PageError(404, 'Step not found', f'There is no step {step}. A new check has steps 1 to {CHECK_LAST}.', back=(f'/analysis/{aid}/check/1', 'Go to step 1'))
+    return render(request, 'check.html', **check_context(a, step))
+
+
+def check_saved(aid, step, error='', **fields):
+    if error:
+        return redirect(f'/analysis/{aid}/check/{step}', error)
+    store.update_analysis(aid, **fields)
+    return redirect(f'/analysis/{aid}/check/{step + 1}')
+
+
+@app.post('/analysis/{aid}/check/2')
+async def check_volume(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    form = await request.form()
+    choice = str(form.get('volume', ''))
+    if choice == 'all':
+        return check_saved(aid, 2, check_volume=0)
+    if choice.isdigit() and int(choice) in workplace.VOLUMES:
+        return check_saved(aid, 2, check_volume=int(choice))
+    if choice == 'custom':
+        typed = str(form.get('volume_custom', '')).strip().replace(',', '')
+        top = config.max_units()
+        if typed.isdigit() and workplace.VOLUME_MIN <= int(typed) <= top:
+            return check_saved(aid, 2, check_volume=int(typed))
+        return check_saved(aid, 2, f'Type a whole number from {workplace.VOLUME_MIN} to {top:,}.')
+    return check_saved(aid, 2, 'Choose how many messages to read.')
+
+
+@app.post('/analysis/{aid}/check/3')
+async def check_incognito(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    choice = str((await request.form()).get('incognito', ''))
+    return check_saved(aid, 3, '' if choice in ('on', 'off') else 'Choose on or off.', incognito=int(choice == 'on'))
+
+
+CLOCK = re.compile(r'([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?')
+
+
+def clock_of(value):
+    """A time typed as HH:MM (a browser's time box), or None when blank. Raises ValueError for anything else."""
+    text = str(value or '').strip()
+    if not text:
+        return None
+    found = CLOCK.fullmatch(text)
+    if not found:
+        raise ValueError(text)
+    return datetime.time(int(found.group(1)), int(found.group(2)))
+
+
+def utc_bound(day, clock, offset, end):
+    """One end of the review period as it is saved. `offset` is the browser's: minutes to add to local time to get UTC. A whole day typed in
+    UTC stays a plain date; a time, or a day in another zone, becomes a minute in UTC."""
+    if day is None:
+        return ''
+    if clock is None and not offset:
+        return day.isoformat()
+    local = datetime.datetime.combine(day, clock or (datetime.time(23, 59) if end else datetime.time.min))
+    return (local + datetime.timedelta(minutes=offset)).strftime('%Y-%m-%dT%H:%M')
+
+
+def period_form(a):
+    """The saved period as the form shows it: the person's own day and time, from the zone it was typed in."""
+    offset = a['period_tz'] or 0
+    out = {}
+    for key in ('start', 'end'):
+        try:
+            bound = store.parse_bound(a['period_' + key])
+        except ValueError:
+            bound = None
+        if isinstance(bound, datetime.datetime):
+            local = bound - datetime.timedelta(minutes=offset)
+            out[key] = (local.date().isoformat(), f'{local:%H:%M}')
+        else:
+            out[key] = (bound.isoformat() if bound else '', '')
+    return out
+
+
+@app.post('/analysis/{aid}/check/4')
+async def check_period(request: Request, aid: AnalysisId):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    form = await request.form()
+    if form.get('all_dates'):
+        return check_saved(aid, 4, period_start='', period_end='', period_tz=None)
+    try:
+        start_day, end_day = store.parse_day(form.get('period_start')), store.parse_day(form.get('period_end'))
+    except ValueError:
+        return check_saved(aid, 4, 'Enter the start and the end as dates, or choose all dates.')
+    try:
+        start_clock, end_clock = clock_of(form.get('period_start_time')), clock_of(form.get('period_end_time'))
+    except ValueError:
+        return check_saved(aid, 4, 'Enter each time as hours and minutes, for example 20:30, or leave it blank.')
+    if (start_clock and not start_day) or (end_clock and not end_day):
+        return check_saved(aid, 4, 'A time needs a date: choose the date it belongs to.')
+    offset = str(form.get('tz_offset', '0')).strip()
+    offset = int(offset) if re.fullmatch(r'-?\d{1,4}', offset) and abs(int(offset)) <= 840 else 0
+    start, end = utc_bound(start_day, start_clock, offset, False), utc_bound(end_day, end_clock, offset, True)
+    if start and end and store.period_of({'period_start': start, 'period_end': end}) == (None, None):
+        return check_saved(aid, 4, 'The end cannot be before the start.')
+    changed = store.period_of(a) != store.period_of({'period_start': start, 'period_end': end})
+    store.update_analysis(aid, period_start=start, period_end=end, period_tz=offset if start or end else None)
+    if changed and report.has_results(analysis.metrics_for(aid), store.latest_vibe(aid)):
+        return redirect(f'/analysis/{aid}/check/5', 'Time frame saved. Run the check again to apply it to the results you already have.')
+    return redirect(f'/analysis/{aid}/check/5')
+
+
+@app.post('/analysis/{aid}/check/5')
+async def check_sensitivity(request: Request, aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    choice = str((await request.form()).get('vibe_sensitivity', ''))
+    return check_saved(aid, 5, '' if choice in pipeline.SENSITIVITIES else 'Choose how sensitive the check should be.', vibe_sensitivity=choice)
+
+
+@app.post('/analysis/{aid}/check/6')
+async def check_run(request: Request, aid: AnalysisId):
+    """The last step: saves the engine, fixes the volume if none was chosen, and starts the check."""
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    form = await request.form()
+    engine = str(form.get('engine', '')).strip()
+    sent = False
+    if cloud.is_cloud(engine):
+        if not cloud.known(engine):
+            return redirect(f'/analysis/{aid}/check/6', 'Choose an engine from the list.')
+        if not cloud.available():
+            return redirect(f'/analysis/{aid}/check/6', 'Claude is not set up on this server. Choose another engine.')
+        if form.get('cloud_ok') != '1':
+            return redirect(f'/analysis/{aid}/check/6', 'Tick the box to confirm that your messages may be sent to Anthropic to be read.')
+        sent = True
+    else:
+        installed = [m['name'] for m in local_models()]
+        if engine and engine != config.model_name() and engine not in installed:
+            return redirect(f'/analysis/{aid}/check/6', 'That engine is not downloaded on this computer. Choose one from the list.')
+    store.update_analysis(aid, engine=engine if engine and engine != config.model_name() else None, cloud_ok=int(sent),
+                          **({'check_volume': workplace.DEFAULT_VOLUME} if a['check_volume'] is None else {}))
+    return start_job(aid, 'full')
+
+
+@app.post('/analysis/{aid}/add-link')
+def add_link(aid: AnalysisId, links: str = Form(''), back: str = Form('')):
+    """Reads the text of public web pages the person typed in, one link per line."""
+    if not store.get_analysis(aid):
+        return not_found()
+    where = check_destination(aid, back)
+    if store.active_job(aid):
+        return redirect(where, 'Wait for the current task to finish before editing evidence.')
+    urls = [x.strip() for x in links.splitlines() if x.strip()][:linkfetch.MAX_LINKS]
+    if not urls:
+        return redirect(where, 'Paste a web address first.')
+    added, problems = 0, []
+    for url in urls:
+        shown = url if len(url) <= 60 else url[:57] + '…'
+        try:
+            host, lines = linkfetch.fetch_lines(url)
+        except linkfetch.LinkError as e:
+            problems.append(f'{shown}: {e}')
+            continue
+        units = ingest.units_from_text('\n'.join(lines), host, mode='lines', clean=False)
+        stored = store.add_upload(aid, host, units, hashlib.sha256(('link:' + url).encode()).hexdigest()) if units else 0
+        if stored is None:
+            problems.append(f'{shown}: {REPEATED_FILE.replace("file", "link")}')
+        else:
+            added += stored
+    return redirect(where, upload_message(added, problems))
+
+
+@app.post('/analysis/{aid}/add-voice')
+def add_voice(aid: AnalysisId, files: List[UploadFile] = File(default=[]), back: str = Form('')):
+    """Turns recordings into text on this computer, then stores the text like any other message."""
+    if not store.get_analysis(aid):
+        return not_found()
+    where = check_destination(aid, back)
+    if store.active_job(aid):
+        return redirect(where, 'Wait for the current task to finish before editing evidence.')
+    added, problems = 0, []
+    for f in files:
+        if not (f.filename or '').strip():
+            continue
+        name = file_label(f.filename)
+        ext = Path(name).suffix.lower()
+        if ext not in voice.AUDIO_EXTENSIONS:
+            problems.append(f'{name}: unsupported type (use {", ".join(voice.AUDIO_EXTENSIONS)})')
+            continue
+        data = f.file.read(config.MAX_UPLOAD_BYTES + 1)
+        if not data or len(data) > config.MAX_UPLOAD_BYTES:
+            problems.append(f'{name}: ' + ('the file is empty' if not data else f'larger than {config.MAX_UPLOAD_BYTES // 1_000_000} MB'))
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        if store.has_upload(aid, digest):
+            problems.append(f'{name}: {REPEATED_FILE}')
+            continue
+        with tempfile.NamedTemporaryFile(dir=config.upload_dir(), prefix=config.UPLOAD_PREFIX, suffix=ext, delete=False) as tmp:
+            tmp.write(data)
+        try:
+            sentences = voice.transcribe(tmp.name)
+        except voice.VoiceUnavailable as e:
+            Path(tmp.name).unlink(missing_ok=True)
+            return redirect(where, str(e))
+        except Exception as e:
+            log.warning('could not transcribe %s: %s: %s', name, type(e).__name__, e)
+            problems.append(f'{name}: could not be turned into text; it may be damaged or not really audio')
+            continue
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+        units = ingest.units_from_text('\n'.join(sentences), name, mode='lines', clean=False)
+        if not units:
+            problems.append(f'{name}: no speech was found')
+            continue
+        stored = store.add_upload(aid, name, units, digest)
+        added += stored or 0
+    return redirect(where, upload_message(added, problems))
+
+
+async def read_paste(request: Request):
+    """Reads the paste form: (text, role), or None when the post is larger than a file may be (MAX_UPLOAD_BYTES). Starlette refuses one
+    form field over 1 MB with a bare JSON 400 (a browser's ordinary post included, from version 1.4), which cost the user the page and
+    the paste; so the parser is given the file limit, and a post that declares more is refused here for the route to answer with a note.
+    A post with no declared length (chunked, so not a browser's) is left to the parser, which refuses a field over the same limit.
+    The form is read by hand because FastAPI reads Form(...) parameters with the default limit before any dependency runs, and in a
+    dependency so that add_text stays a plain `def` and its database work runs in a worker thread."""
+    limit = config.MAX_UPLOAD_BYTES
+    declared = request.headers.get('content-length', '')
+    if declared.isdecimal() and int(declared) > limit:                              # a post within the limit holds no field the parser would refuse
+        return None
+    async with request.form(max_part_size=limit) as form:
+        text, role, back = form.get('raw_text'), form.get('actor_role'), form.get('back')
+    return ((text if isinstance(text, str) else ''), (role if isinstance(role, str) and role else 'SUBJECT'),   # an empty role is no role, as with Form(...)
+            back if isinstance(back, str) else '')
+
+
+@app.post('/analysis/{aid}/add-text')
+def add_text(aid: AnalysisId, paste=Depends(read_paste)):
+    if not store.get_analysis(aid):
+        return not_found()
+    if paste is None:
+        return redirect(f'/analysis/{aid}/workspace', 'That paste is too large. Save it as a .txt file and add it with File.')
+    raw_text, actor_role, back = paste
+    where = check_destination(aid, back)
+    if actor_role not in ('SUBJECT', 'AUDIENCE'):
+        return HTMLResponse('Choose whose words these are.', status_code=400)
+    if store.active_job(aid):
+        return redirect(where, 'Wait for the current task to finish before editing evidence.')
+    units = ingest.units_from_text(raw_text, 'Pasted text', role=actor_role, mode='lines', clean=False)
+    if not units:
+        return redirect(where, 'Paste at least one communication unit.')
+    added = store.add_units(aid, units, 'PASTE')
+    limit = config.max_units()
+    if not added:
+        message = f'Nothing was added: this analysis already holds its limit of {limit:,} communication units.'
+    elif added < len(units):
+        message = f'Added {added:,} of {unit_total(units)} communication units (limit {limit:,} per analysis).'
+    else:
+        message = f'Added {added:,} communication unit{"" if added == 1 else "s"}.'
+    cut = f' Only the first {ingest.MAX_TEXT_CHARS:,} characters were read.' if len(raw_text) > ingest.MAX_TEXT_CHARS else ''
+    return redirect(where, message + cut)
+
+
+@app.post('/analysis/{aid}/upload')
+def upload(aid: AnalysisId, files: List[UploadFile] = File(default=[]), back: str = Form('')):
+    if not store.get_analysis(aid):
+        return not_found()
+    where = check_destination(aid, back)
+    if store.active_job(aid):
+        return redirect(where, 'Wait for the current task to finish before editing evidence.')
+    added, problems = ingest_files(aid, files)
+    return redirect(where, upload_message(added, problems))
+
+
+@app.post('/analysis/{aid}/raw-csv')
+def raw_csv(aid: AnalysisId, raw_csv: UploadFile = File(...)):
+    """The original single-CSV import, kept so existing links and scripts continue to work."""
+    return upload(aid, [raw_csv], '')
+
+
+def cleared_message(units, had_results):
+    """Says what a clear removed, so the page never leaves the user guessing whether the report went too."""
+    if not units:
+        return 'There was no evidence to delete.'
+    gone = f'{units:,} communication unit{"" if units == 1 else "s"}'
+    if had_results:
+        gone += ' and every result built from them (ratings, guidance, Vibe Check, report, PDF and CSV)'
+    return f'Deleted {gone}. The analysis details and the numeric Vibe Check history (scores and counts) are kept, so trends survive a re-upload.'
+
+
+@app.post('/analysis/{aid}/clear-units')
+def clear_units(aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', 'Wait for the current task to finish before clearing evidence.')
+    units, had_results = store.count_units(aid), report.has_results(analysis.metrics_for(aid), store.latest_vibe(aid))
+    store.clear_evidence(aid)
+    return redirect(f'/analysis/{aid}/workspace', cleared_message(units, had_results))
+
+
+# ---- background tasks ------------------------------------------------------------------
+WORKER = ThreadPoolExecutor(max_workers=1)    # one model call at a time on a small instance
+JOB_LOCK = threading.Lock()
+
+
+def start_job(aid, kind):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    destination = f'/analysis/{aid}/workspace'
+    if not store.count_units(aid):
+        return redirect(destination, 'Add some communication to analyze first.')
+    period = store.period_coverage(a)
+    if period and not period['kept']:
+        return redirect(destination, f'All {period["total"]:,} communication units are dated outside the review period '
+                                     f'({report.period_span(period)}). Change the time frame in the New check, or choose all dates.')
+    if cloud.is_cloud(a['engine']):
+        if not cloud.available():
+            return redirect(destination, 'Claude is not set up on this server, so that engine cannot run. Choose another engine.')
+    elif not local_model_ready(a['engine']):
+        return redirect(destination, 'The model is still preparing. Please retry shortly.')
+    with JOB_LOCK:
+        if store.active_job(aid):
+            return redirect(destination, 'A task is already in progress.')
+        if store.count_active_jobs() >= MAX_QUEUED_JOBS:
+            return redirect(destination, 'The queue is full. Please try again shortly.')
+        jid = store.create_job(aid, kind)
+    WORKER.submit(pipeline.run_job, jid, aid, kind)
+    return redirect(destination)
+
+
+def remember_sensitivity(aid, value):
+    if value in pipeline.SENSITIVITIES:
+        store.update_analysis(aid, vibe_sensitivity=value)
+
+
+@app.post('/analysis/{aid}/run-ai')
+def run_ai(aid: AnalysisId, vibe_sensitivity: Optional[str] = Form(None)):
+    if not store.get_analysis(aid):
+        return not_found()
+    remember_sensitivity(aid, vibe_sensitivity)
+    return start_job(aid, 'full')
+
+
+@app.post('/analysis/{aid}/run-vibe')
+def run_vibe(aid: AnalysisId, vibe_sensitivity: Optional[str] = Form(None)):
+    if not store.get_analysis(aid):
+        return not_found()
+    remember_sensitivity(aid, vibe_sensitivity)
+    return start_job(aid, 'vibe')
+
+
+@app.post('/analysis/{aid}/cancel')
+def cancel(aid: AnalysisId):
+    if not store.get_analysis(aid):
+        return not_found()
+    if store.request_cancel(aid):
+        return redirect(f'/analysis/{aid}/workspace', 'Cancelling. The task stops once the model call in progress has finished.')
+    return redirect(f'/analysis/{aid}/workspace', 'There is no task to cancel.')
+
+
+@app.get('/analysis/{aid}/job')
+def job_status(aid: AnalysisId):
+    job = store.latest_job(aid)
+    if job:
+        job.pop('result', None)
+    return JSONResponse(job or {})
+
+
+# ---- reports ---------------------------------------------------------------------------
+@app.get('/analysis/{aid}/report', response_class=HTMLResponse)
+def report_page(request: Request, aid: AnalysisId):
+    ctx = report_context(aid, 'report')
+    return render(request, 'report.html', **ctx)
+
+
+@app.get('/analysis/{aid}/report.pdf')
+def report_pdf(aid: AnalysisId):
+    ctx = report_context(aid, 'report')
+    data = report_export.pdf(ctx, BASE_DIR)
+    return StreamingResponse(io.BytesIO(data), media_type='application/pdf',
+                             headers={'Content-Disposition': f'attachment; filename="FelixaCommunityHealth_Report_{aid}.pdf"'})
+
+
+@app.get('/analysis/{aid}/export')
+def export(aid: AnalysisId):
+    ctx = report_context(aid, 'export')
+    out = io.StringIO()
+    csv.writer(out).writerows(report.csv_rows(ctx))
+    return StreamingResponse(io.BytesIO(out.getvalue().encode('utf-8-sig')), media_type='text/csv; charset=utf-8',
+                             headers={'Content-Disposition': f'attachment; filename="felixa_community_health_{aid}.csv"'})
+
+
+@app.get('/health')
+def health():
+    return JSONResponse({'ok': True, 'product': config.PRODUCT, 'version': config.VERSION, 'local_model_ready': local_model_ready(), 'claude_ready': cloud.available()})
+
+
+def warn_if_sign_in_needs_https(host):
+    """Logs a warning when a password is set and `host`, where the app listens, is more than this computer. A browser keeps the Secure
+    session cookie only over https or at a localhost address, so someone who opens http://<this computer's address>:<port> and signs in
+    with the right password lands on the form again (see login_page). Through a proxy that ends https, or an SSH tunnel to 127.0.0.1,
+    sign-in works, so this only warns."""
+    if os.getenv('FELIXA_PASSWORD') and host.strip('[]').lower() not in {name.strip('[]') for name in LOCAL_HOSTS}:
+        log.warning('FELIXA_PASSWORD is set and the app listens on "%s". Its sign-in cookie is Secure, so a browser keeps it only over https or at '
+                    'http://127.0.0.1 (or localhost): over plain http at any other address, sign-in returns to the form. Put an https proxy in '
+                    'front of the app, or keep FELIXA_HOST=127.0.0.1 and reach it through an SSH tunnel (see the README).', host)
+
+
+def main():
+    import uvicorn
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    host = os.getenv('FELIXA_HOST', '127.0.0.1')
+    warn_if_sign_in_needs_https(host)
+    uvicorn.run('app:app', host=host, port=int(os.getenv('PORT', '5000')), reload=False)
+
+
+if __name__ == '__main__':
+    main()

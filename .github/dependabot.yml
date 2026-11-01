@@ -1,0 +1,7 @@
+# A weekly pull request for each outdated pin in requirements.txt and requirements-dev.txt (see "Keep the pins current" in DEV.md).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly

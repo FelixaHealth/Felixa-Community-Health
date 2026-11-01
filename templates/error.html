@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}{{ heading }} | {{ product }}{% endblock %}
+{% block content %}<section class="panel"><div class="eyebrow">Error {{ status }}</div><h1>{{ heading }}</h1>
+<p class="muted">{{ message }}</p>
+<div class="actions"><a class="btn primary" href="/">Back to start</a>{% if back %}<a class="btn" href="{{ back[0] }}">{{ back[1] }}</a>{% endif %}</div></section>{% endblock %}

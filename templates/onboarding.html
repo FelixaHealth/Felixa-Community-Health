@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Step {{ step }} of {{ last }}{% endblock %}
+{% macro choice(name, options, current, typed, label, hint) %}
+<label class="field">{{ label }}<select name="{{ name }}" data-other="{{ name }}_other" required{% if msg %} aria-invalid="true" aria-describedby="flash"{% endif %}><option value="" {% if not current %}selected{% endif %} disabled>{{ hint }}</option>{% for o in options %}<option value="{{ o }}" {% if o == current %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+<label class="field other-field" id="{{ name }}_other_wrap" {% if current != 'Other' %}hidden{% endif %}>Tell us <input name="{{ name }}_other" value="{{ typed }}" maxlength="120" placeholder="Type it here"></label>
+{% endmacro %}
+{% block content %}
+<div class="shell three">{% include "_rail.html" %}
+<section class="question-card">
+<div class="eyebrow">Step {{ step }} of {{ last }}</div>
+{% if step == 1 %}<div class="welcome"><img class="welcome-logo" src="/static/logo_stacked.png" alt="Felixa Community Health" width="120"><div><h2>Hi, welcome to Felixa Community Health</h2><p>Felixa reads how people in a community or team talk to each other and shows how healthy it feels. Start by telling us about your workplace.</p></div></div>{% endif %}
+<form method="post">
+{% if step == 1 %}
+<h1>What kind of place is this?</h1><p class="lead">Pick the one that fits best. You can change it later.</p>
+<fieldset class="group"><legend class="sr-only">What kind of place is this?</legend><div class="option-grid">{% for name, about in environments %}<label class="option"><input type="radio" name="environment" value="{{ name }}" data-other="environment_other" required {% if env == name %}checked{% endif %}><span><b>{{ name }}</b><small>{{ about }}</small></span></label>{% endfor %}</div></fieldset>
+<label class="field other-field" id="environment_other_wrap" {% if env != 'Other' %}hidden{% endif %}>Tell us what kind of place it is <input name="environment_other" value="{{ env_other }}" maxlength="120" placeholder="For example: a school club"></label>
+{% elif step == 2 %}
+<h1>What is the workplace called?</h1><p class="lead">This is the name you will see on every report.</p>
+<label class="field">Name of the workplace<input name="workplace_name" value="{{ a.person_name or '' }}" required maxlength="200" {% if msg %}aria-invalid="true" aria-describedby="flash"{% endif %} placeholder="For example: Night Owls Guild" autofocus></label>
+{% elif step == 3 %}
+<h1>What area does it work in?</h1><p class="lead">This helps the report speak your language.</p>
+{{ choice('area', areas, area, area_other, 'Area', 'Choose an area') }}
+{% elif step == 4 %}
+<h1>How do people communicate?</h1><p class="lead">Choose the place where most of the conversation happens.</p>
+{{ choice('channel', channels, channel, channel_other, 'Where people talk', 'Choose a platform') }}
+<div class="bot-offer" id="discord-offer" {% if channel != 'Discord' %}hidden{% endif %}><strong>Using Discord? Add the Vibe Check bot</strong>
+<p>The Vibe Check bot checks the mood of a Discord channel from inside Discord. Add it to your server with the button, choose the server in the window that opens, and the bot appears in your member list. This page stays open in this tab.</p>
+<p><a class="btn primary" href="{{ discord_url }}" target="_blank" rel="noopener noreferrer">{{ icon('link') }} Add the bot to my Discord server</a></p>
+<p class="small-note">It asks Discord for five permissions: view channels, read message history, send messages, embed links and attach files. You approve them on Discord's own page, and you can remove the bot at any time. The bot works inside Discord and does not send messages to Felixa Community Health. To see a channel in a Felixa Community Health report, export the channel and add the file in a new check.</p>
+<details><summary>How to export a Discord channel</summary><ol><li>Use a channel export tool such as DiscordChatExporter, or request your data package from Discord.</li><li>Choose CSV or JSON, or copy the messages as text.</li><li>Press New on your workplace page and drop the file in.</li></ol></details></div>
+{% elif step == 5 %}
+<h1>Who is asking?</h1><p class="lead">Your name and what you do, so the advice is written for the right person.</p>
+<label class="field">Your name<input name="user_name" value="{{ a.user_name or '' }}" required maxlength="120" {% if msg %}aria-invalid="true" aria-describedby="flash"{% endif %} placeholder="Your name"></label>
+{{ choice('user_role', roles, role, role_other, 'Your role', 'Choose your role') }}
+{% elif step == 6 %}
+<h1>What do you want to find out?</h1><p class="lead">Choose everything that matters. Your answers shape the plan and the advice.</p>
+<fieldset class="group"><legend class="sr-only">What you want to find out</legend><div class="option-grid">{% for g in goal_options %}<label class="option"><input type="checkbox" name="goals" value="{{ g }}" {% if g in goals %}checked{% endif %}><span>{{ g }}</span></label>{% endfor %}
+<label class="option"><input type="checkbox" name="goals" value="Other" data-other="goal_other" {% if goal_other %}checked{% endif %}><span>Other</span></label></div></fieldset>
+<label class="field other-field" id="goal_other_wrap" {% if not goal_other %}hidden{% endif %}>Tell us what you want to find out <textarea name="goal_other" maxlength="480" placeholder="Describe it in your own words">{{ goal_other }}</textarea></label>
+{% endif %}
+<div class="actions">{% if step > 1 %}<a class="btn" href="/analysis/{{ a.id }}/step/{{ step - 1 }}">{{ icon('back') }} Back</a>{% else %}<span></span>{% endif %}<button class="btn primary">{% if step == last %}Create workplace{% else %}Continue {{ icon('arrow') }}{% endif %}</button></div>
+</form>
+</section>
+{% include "_setup.html" %}</div>{% endblock %}

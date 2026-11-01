@@ -1,0 +1,5 @@
+{# Right-hand summary of what has been chosen so far. Needs `summary_title` and `summary_rows` [(icon, label, value)]. #}
+{% from "_icons.html" import icon %}
+<aside class="setup" aria-label="{{ summary_title }}"><h2>{{ summary_title }}</h2><dl>
+{% for ic, label, value in summary_rows %}<div class="setup-row"><span class="setup-ic">{{ icon(ic) }}</span><div><dt>{{ label }}</dt><dd{% if not value %} class="unset"{% endif %}>{{ value or 'Not set yet' }}</dd></div></div>
+{% endfor %}</dl></aside>

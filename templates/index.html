@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — See how people really communicate{% endblock %}
+{% block content %}
+<div class="home">
+<section class="welcome hero"><img class="welcome-logo" src="/static/logo_stacked.png" alt="Felixa Community Health" width="128"><div>
+<div class="eyebrow">Community health</div><h1>See how people really communicate.</h1>
+<p>Describe your workplace once, add your messages, and get a clear picture of how healthy the conversation is and what to try next.</p>
+<a class="btn primary large" href="/new">Create a workplace {{ icon('arrow') }}</a></div></section>
+{% if workplaces %}<section class="wp-list" aria-labelledby="wp-title"><h2 id="wp-title">Your workplaces</h2><ul>
+{% for w in workplaces %}<li><a href="/analysis/{{ w.id }}/workspace"><span class="wp-main"><strong>{{ w.person_name }}</strong><span class="wp-facts">{{ w.facts|join(' · ') }}</span></span>
+<span class="wp-score">{% if w.score is not none %}<b>{{ '%g'|format(w.score) }}</b><small>/ 10 vibe</small>{% else %}<small>No check yet</small>{% endif %}</span>
+<span class="wp-when">{{ w.when }}</span><span class="wp-go" aria-hidden="true">{{ icon('arrow') }}</span></a></li>
+{% endfor %}</ul></section>{% endif %}
+<section class="how" aria-label="How it works"><div><span class="how-ic">{{ icon('users') }}</span><strong>Describe</strong><p>Your community or team, and what you want to find out.</p></div>
+<div><span class="how-ic">{{ icon('upload') }}</span><strong>Add messages</strong><p>A file, pasted text, a public link or a recording. Names can be hidden.</p></div>
+<div><span class="how-ic">{{ icon('gauge') }}</span><strong>Check</strong><p>13 tone signals and a Vibe Check, with advice on what to try next.</p></div>
+<div><span class="how-ic">{{ icon('eye') }}</span><strong>Check again</strong><p>Press New after the next upload and follow the trend.</p></div></section>
+</div>{% endblock %}
