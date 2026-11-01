@@ -16,6 +16,15 @@ def main():
         log.write(json.dumps({'args': args, 'cwd': os.getcwd(), 'files_in_cwd': sorted(os.listdir('.')), 'stdin': text,
                               'has_api_key': any(k in os.environ for k in ('ANTHROPIC_API_KEY', 'FELIXA_ANTHROPIC_API_KEY'))}) + '\n')
     mode = os.environ.get('FAKE_CLAUDE_MODE', 'ok')
+    if mode == 'old' and '--tools' in args:                                    # a Claude Code too old to know --tools
+        print("error: unknown option '--tools'", file=sys.stderr)
+        sys.exit(1)
+    if mode == 'notsignedin':
+        print(json.dumps({'type': 'result', 'is_error': True, 'result': 'Not logged in \u00b7 Please run /login'}))
+        return
+    if mode == 'limit':
+        print(json.dumps({'type': 'result', 'is_error': True, 'result': 'Claude usage limit reached. Your limit will reset at 5pm.'}))
+        return
     if mode == 'crash':
         print('not signed in', file=sys.stderr)
         sys.exit(1)

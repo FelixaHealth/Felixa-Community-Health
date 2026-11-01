@@ -388,17 +388,55 @@ class ClaudeLogin(unittest.TestCase):
         self.assertTrue(pathlib.Path(seen['cwd']).name.startswith('felixa-claude-'))
         self.assertGreater(seen['timeout'], 0)
 
-    def test_every_failure_is_one_plain_message_that_names_no_key(self):
-        outputs = [self.done('', 1), self.done('not json'), self.done(json.dumps({'is_error': True, 'result': 'Invalid API key sk-ant-secret'})),
-                   self.done(json.dumps({'is_error': False})), self.done(json.dumps(['x']))]
-        failures = [mock.Mock(return_value=o) for o in outputs] + [mock.Mock(side_effect=subprocess.TimeoutExpired('claude', 5)), mock.Mock(side_effect=FileNotFoundError('claude'))]
-        for run in failures:
+    def test_every_failure_is_one_plain_message_that_names_no_key_and_no_message(self):
+        outputs = [(self.done('', 1), 'reported a problem'), (self.done('not json'), 'reported a problem'),
+                   (self.done(json.dumps({'is_error': True, 'result': 'Invalid API key sk-ant-secret'})), 'not signed in'),
+                   (self.done(json.dumps({'is_error': False})), 'reported a problem'), (self.done(json.dumps(['x'])), 'reported a problem')]
+        failures = [(mock.Mock(return_value=o), said) for o, said in outputs] + [(mock.Mock(side_effect=subprocess.TimeoutExpired('claude', 5)), 'took too long'),
+                                                                                 (mock.Mock(side_effect=FileNotFoundError('claude')), 'was not found')]
+        for run, said in failures:
             with self.env(), mock.patch('cloud.subprocess.run', run), self.assertLogs('bei.cloud', logging.WARNING) as logs:
                 with self.assertRaises(cloud.ClaudeUnavailable) as raised:
-                    cloud.login_call('claudecode:haiku')('x', 'y')
-            self.assertEqual(str(raised.exception), cloud.REFUSED_LOGIN)
+                    cloud.login_call('claudecode:haiku')('x', 'secret message text')
+            self.assertTrue(str(raised.exception).startswith('Claude Code could not answer. '), str(raised.exception))
+            self.assertIn(said, str(raised.exception))
             self.assertNotIn('sk-ant', str(raised.exception) + ' '.join(logs.output))
+            self.assertNotIn('secret message text', str(raised.exception) + ' '.join(logs.output))
             self.assertIsNone(raised.exception.__cause__)
+
+    def test_what_went_wrong_is_read_from_what_claude_code_printed(self):
+        cases = [('Not logged in \u00b7 Please run /login', '', 'not signed in'), ('', 'Claude AI usage limit reached|1700000000', 'usage limit'),
+                 ("error: unknown option '--tools'", '', 'too old'), ('API Error: 529 overloaded', '', 'busy'),
+                 ('segfault in module x', '', 'Claude Code reported a problem: segfault in module x.'), ('', '', 'gave no details'),
+                 ('boom sk-ant-api03-SECRETSECRET and Bearer abc123', '', '[hidden]')]
+        for stderr, result, said in cases:
+            out = cloud.diagnose(stderr, result)
+            self.assertIn(said, out)
+            self.assertNotIn('SECRETSECRET', out)
+            self.assertNotIn('abc123', out)
+        self.assertLessEqual(len(cloud.diagnose('x' * 1000)), 220)
+        self.assertIn('took too long', cloud.diagnose(timed_out=True))
+        self.assertIn('not found', cloud.diagnose(missing=True))
+
+    def test_a_too_old_claude_code_is_tried_again_by_name_then_given_up_on(self):
+        calls = []
+
+        def run(command, **kw):
+            calls.append(command)
+            return self.done('', 1) if '--tools' in command else self.done(json.dumps({'is_error': False, 'result': 'fine'}))
+        with self.env(), mock.patch('cloud.subprocess.run', run):
+            self.assertEqual(cloud.run_login('claude', 'haiku', 'sys', 'text')[0], None)           # exit 1 with no words: not "too old", so no second try
+            self.assertEqual(len(calls), 1)
+        calls.clear()
+
+        def old(command, **kw):
+            calls.append(command)
+            return subprocess.CompletedProcess([], 1, stdout='', stderr="error: unknown option '--tools'") if '--tools' in command else self.done(json.dumps({'is_error': False, 'result': 'fine'}))
+        with self.env(), mock.patch('cloud.subprocess.run', old):
+            self.assertEqual(cloud.run_login('claude', 'haiku', 'sys', 'text'), ('fine', None))
+        self.assertEqual(len(calls), 2)
+        self.assertIn('--disallowedTools', calls[1])
+        self.assertNotIn('--tools', calls[1])
 
     def test_a_hosted_app_refuses_to_run_it_even_if_asked(self):
         with self.env(FELIXA_PASSWORD='secret'), mock.patch('cloud.subprocess.run') as run:

@@ -3801,16 +3801,47 @@ class Workplaces(AppCase):
         self.assertIn('Claude Haiku (your Claude login)', self.client.get(f'/analysis/{aid}/check/6').text)
         self.assertIn('claude-code:haiku', self.client.get(f'/analysis/{aid}/report').text)
 
-    def test_when_claude_code_fails_the_check_says_how_to_fix_it_in_plain_words(self):
-        for mode in ('crash', 'error'):
+    def test_when_claude_code_fails_the_check_says_what_is_wrong_in_plain_words(self):
+        for mode, said in (('crash', 'not signed in to Claude Code'), ('error', 'not signed in to Claude Code'), ('notsignedin', 'Run `claude` once in a terminal'),
+                           ('limit', 'usage limit may be reached')):
             aid = self.with_chat()
             self.fake_claude(mode)
             job = self.run_job_fast(aid, path='check/6', engine='claudecode:sonnet', cloud_ok='1')
             self.assertEqual(job['status'], 'failed', (mode, job))
-            self.assertIn('Claude Code could not answer', job['message'])
-            self.assertIn('run `claude` once in a terminal', job['message'])
+            self.assertIn('Claude Code could not answer.', job['message'], mode)
+            self.assertIn(said, job['message'], mode)
             self.assertNotIn('Invalid API key', job['message'])
             self.assertNotIn('sk-ant', json.dumps(job))
+
+    def test_an_older_claude_code_that_lacks_a_switch_is_asked_again_with_the_tools_turned_off_by_name(self):
+        aid = self.with_chat()
+        log = self.fake_claude('old')
+        job = self.run_job_fast(aid, path='check/6', engine='claudecode:haiku', cloud_ok='1')
+        self.assertEqual(job['status'], 'complete', job)
+        calls = self.logged(log)
+        self.assertTrue(any('--tools' in c['args'] for c in calls))                                 # the first try had every switch
+        later = [c for c in calls if '--tools' not in c['args']]
+        self.assertTrue(later)
+        for call in later:
+            args = call['args']
+            self.assertIn('Bash', args[args.index('--disallowedTools') + 1])
+            self.assertIn('Read', args[args.index('--disallowedTools') + 1])
+            self.assertFalse(call['has_api_key'])
+
+    def test_the_test_button_tells_you_at_once_whether_your_claude_login_works(self):
+        aid = self.with_chat()
+        self.fake_claude()
+        self.assertIn('Test my Claude login', self.client.get(f'/analysis/{aid}/check/6').text)
+        r = self.post(aid, 'check/6/test-login')
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/6')
+        self.assertIn('Your Claude login works', flash(r))
+        for mode, said in (('notsignedin', 'not signed in'), ('limit', 'usage limit')):
+            self.fake_claude(mode)
+            self.assertIn(said, flash(self.post(aid, 'check/6/test-login')), mode)
+        with mock.patch.dict(os.environ, {'FELIXA_CLAUDE_CLI_PATH': '/nonexistent/claude'}):
+            self.assertIn('not found', flash(self.post(aid, 'check/6/test-login')))
+            self.assertNotIn('Test my Claude login', self.client.get(f'/analysis/{aid}/check/6').text)
+        self.assertEqual(self.store.count_units(aid), 76)                                          # the test sent no message of theirs
 
     def test_a_password_protected_app_never_offers_the_login(self):
         import cloud

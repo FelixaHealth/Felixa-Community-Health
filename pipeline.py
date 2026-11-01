@@ -43,7 +43,7 @@ def engine_call(a):
     if cloud.is_cloud(name):
         if not a['cloud_ok']:
             def refuse(*_args, **_kwargs):
-                raise cloud.ClaudeUnavailable(cloud.REFUSED)
+                raise cloud.login_failure('The box that lets your messages go to Anthropic was not ticked.') if cloud.is_login(name) else cloud.ClaudeUnavailable(cloud.REFUSED)
             return refuse
         return cloud.claude_call(name)
     return (lambda instructions, text, **kw: local_model_call(instructions, text, model=name, **kw)) if name else local_model_call

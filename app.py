@@ -898,6 +898,17 @@ async def check_run(request: Request, aid: AnalysisId):
     return start_job(aid, 'full')
 
 
+@app.post('/analysis/{aid}/check/6/test-login')
+def check_test_login(aid: AnalysisId):
+    """One tiny question to Claude Code, so a person can see at once whether their login works. No message of theirs is sent."""
+    if not store.get_analysis(aid):
+        return not_found()
+    if not cloud.login_available():
+        return redirect(f'/analysis/{aid}/check/6', 'Claude Code was not found on this computer, or this app is password-protected.')
+    ok, said = cloud.login_test()
+    return redirect(f'/analysis/{aid}/check/6', said)
+
+
 @app.post('/analysis/{aid}/add-link')
 def add_link(aid: AnalysisId, links: str = Form(''), back: str = Form('')):
     """Reads the text of public web pages the person typed in, one link per line."""

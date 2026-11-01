@@ -31,8 +31,6 @@ LOGIN_MODELS = [('haiku', 'Claude Haiku', 'Fastest and lightest', 9.0),
                 ('sonnet', 'Claude Sonnet', 'Balanced speed and care', 14.0),
                 ('opus', 'Claude Opus', 'Most careful, slowest', 24.0)]
 MAX_TOKENS = 2600
-REFUSED_LOGIN = ('Claude Code could not answer. Check that it is installed and that you are signed in (run `claude` once in a terminal), '
-                 'and that you have usage left. Then retry, or choose another engine.')
 LOGIN_LOCK = threading.Lock()                                                                  # one question at a time, as a person would ask
 REFUSED = ('Claude could not finish. The server\'s Claude key may be missing, wrong or out of credit, or Claude may be busy. '
            'Please retry, or choose another engine.')
@@ -125,6 +123,64 @@ def api_call(engine):
     return call
 
 
+# Tools Claude Code could use. Used by name when the installed version does not know `--tools`.
+TOOLS_OFF = 'Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit,TodoWrite'
+SECRET = __import__('re').compile(r'sk-ant-[\w-]+|Bearer\s+\S+')
+
+
+def login_failure(reason) -> ClaudeUnavailable:
+    return ClaudeUnavailable(f'Claude Code could not answer. {reason}')
+
+
+def diagnose(stderr='', result='', timed_out=False, missing=False) -> str:
+    """What went wrong with a Claude Code call, in words for the person, from what the program printed. Never includes a message or a key."""
+    if missing:
+        return 'Claude Code was not found. Install it, then try again.'
+    if timed_out:
+        return 'Claude Code took too long. Try again, or choose a faster model.'
+    said = f'{stderr} {result}'.lower()
+    if any(x in said for x in ('not logged in', 'please run /login', '/login', 'authenticat', 'invalid api key', 'unauthorized', 'sign in', 'signed in', '401')):
+        return 'You are not signed in to Claude Code. Run `claude` once in a terminal, sign in, then try again.'
+    if any(x in said for x in ('usage limit', 'rate limit', 'limit reached', 'quota', 'credit', 'overloaded', '429', '529')):
+        return 'Your Claude usage limit may be reached, or Claude is busy. Wait a little and try again, or choose another engine.'
+    if any(x in said for x in ('unknown option', 'unrecognized', 'unknown argument', 'invalid option')):
+        return 'Your copy of Claude Code is too old for this app. Update it (run `claude update` in a terminal), then try again.'
+    first = SECRET.sub('[hidden]', ' '.join(str(stderr or result).split()))[:160]
+    return 'Claude Code reported a problem' + (f': {first}' if first else ' and gave no details') + '.'
+
+
+def run_login(program, alias, system, input_text):
+    """Runs Claude Code once. Returns (text, None) or (None, reason). The first try uses every safety switch; a Claude Code too old to know one
+    of them is asked again with the tools turned off by name, and nothing else is relaxed."""
+    env = {k: v for k, v in os.environ.items() if k not in ('ANTHROPIC_API_KEY', 'FELIXA_ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')}
+    base = [program, '-p', '--output-format', 'json', '--model', alias, '--system-prompt', system]
+    tries = [base + ['--tools', '', '--no-session-persistence', '--disable-slash-commands', '--strict-mcp-config'],
+             base + ['--disallowedTools', TOOLS_OFF]]
+    reason = ''
+    for command in tries:
+        try:
+            with LOGIN_LOCK, tempfile.TemporaryDirectory(prefix='felixa-claude-') as folder:
+                done = subprocess.run(command, input=input_text, capture_output=True, text=True, timeout=config.model_timeout(), cwd=folder, env=env)
+        except subprocess.TimeoutExpired:
+            log.warning('Claude Code took too long')
+            return None, diagnose(timed_out=True)
+        except OSError as e:
+            log.warning('Claude Code could not be started: %s', type(e).__name__)
+            return None, diagnose(missing=True)
+        try:
+            result = json.loads(done.stdout)
+        except ValueError:
+            result = None
+        answer = result.get('result') if isinstance(result, dict) else None
+        if done.returncode == 0 and isinstance(result, dict) and not result.get('is_error') and isinstance(answer, str):
+            return answer, None
+        reason = diagnose(done.stderr, answer if isinstance(answer, str) else done.stdout)
+        log.warning('Claude Code did not answer (exit %s): %s', done.returncode, reason[:120])
+        if 'too old' not in reason:
+            break
+    return None, reason
+
+
 def login_call(engine):
     """A model function that asks Claude Code, signed in as the person, with every tool switched off: the messages are text to rate, and nothing
     in them can make the program read a file or run a command. It runs in an empty folder, without the API key variables, so that it uses the
@@ -134,23 +190,22 @@ def login_call(engine):
     def call(instructions, input_text, schema=None, **_ignored):
         program = cli_path()
         if not login_available() or not program:
-            raise ClaudeUnavailable(REFUSED_LOGIN)
+            raise login_failure('It is not available here: Claude Code is not installed on this computer, or this app is password-protected.')
         system = instructions + ('\n\nAnswer with JSON only, matching this JSON Schema exactly:\n' + json.dumps(schema) if schema is not None else '\n\nAnswer with JSON only.')
-        command = [program, '-p', '--output-format', 'json', '--model', alias, '--system-prompt', system, '--tools', '', '--no-session-persistence',
-                   '--disable-slash-commands', '--strict-mcp-config']
-        env = {k: v for k, v in os.environ.items() if k not in ('ANTHROPIC_API_KEY', 'FELIXA_ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN')}
-        try:
-            with LOGIN_LOCK, tempfile.TemporaryDirectory(prefix='felixa-claude-') as folder:
-                done = subprocess.run(command, input=input_text, capture_output=True, text=True, timeout=config.model_timeout(), cwd=folder, env=env)
-            result = json.loads(done.stdout)
-        except Exception as e:
-            log.warning('Claude Code could not be used: %s', type(e).__name__)
-            raise ClaudeUnavailable(REFUSED_LOGIN) from None
-        if done.returncode != 0 or not isinstance(result, dict) or result.get('is_error') or not isinstance(result.get('result'), str):
-            log.warning('Claude Code did not answer (exit %s)', done.returncode)
-            raise ClaudeUnavailable(REFUSED_LOGIN)
-        return result['result'], 'claude-code:' + alias
+        text, reason = run_login(program, alias, system, input_text)
+        if text is None:
+            raise login_failure(reason)
+        return text, 'claude-code:' + alias
     return call
+
+
+def login_test(alias='haiku'):
+    """A one-word question to check that Claude Code is installed, signed in and answering. Returns (ok, sentence for the person)."""
+    program = cli_path()
+    if not login_available() or not program:
+        return False, 'Claude Code was not found on this computer, or this app is password-protected.'
+    text, reason = run_login(program, alias, 'Reply with the single word: ready', 'ping')
+    return (True, 'Claude Code answered. Your Claude login works.') if text is not None else (False, reason)
 
 
 def claude_call(engine):

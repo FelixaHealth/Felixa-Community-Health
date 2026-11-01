@@ -61,6 +61,7 @@
 <p class="small-note">This asks the Claude Code program on this computer, signed in as you, so no key is needed. It is slower, because the program starts again for every step, and it counts against your own Claude usage. Your messages go to Anthropic to be read, as with the cloud engines. It works only while this app runs on your own computer.</p>
 {% if not login_ready %}<div class="notice warn">Claude Code was not found on this computer. Install <a href="https://claude.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a>, run <code>claude</code> once in a terminal to sign in, then reload this page.</div>{% endif %}
 <div class="engine-list">{% for e in engines if e.kind == 'login' %}{{ engine_card(e) }}{% endfor %}</div>
+{% if login_ready %}<p class="small-note"><button class="btn" type="submit" formaction="/analysis/{{ a.id }}/check/6/test-login" formnovalidate>Test my Claude login</button> Sends one word to Claude and tells you if it worked.</p>{% endif %}
 {% endif %}
 <label class="consent"><input type="checkbox" name="cloud_ok" value="1" {% if cloud_ok %}checked{% endif %}><span>I understand that my messages are sent to Anthropic to be read when I choose a Claude engine. Nothing else leaves this computer.</span></label>
 </fieldset>
