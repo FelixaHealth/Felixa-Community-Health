@@ -1186,7 +1186,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     host = os.getenv('FELIXA_HOST', '127.0.0.1')
     warn_if_sign_in_needs_https(host)
-    uvicorn.run('app:app', host=host, port=int(os.getenv('PORT', '5000')), reload=False)
+    uvicorn.run('app:app', host=host, port=int(os.getenv('PORT', '5050')), reload=False)
 
 
 if __name__ == '__main__':

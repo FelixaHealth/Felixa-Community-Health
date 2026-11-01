@@ -13,14 +13,14 @@ Everything runs on [Ollama](https://ollama.com) on your own machine, with no clo
 This is the easiest way to try the app. It uses [Claude Code](https://claude.com/claude-code) on your computer, signed in as you.
 
 1. Install Claude Code, then run `claude` once in a terminal and sign in.
-2. Mac: double-click `run_claude_mac.command` (or run `./run_claude_mac.command`). Windows: double-click `run_claude_windows.bat`. It sets everything up and opens http://127.0.0.1:5000.
+2. Mac: double-click `run_claude_mac.command` (or run `./run_claude_mac.command`). Windows: double-click `run_claude_windows.bat`. It checks your Python, sets everything up and opens the app in your browser (at the address it prints, usually http://127.0.0.1:5050). If something is missing it says what, and waits so you can read it.
 3. Create a workplace, press New, add `sample_data/sample_guild_chat.csv`, and on the last step choose **Your Claude login**, tick the box and run. If it does not work, press **Test my Claude login** on that step: it tells you what is wrong.
 
 ## Quick start with a model on your computer (Mac)
 
 1. Install Ollama and start it.
 2. Run `./run_mac.command`. It creates a virtual environment, installs the requirements, downloads the model if it is not installed yet (`qwen2.5:7b` by default, or the model named by `FELIXA_LOCAL_MODEL` in `.env`; another size of the same model, such as `qwen2.5:3b`, counts as a different model) and starts the app.
-3. Open http://127.0.0.1:5000, create a workplace, press New, and add `sample_data/sample_guild_chat.csv`.
+3. Open http://127.0.0.1:5050, create a workplace, press New, and add `sample_data/sample_guild_chat.csv`.
 
 Windows: `run_windows.bat`. Manual (Python 3.10 or newer; 3.11 and 3.13 are tested): `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python app.py`. The virtual environment is needed on systems whose Python is externally managed (Ubuntu 24.04, Homebrew).
 

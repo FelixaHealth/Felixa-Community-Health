@@ -3464,6 +3464,49 @@ class Workplaces(AppCase):
         if shutil.which('bash'):
             self.assertEqual(subprocess.run(['bash', '-n', str(ROOT / 'run_claude_mac.command')], capture_output=True).returncode, 0)
 
+    def test_the_start_script_picks_a_free_port_from_5050_and_never_uses_5000(self):
+        import socket
+        first = subprocess.run([sys.executable, str(ROOT / 'pick_port.py')], capture_output=True, text=True)
+        self.assertEqual(first.returncode, 0)
+        port = int(first.stdout)
+        self.assertTrue(5050 <= port < 5100)
+        with socket.socket() as held:                                                        # that port is now taken: the next call must move on
+            held.bind(('127.0.0.1', port))
+            second = int(subprocess.run([sys.executable, str(ROOT / 'pick_port.py')], capture_output=True, text=True).stdout)
+        self.assertGreater(second, port)
+        self.assertIsNone(re.search(r'PORT=5000|:5000', (ROOT / 'run_claude_mac.command').read_text()))      # it never points the browser at AirPlay's port
+        self.assertIn("os.getenv('PORT', '5050')", (ROOT / 'app.py').read_text())
+
+    @needs_bash
+    def test_the_mac_script_stops_with_plain_words_and_waits_when_something_is_missing(self):
+        """Run with stand-in programs on the PATH. A window that closes at once hides what went wrong, so every refusal waits for a key."""
+        bin_dir = pathlib.Path(tempfile.mkdtemp(prefix='bei-bin-'))
+        self.addCleanup(shutil.rmtree, bin_dir, True)
+        for tool in ('dirname', 'rm'):
+            os.symlink(shutil.which(tool), bin_dir / tool)
+        folder = pathlib.Path(tempfile.mkdtemp(prefix='bei-start-'))
+        self.addCleanup(shutil.rmtree, folder, True)
+        shutil.copy(ROOT / 'run_claude_mac.command', folder)
+
+        def run():
+            return subprocess.run([shutil.which('bash'), str(folder / 'run_claude_mac.command')], input='x', capture_output=True, text=True, timeout=30,
+                                  env={'PATH': str(bin_dir), 'HOME': str(folder)})
+        without_claude = run()                                                               # nothing on the PATH at all
+        self.assertEqual(without_claude.returncode, 1)
+        self.assertIn('Claude Code was not found', without_claude.stdout)
+        self.assertIn('https://claude.com/claude-code', without_claude.stdout)
+        self.assertIn('Press any key to close this window.', without_claude.stdout)
+        (bin_dir / 'claude').write_text('#!/bin/sh\nexit 0\n')
+        (bin_dir / 'claude').chmod(0o755)
+        (bin_dir / 'python3').write_text('#!/bin/sh\nexit 1\n')                              # a python3 that says it is too old
+        (bin_dir / 'python3').chmod(0o755)
+        too_old = run()
+        self.assertEqual(too_old.returncode, 1)
+        self.assertIn('Python 3.10 or newer is needed', too_old.stdout)
+        self.assertIn('https://www.python.org/downloads/', too_old.stdout)
+        self.assertIn('Press any key to close this window.', too_old.stdout)
+        self.assertFalse((folder / '.venv').exists())                                         # nothing was half-installed
+
     def test_the_old_success_metric_step_is_gone(self):
         aid = self.new_analysis()
         for text in (self.client.get(f'/analysis/{aid}/step/4').text, self.client.get(f'/analysis/{aid}/workspace').text):
