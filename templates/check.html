@@ -49,10 +49,10 @@
 <form method="post"><fieldset class="group"><legend class="sr-only">Sensitivity</legend><div class="option-grid one">{% for key, label, help in sens_options %}<label class="option"><input type="radio" name="vibe_sensitivity" value="{{ key }}" required {% if sensitivity == key %}checked{% endif %}><span><b>{{ label }}</b><small>{{ help }}</small></span></label>{% endfor %}</div></fieldset>
 <div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/4">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
 {% else %}
-<h1>Pick an engine</h1><p class="lead">The engine is the language model that reads your messages. Pick one that runs on this computer, or Claude in the cloud. A bigger one reads more carefully and takes longer.</p>
-{% if not model_server_up %}<div class="notice warn">The model server is not answering. Start Ollama, then reload this page.</div>{% endif %}
+<h1>Pick an engine</h1><p class="lead">The engine is the language model that reads your messages. {% if local_enabled %}Pick one that runs on this computer, or Claude in the cloud.{% else %}Claude reads them in the cloud.{% endif %} A bigger one reads more carefully and takes longer.</p>
+{% if local_enabled and not model_server_up %}<div class="notice warn">The model server is not answering. Start Ollama, then reload this page.</div>{% endif %}
 <form method="post"><fieldset class="group"><legend class="sr-only">Engine</legend>
-<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>
+{% if local_enabled %}<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>{% endif %}
 <h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
 <p class="small-note">Claude runs on Anthropic's servers, through the key set on this server, so it costs you nothing while you test. It reads more carefully and answers faster than a small local model, but your messages leave this computer to be read.{% if not incognito %} Turn on Incognito (step 3) first if the messages hold names.{% endif %}</p>
 {% if not cloud_ready %}<div class="notice warn">Claude is not set up on this server yet. Set <code>FELIXA_ANTHROPIC_API_KEY</code> and restart the app to turn it on.</div>{% endif %}

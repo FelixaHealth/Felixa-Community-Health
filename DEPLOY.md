@@ -1,6 +1,25 @@
 # Felixa Community Health: online deployment
 
-Status: prepared and tested locally with a fake model; not yet deployed to Railway with a real model.
+Status: prepared and tested locally with fake models; not yet deployed to Railway.
+
+## Recommended: the light setup with Claude (no model on the server)
+
+A model of its own needs a big, costly machine and is slow on a server's processor. The light setup runs only the web app and sends the reading to Claude through an API key, so a small service is enough (start with 1 GB of memory).
+
+1. In Railway, create a new project from the GitHub repository `FelixaHealth/Felixa-Community-Health`. It builds the `Dockerfile`.
+2. Add a volume to the service, mounted at `/data`. The database lives there. 1 GB is plenty.
+3. Under Variables, add:
+   - `FELIXA_NO_LOCAL_MODEL` = `1` (no model server, no download)
+   - `FELIXA_ANTHROPIC_API_KEY` = your Claude API key (from console.anthropic.com)
+   - `FELIXA_PASSWORD` = a strong password of at least 12 characters (everyone who signs in sees every workplace; the username is `felixa`)
+4. Deploy, then under Settings, Networking, generate a public domain. Open it by its `https://` address and sign in.
+5. Check `https://your-domain/health`: it should show `"ok": true` and `"claude_ready": true`.
+6. Create a workplace, press New, add `sample_data/sample_guild_chat.csv`, choose a Claude engine on the last step and tick the box.
+
+Things to know about this setup: your own Claude login (Claude Code) never works here, because the app switches it off whenever a password is set, so a hosted app cannot spend anyone's personal Claude usage. Every Claude check spends tokens from the API key's account. Messages are sent to Anthropic to be read, and the page asks each person to tick a box first. The app has one shared password, not separate accounts. Keep one replica, because the database is SQLite, and back up the volume.
+
+## With a model on the server
+
 
 1. Push this directory to a private GitHub repository.
 2. Create a Railway service from that repository (it builds the `Dockerfile`).

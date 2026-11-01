@@ -675,7 +675,7 @@ def workspace(request: Request, aid: AnalysisId):
         return not_found()
     a = ctx['a']
     return render(request, 'workspace.html', **ctx, local_model_ready=local_model_ready(), job=store.latest_job(aid), model=config.model_name(),
-                  claude_ready=cloud.available() or cloud.login_available(), rail=workplace_rail(aid, 'overview'),
+                  local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(), rail=workplace_rail(aid, 'overview'),
                   summary_title='Your workplace', summary_rows=setup_rows(a))
 
 
@@ -701,7 +701,7 @@ def check_rows(a, units_n):
             ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
             ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
             ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
-            ('cpu', 'Engine', cloud.label(a['engine'] or config.model_name()))]
+            ('cpu', 'Engine', cloud.label(a['engine'] or (config.model_name() if config.local_model_enabled() else 'claude:' + cloud.CLAUDE_MODELS[0][0])))]
 
 
 def check_context(a, step):
@@ -725,11 +725,15 @@ def check_context(a, step):
                                foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{aid}/workspace'}),
            'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}
     if step == CHECK_LAST:
-        models = local_models()
+        local = config.local_model_enabled()
+        models = local_models() if local else []
         ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
                                                   cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available())
-        ctx['engine'] = a['engine'] or config.model_name()
-        ctx['model_server_up'] = bool(models)
+        if not local:
+            ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
+        ctx['local_enabled'] = local
+        ctx['engine'] = a['engine'] or (config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0])
+        ctx['model_server_up'] = bool(models) if local else True
         ctx['cloud_ready'] = cloud.available()
         ctx['login_offered'] = cloud.login_offered()
         ctx['login_ready'] = cloud.login_available()
@@ -890,6 +894,8 @@ async def check_run(request: Request, aid: AnalysisId):
             return redirect(f'/analysis/{aid}/check/6', 'Tick the box to confirm that your messages may be sent to Anthropic to be read.')
         sent = True
     else:
+        if not config.local_model_enabled():
+            return redirect(f'/analysis/{aid}/check/6', 'This app runs without a model of its own. Choose a Claude engine.')
         installed = [m['name'] for m in local_models()]
         if engine and engine != config.model_name() and engine not in installed:
             return redirect(f'/analysis/{aid}/check/6', 'That engine is not downloaded on this computer. Choose one from the list.')
@@ -1161,7 +1167,7 @@ def export(aid: AnalysisId):
 
 @app.get('/health')
 def health():
-    return JSONResponse({'ok': True, 'product': config.PRODUCT, 'version': config.VERSION, 'local_model_ready': local_model_ready(), 'claude_ready': cloud.available()})
+    return JSONResponse({'ok': True, 'product': config.PRODUCT, 'version': config.VERSION, 'local_model_ready': local_model_ready() if config.local_model_enabled() else False, 'local_model_enabled': config.local_model_enabled(), 'claude_ready': cloud.available()})
 
 
 def warn_if_sign_in_needs_https(host):

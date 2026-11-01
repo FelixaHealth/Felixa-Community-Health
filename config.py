@@ -85,6 +85,11 @@ def max_rated_units() -> int:
     return _int('FELIXA_MAX_RATED_UNITS', 300)
 
 
+def local_model_enabled() -> bool:
+    """False when the app runs without a model of its own (FELIXA_NO_LOCAL_MODEL=1, the light hosted setup): Claude is then the only engine."""
+    return os.getenv('FELIXA_NO_LOCAL_MODEL', '').strip() != '1'
+
+
 def anthropic_key() -> str:
     """The Claude API key the server uses for the Claude engines, or '' when there is none. With one set, people can pick Claude for free:
     the server's key pays for it. The key is read from the environment only, and is never stored, logged or shown."""

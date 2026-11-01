@@ -3065,7 +3065,7 @@ class HostedStart(unittest.TestCase):
     that asks for the model named by FELIXA_LOCAL_MODEL (qwen2.5:7b when it is unset), so the launcher must hand it the model it
     downloaded. Otherwise the app waits for a model that is never pulled and both Run buttons stay disabled."""
 
-    def launch(self, **env):
+    def launch(self, local=True, **env):
         """Runs the script with its processes faked and stops it with SIGTERM, the way Railway does.
         Returns (the model it downloaded, the model the web app it started would ask for)."""
         children, commands, handlers, pulled = [], [], {}, threading.Event()
@@ -3096,11 +3096,12 @@ class HostedStart(unittest.TestCase):
         def sleep(seconds):                                           # the launcher only sleeps while both services are running
             if threading.current_thread() is not launcher:
                 return real_sleep(seconds)                            # a thread left by another test sleeps as usual
-            self.assertTrue(pulled.wait(10), 'the model download never started')
+            if local:
+                self.assertTrue(pulled.wait(10), 'the model download never started')
             handlers[signal.SIGTERM](signal.SIGTERM, None)
 
         with mock.patch.dict(os.environ, {'FELIXA_PASSWORD': 'a hosted secret'}):
-            for name in ('FELIXA_LOCAL_MODEL', 'FELIXA_REMOVE_OLD_MODEL', 'RAILWAY_ENVIRONMENT_ID'):
+            for name in ('FELIXA_LOCAL_MODEL', 'FELIXA_REMOVE_OLD_MODEL', 'RAILWAY_ENVIRONMENT_ID', 'FELIXA_NO_LOCAL_MODEL', 'FELIXA_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'):
                 os.environ.pop(name, None)
             os.environ.update(env)
             with mock.patch('subprocess.Popen', Child), mock.patch('subprocess.run', run), mock.patch('time.sleep', sleep), \
@@ -3108,6 +3109,10 @@ class HostedStart(unittest.TestCase):
                 runpy.run_path(str(ROOT / 'start_online.py'))
         web = [c for c in children if 'uvicorn' in c.args]
         downloads = [c[2] for c in commands if c[:2] == ['ollama', 'pull']]
+        if not local:
+            self.assertEqual((len(web), len(downloads), [c.args for c in children if c.args[:1] == ['ollama']], [c for c in commands if c[:1] == ['ollama']]),
+                             (1, 0, [], []))                           # only the web app: no model server, no download
+            return web[0].env
         self.assertEqual((len(web), len(downloads)), (1, 1))
         import config
         with mock.patch.dict(os.environ, web[0].env, clear=True):
@@ -3132,6 +3137,19 @@ class HostedStart(unittest.TestCase):
                 with self.assertRaises(SystemExit) as refused:
                     runpy.run_path(str(ROOT / 'start_online.py'))
                 self.assertIn('FELIXA_PASSWORD', str(refused.exception))
+
+    def test_without_a_local_model_only_the_web_app_starts_and_it_needs_the_claude_key(self):
+        env = self.launch(local=False, FELIXA_NO_LOCAL_MODEL='1', FELIXA_ANTHROPIC_API_KEY='sk-ant-hosted-key')
+        self.assertEqual((env['FELIXA_NO_LOCAL_MODEL'], env['FELIXA_ANTHROPIC_API_KEY']), ('1', 'sk-ant-hosted-key'))      # the web app is told, and has the key
+        self.assertEqual(self.launch(local=False, FELIXA_NO_LOCAL_MODEL='1', ANTHROPIC_API_KEY='sk-ant-other')['FELIXA_NO_LOCAL_MODEL'], '1')
+        for env in ({'FELIXA_NO_LOCAL_MODEL': '1'}, {'FELIXA_NO_LOCAL_MODEL': '1', 'FELIXA_ANTHROPIC_API_KEY': '  '}):
+            with self.subTest(env), mock.patch.dict(os.environ, {'FELIXA_PASSWORD': 'a hosted secret', **env}), mock.patch('subprocess.Popen', side_effect=AssertionError('a process was started')):
+                os.environ.pop('FELIXA_ANTHROPIC_API_KEY', None) if 'FELIXA_ANTHROPIC_API_KEY' not in env else None
+                os.environ.pop('ANTHROPIC_API_KEY', None)
+                with self.assertRaises(SystemExit) as refused:
+                    runpy.run_path(str(ROOT / 'start_online.py'))
+                self.assertIn('FELIXA_ANTHROPIC_API_KEY', str(refused.exception))
+        self.assertEqual(self.launch(), ('qwen2.5:3b', 'qwen2.5:3b'))                                   # the usual hosted setup is unchanged
 
     def test_a_password_of_twelve_characters_is_enough(self):
         self.assertEqual(self.launch(FELIXA_PASSWORD='x' * 12), ('qwen2.5:3b', 'qwen2.5:3b'))
@@ -3611,6 +3629,17 @@ class Workplaces(AppCase):
         env = {'FELIXA_ANTHROPIC_URL': self.url, 'FELIXA_ANTHROPIC_API_KEY': key}
         return mock.patch.dict(os.environ, env)
 
+    def no_claude_env_ctx(self):
+        patched = mock.patch.dict(os.environ, {'FELIXA_ANTHROPIC_URL': self.url})
+        class Ctx:
+            def __enter__(inner):
+                patched.__enter__()
+                for name in ('FELIXA_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'):
+                    os.environ.pop(name, None)
+            def __exit__(inner, *a):
+                return patched.__exit__(*a)
+        return Ctx()
+
     def no_claude_env(self):
         patched = mock.patch.dict(os.environ, {'FELIXA_ANTHROPIC_URL': self.url})
         patched.start()
@@ -3742,6 +3771,31 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertIn('Model needed', page)
         self.assertIn('Or choose a Claude engine when you press New.', page)
+
+    def test_an_app_without_a_local_model_offers_claude_only_and_says_so(self):
+        aid = self.with_chat()
+        with self.claude_env(), mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1', 'FELIXA_CLAUDE_LOGIN': '0'}):
+            page = self.client.get(f'/analysis/{aid}/check/6').text
+            self.assertNotIn('On this computer', page)
+            self.assertNotIn('The model server is not answering', page)
+            self.assertNotIn('ollama pull', page)
+            self.assertIn('Claude reads them in the cloud', page)
+            self.assertEqual(page.count('name="engine"'), 3)
+            self.assertRegex(page, r'name="engine" value="claude:claude-haiku-5-5" checked')            # the first Claude is the one chosen at the start
+            self.assertNotRegex(page, r'<button class="btn primary" disabled>Run check')
+            self.assertIn('Claude Haiku 5.5 (cloud)', page)
+            r = self.post(aid, 'check/6', engine='', cloud_ok='1')                                        # the local default is not on offer
+            self.assertIn('Choose a Claude engine', flash(r))
+            self.assertIsNone(self.store.latest_job(aid))
+            workspace = self.client.get(f'/analysis/{aid}/workspace').text
+            self.assertIn('Claude is ready', workspace)
+            self.assertNotIn('Model needed', workspace)
+            health = self.client.get('/health').json()
+            self.assertEqual((health['local_model_enabled'], health['local_model_ready'], health['claude_ready']), (False, False, True))
+            job = self.run_job(aid, path='check/6', engine='claude:claude-haiku-5-5', cloud_ok='1')
+            self.assertEqual(job['status'], 'complete', job)
+        with self.no_claude_env_ctx(), mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1', 'FELIXA_CLAUDE_LOGIN': '0'}):
+            self.assertIn('Claude key needed', self.client.get(f'/analysis/{aid}/workspace').text)
 
     def test_with_no_model_server_and_no_key_the_login_can_still_run_a_check(self):
         aid = self.with_chat()

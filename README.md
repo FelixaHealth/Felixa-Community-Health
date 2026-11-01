@@ -47,7 +47,7 @@ Copy [.env.example](.env.example) to `.env` (`run_mac.command` and `run_windows.
 
 ## Hosting
 
-Railway with a persistent volume, its own Ollama and a password. See [DEPLOY.md](DEPLOY.md). It is one shared, password-protected workspace, not separate customer accounts.
+Railway with a persistent volume and a password. The recommended light setup runs only the web app and uses Claude through an API key (`FELIXA_NO_LOCAL_MODEL=1`); a heavier one runs its own Ollama on the server. See [DEPLOY.md](DEPLOY.md). It is one shared, password-protected workspace, not separate customer accounts.
 
 **Sign-in needs https.** With `FELIXA_PASSWORD` set, the session cookie is `Secure`, and a browser keeps a `Secure` cookie only for an https page or for `http://127.0.0.1` and `http://localhost`, which always mean the browser's own computer (Safari may refuse it there too; then reach the app through https, as below). At any other plain-http address, such as `http://192.168.1.20:5000` after `FELIXA_HOST=0.0.0.0`, the app accepts the right password, the browser drops the cookie and the sign-in form comes back. The form shows a notice when that is the case, and `python app.py` logs a warning at start-up. To use a password-protected app from another computer, either put a TLS reverse proxy (Caddy, nginx) in front of it, passing the original `Host` header through (or the app refuses every form post as coming from another site), or open an SSH tunnel with `ssh -L 5000:127.0.0.1:5000 <host>` and browse to `http://127.0.0.1:5000` on your own computer. A hosted deploy on an https domain, as in [DEPLOY.md](DEPLOY.md), is not affected.
 
