@@ -19,7 +19,7 @@
 
 <div class="results-grid two-up">
 <section class="panel"><div class="eyebrow">Plan</div><h2>{{ pathway.name }}</h2><p>{{ pathway.question }}</p><div class="path-list">{% for x in pathway.actions %}<div><b>{{ loop.index }}</b><span>{{ x }}</span></div>{% endfor %}</div></section>
-<section class="panel"><div class="eyebrow">Engine</div><h2>{{ 'Ready' if local_model_ready else 'Model needed' }}</h2><p>{% if local_model_ready %}{{ model }} is installed on this computer.{% else %}Start Ollama and download the default model: <code>ollama pull {{ model }}</code>{% endif %}</p>{% if a.model_used %}<p><strong>Last used:</strong> {{ a.model_used }}</p>{% endif %}</section>
+<section class="panel"><div class="eyebrow">Engine</div><h2>{{ 'Ready' if local_model_ready else 'Model needed' }}</h2><p>{% if local_model_ready %}{{ model }} is installed on this computer.{% else %}Start Ollama and download the default model: <code>ollama pull {{ model }}</code>{% if claude_ready %}. Or choose a Claude engine when you press New.{% endif %}{% endif %}</p>{% if a.model_used %}<p><strong>Last used:</strong> {{ a.model_used }}</p>{% endif %}</section>
 </div>
 
 {% if evidence %}<section class="panel"><div class="eyebrow">Messages</div><h2>Stored on this computer</h2><p class="small-note">Your messages are kept in the database on the machine that runs {{ product }} until you delete them. An uploaded file itself is discarded once it has been read.</p>

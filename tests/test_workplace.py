@@ -5,6 +5,7 @@ import logging
 import os
 import pathlib
 import socket
+import subprocess
 import sys
 import types
 import unittest
@@ -330,6 +331,90 @@ class Claude(unittest.TestCase):
         self.assertLess(cloud_estimates[0], engines[0]['estimate']['low'])                          # and the light one beats a 7B model on a laptop
         off = workplace.engine_options([], 'qwen2.5:7b', 300, 300, 1, cloud.CLAUDE_MODELS, False)
         self.assertEqual([e['installed'] for e in off if e['kind'] == 'cloud'], [False] * 3)
+
+
+class ClaudeLogin(unittest.TestCase):
+    """Claude through the person's own login, by the Claude Code program: how it is asked, and what happens when it cannot answer."""
+
+    def env(self, **extra):
+        return mock.patch.dict(os.environ, {'FELIXA_CLAUDE_CLI_PATH': sys.executable, 'ANTHROPIC_API_KEY': 'sk-ant-secret', 'FELIXA_ANTHROPIC_API_KEY': 'sk-ant-secret2',
+                                            'FELIXA_PASSWORD': '', **extra})
+
+    def done(self, out, code=0):
+        return subprocess.CompletedProcess([], code, stdout=out, stderr='')
+
+    def test_names_and_what_is_known(self):
+        self.assertTrue(cloud.is_login('claudecode:haiku'))
+        self.assertTrue(cloud.is_cloud('claudecode:haiku'))
+        self.assertFalse(cloud.is_login('claude:claude-haiku-5-5'))
+        self.assertEqual(cloud.model_of('claudecode:opus'), 'opus')
+        self.assertTrue(cloud.known('claudecode:sonnet'))
+        self.assertFalse(cloud.known('claudecode:gpt'))
+        self.assertEqual(cloud.label('claudecode:haiku'), 'Claude Haiku (your Claude login)')
+
+    def test_it_is_offered_only_on_the_persons_own_computer(self):
+        with self.env():
+            self.assertTrue(cloud.login_offered() and cloud.login_available())
+        with self.env(FELIXA_PASSWORD='secret'):
+            self.assertFalse(cloud.login_offered())
+            self.assertFalse(cloud.login_available())
+        with self.env(FELIXA_CLAUDE_LOGIN='0'):
+            self.assertFalse(cloud.login_offered())
+        with self.env(FELIXA_CLAUDE_CLI_PATH='/nonexistent/claude'):
+            self.assertTrue(cloud.login_offered())
+            self.assertFalse(cloud.login_available())
+        with self.env(FELIXA_CLAUDE_CLI_PATH='', ), mock.patch('cloud.shutil.which', return_value=None):
+            self.assertFalse(cloud.login_available())
+
+    def test_the_command_has_no_tools_an_empty_folder_and_no_key_and_the_text_goes_in_on_stdin(self):
+        seen = {}
+
+        def run(command, **kw):
+            seen.update(command=command, **kw)
+            return self.done(json.dumps({'type': 'result', 'is_error': False, 'result': '{"ok": 1}'}))
+        with self.env(), mock.patch('cloud.subprocess.run', run):
+            text, model = cloud.login_call('claudecode:sonnet')('Rate these.', 'a message: rm -rf /', schema={'type': 'object'})
+        self.assertEqual((text, model), ('{"ok": 1}', 'claude-code:sonnet'))
+        command = seen['command']
+        self.assertEqual(command[0], sys.executable)
+        self.assertEqual(command[command.index('--tools') + 1], '')
+        self.assertEqual(command[command.index('--model') + 1], 'sonnet')
+        self.assertTrue(command[command.index('--system-prompt') + 1].startswith('Rate these.'))
+        self.assertIn('JSON Schema', command[command.index('--system-prompt') + 1])
+        self.assertNotIn('rm -rf', ' '.join(command))
+        self.assertEqual(seen['input'], 'a message: rm -rf /')
+        self.assertNotIn('ANTHROPIC_API_KEY', seen['env'])
+        self.assertNotIn('FELIXA_ANTHROPIC_API_KEY', seen['env'])
+        self.assertTrue(pathlib.Path(seen['cwd']).name.startswith('felixa-claude-'))
+        self.assertGreater(seen['timeout'], 0)
+
+    def test_every_failure_is_one_plain_message_that_names_no_key(self):
+        outputs = [self.done('', 1), self.done('not json'), self.done(json.dumps({'is_error': True, 'result': 'Invalid API key sk-ant-secret'})),
+                   self.done(json.dumps({'is_error': False})), self.done(json.dumps(['x']))]
+        failures = [mock.Mock(return_value=o) for o in outputs] + [mock.Mock(side_effect=subprocess.TimeoutExpired('claude', 5)), mock.Mock(side_effect=FileNotFoundError('claude'))]
+        for run in failures:
+            with self.env(), mock.patch('cloud.subprocess.run', run), self.assertLogs('bei.cloud', logging.WARNING) as logs:
+                with self.assertRaises(cloud.ClaudeUnavailable) as raised:
+                    cloud.login_call('claudecode:haiku')('x', 'y')
+            self.assertEqual(str(raised.exception), cloud.REFUSED_LOGIN)
+            self.assertNotIn('sk-ant', str(raised.exception) + ' '.join(logs.output))
+            self.assertIsNone(raised.exception.__cause__)
+
+    def test_a_hosted_app_refuses_to_run_it_even_if_asked(self):
+        with self.env(FELIXA_PASSWORD='secret'), mock.patch('cloud.subprocess.run') as run:
+            with self.assertRaises(cloud.ClaudeUnavailable):
+                cloud.login_call('claudecode:haiku')('x', 'y')
+            run.assert_not_called()
+
+    def test_login_engines_follow_the_cloud_ones_with_slower_estimates(self):
+        engines = workplace.engine_options([], 'qwen2.5:7b', 100, 100, 1, cloud.CLAUDE_MODELS, True, cloud.LOGIN_MODELS, True)
+        kinds = [e['kind'] for e in engines]
+        self.assertEqual(kinds, ['local'] + ['cloud'] * 3 + ['login'] * 3)
+        self.assertEqual([e['name'] for e in engines if e['kind'] == 'login'], ['claudecode:haiku', 'claudecode:sonnet', 'claudecode:opus'])
+        by = {e['name']: e['estimate']['low'] for e in engines}
+        self.assertGreater(by['claudecode:haiku'], by['claude:claude-haiku-5-5'])                    # the program starts again for each step
+        off = workplace.engine_options([], 'qwen2.5:7b', 100, 100, 1, (), False, cloud.LOGIN_MODELS, False)
+        self.assertEqual([e['installed'] for e in off if e['kind'] == 'login'], [False] * 3)
 
 
 if __name__ == '__main__':

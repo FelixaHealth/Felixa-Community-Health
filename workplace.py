@@ -128,7 +128,7 @@ def estimate(messages, volume, billions=None, sources=1, per_call=None):
     return {**parts, 'low': low, 'high': high, 'text': text}
 
 
-def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False):
+def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False, login_models=(), login_ready=False):
     """The engines to choose from, each with its estimate. `models` are what the local model server has downloaded: [{'name', 'details'}].
     The configured default comes first and is marked, whether or not it is downloaded yet. `cloud_models` are (id, name, about, seconds a
     call takes); they follow the local ones, and are marked not ready when the server has no key for them."""
@@ -148,5 +148,8 @@ def engine_options(models, default, messages, volume, sources=1, cloud_models=()
                     'size': f'{billions:g}B parameters', 'estimate': estimate(messages, volume, billions, sources)})
     for model, label, about, seconds in cloud_models:
         out.append({'name': 'claude:' + model, 'label': label, 'kind': 'cloud', 'default': False, 'installed': cloud_ready, 'billions': None,
+                    'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds)})
+    for alias, label, about, seconds in login_models:
+        out.append({'name': 'claudecode:' + alias, 'label': label, 'kind': 'login', 'default': False, 'installed': login_ready, 'billions': None,
                     'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds)})
     return out

@@ -675,7 +675,7 @@ def workspace(request: Request, aid: AnalysisId):
         return not_found()
     a = ctx['a']
     return render(request, 'workspace.html', **ctx, local_model_ready=local_model_ready(), job=store.latest_job(aid), model=config.model_name(),
-                  rail=workplace_rail(aid, 'overview'),
+                  claude_ready=cloud.available() or cloud.login_available(), rail=workplace_rail(aid, 'overview'),
                   summary_title='Your workplace', summary_rows=setup_rows(a))
 
 
@@ -726,10 +726,13 @@ def check_context(a, step):
            'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}
     if step == CHECK_LAST:
         models = local_models()
-        ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available())
+        ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
+                                                  cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available())
         ctx['engine'] = a['engine'] or config.model_name()
         ctx['model_server_up'] = bool(models)
         ctx['cloud_ready'] = cloud.available()
+        ctx['login_offered'] = cloud.login_offered()
+        ctx['login_ready'] = cloud.login_available()
         ctx['cloud_ok'] = bool(a['cloud_ok'])
     return ctx
 
@@ -880,8 +883,9 @@ async def check_run(request: Request, aid: AnalysisId):
     if cloud.is_cloud(engine):
         if not cloud.known(engine):
             return redirect(f'/analysis/{aid}/check/6', 'Choose an engine from the list.')
-        if not cloud.available():
-            return redirect(f'/analysis/{aid}/check/6', 'Claude is not set up on this server. Choose another engine.')
+        if not cloud.available(engine):
+            return redirect(f'/analysis/{aid}/check/6', 'Claude Code is not available here. Install it and sign in, or choose another engine.' if cloud.is_login(engine)
+                            else 'Claude is not set up on this server. Choose another engine.')
         if form.get('cloud_ok') != '1':
             return redirect(f'/analysis/{aid}/check/6', 'Tick the box to confirm that your messages may be sent to Anthropic to be read.')
         sent = True
@@ -1068,8 +1072,8 @@ def start_job(aid, kind):
         return redirect(destination, f'All {period["total"]:,} communication units are dated outside the review period '
                                      f'({report.period_span(period)}). Change the time frame in the New check, or choose all dates.')
     if cloud.is_cloud(a['engine']):
-        if not cloud.available():
-            return redirect(destination, 'Claude is not set up on this server, so that engine cannot run. Choose another engine.')
+        if not cloud.available(a['engine']):
+            return redirect(destination, 'That Claude engine is not available here, so it cannot run. Choose another engine.')
     elif not local_model_ready(a['engine']):
         return redirect(destination, 'The model is still preparing. Please retry shortly.')
     with JOB_LOCK:
