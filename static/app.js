@@ -43,8 +43,8 @@
   document.addEventListener('change', e => { if (e.target.closest('[data-other]')) refresh(); });
   // Radios of one group share a name; the group's Other box must also react when another radio is picked.
   document.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', refresh));
-  const select = document.querySelector('select[name=channel]'), offer = document.getElementById('discord-offer');
-  if (select && offer) select.addEventListener('change', () => { offer.hidden = select.value !== 'Discord'; });
+  const offer = document.getElementById('discord-offer');
+  if (offer) document.querySelectorAll('input[name=channel]').forEach(r => r.addEventListener('change', () => { offer.hidden = !r.checked || r.value !== 'Discord'; }));
   refresh();
 })();
 

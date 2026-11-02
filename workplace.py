@@ -17,8 +17,15 @@ ENVIRONMENTS = [('Online community', 'A forum, server or group that people join 
                 ('Other', 'Something else')]
 AREAS = ['Gaming', 'Cybersecurity', 'IT and software', 'Customer service', 'Education', 'Healthcare', 'Finance',
          'Retail and e-commerce', 'Media and creators', 'Non-profit', 'Government and public sector', 'Other']
-CHANNELS = ['Discord', 'Slack', 'Microsoft Teams', 'Google Meet', 'Zoom', 'Google Chat', 'WhatsApp', 'Telegram', 'Messages (SMS or iMessage)',
-            'Facebook Messenger', 'Signal', 'Email', 'Forum or website', 'Social media comments', 'Other']
+CHANNELS = ['Discord', 'Slack', 'Microsoft Teams', 'WhatsApp', 'Telegram', 'Reddit', 'YouTube', 'Twitch', 'Google Chat', 'Zoom', 'Google Meet',
+            'Messages (SMS or iMessage)', 'Facebook Messenger', 'Signal', 'Email', 'Forum or website', 'Social media comments', 'Other']
+# Where the messages of a platform that has no export button come from. Shown on step 1 of a check when the workplace talks there.
+CHANNEL_TIPS = {
+    'Reddit': 'Reddit has no export button for a thread. Save the comments as a CSV or text file with a Reddit export tool or your own data request, then add the file. '
+              'A public thread link can also work, but Reddit loads most comments after the page opens, so the link may bring only the post.',
+    'YouTube': 'YouTube comments load after the page opens, so a link brings little. Export the comments to a CSV or text file with a comment export tool, then add the file.',
+    'Twitch': 'Twitch chat is not saved by Twitch. Use a chat log export from your streaming or moderation tool, or a chat downloader for past broadcasts, and add the file (CSV, JSON or text).',
+}
 # The invitation to add the Vibe Check bot to a Discord server. The permissions in it are View Channels, Send Messages, Embed Links, Attach Files and
 # Read Message History (117760). The bot runs inside Discord; it does not send anything to this app.
 DISCORD_BOT_URL = ('https://discord.com/oauth2/authorize?client_id=1475337312303841401&permissions=117760&integration_type=0'

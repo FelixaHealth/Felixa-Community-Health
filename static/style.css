@@ -376,3 +376,5 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 @media print{.rail-col{display:none!important}}
 .stage>.setup{position:static;margin:0 0 18px}.setup-edit{margin:14px 0 0}
 .stage>.setup dl{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.option-grid.chips{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.option-grid.chips .option span{padding:12px 14px;min-height:48px;justify-content:center;font-weight:600}
+.field-legend{font-weight:650;margin:0 0 8px;padding:0}.channel-tip{margin:14px 0}

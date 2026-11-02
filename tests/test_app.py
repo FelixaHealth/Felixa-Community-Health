@@ -3972,8 +3972,20 @@ class Workplaces(AppCase):
     def test_the_list_of_places_people_talk_includes_messages_and_google_meet(self):
         aid = self.new_analysis()
         page = self.client.get(f'/analysis/{aid}/step/4').text
-        for place in ('Discord', 'Google Meet', 'Zoom', 'Messages (SMS or iMessage)', 'WhatsApp', 'Microsoft Teams', 'Social media comments', 'Other'):
-            self.assertIn(f'<option value="{place}"', page, place)
+        for place in ('Discord', 'Google Meet', 'Zoom', 'Messages (SMS or iMessage)', 'WhatsApp', 'Microsoft Teams', 'Social media comments', 'Reddit', 'YouTube', 'Twitch', 'Other'):
+            self.assertIn(f'<input type="radio" name="channel" value="{place}"', page, place)               # one tap each, no drop-down to open
+        self.assertNotIn('<select name="channel"', page)
+        import workplace
+        self.assertEqual(workplace.CHANNELS[:3], ['Discord', 'Slack', 'Microsoft Teams'], 'the common ones first')
+        self.assertEqual(workplace.CHANNELS[-1], 'Other')
+        for place in ('Reddit', 'YouTube', 'Twitch'):
+            self.assertEqual(self.post(aid, 'step/4', channel=place).headers['location'], f'/analysis/{aid}/step/5', place)
+            self.assertEqual(self.store.get_analysis(aid)['channel'], place)
+            tip = self.client.get(f'/analysis/{aid}/check/1').text
+            self.assertIn(f'Adding {place} messages.', tip)
+            self.assertIn(workplace.CHANNEL_TIPS[place].split('.')[0], tip)
+        self.post(aid, 'step/4', channel='Slack')
+        self.assertNotIn('Adding Slack messages.', self.client.get(f'/analysis/{aid}/check/1').text, 'a platform with no tip shows none')
         for place in ('Google Meet', 'Messages (SMS or iMessage)'):
             r = self.post(aid, 'step/4', channel=place)
             self.assertEqual((r.headers['location'], self.store.get_analysis(aid)['channel']), (f'/analysis/{aid}/step/5', place))

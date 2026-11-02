@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon %}{% from "_fields.html" import choice, members_field, zone_field with context %}{% block title %}Felixa Community Health — Edit {{ a.person_name or 'workplace' }}{% endblock %}
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% from "_fields.html" import choice, choice_grid, members_field, zone_field with context %}{% block title %}Felixa Community Health — Edit {{ a.person_name or 'workplace' }}{% endblock %}
 {% block content %}
 <div class="shell two">{% include "_rail.html" %}<div class="stage">
 <section class="panel edit-panel"><div class="eyebrow">Workplace</div><h1>Edit {{ a.person_name or 'workplace' }}</h1>
@@ -11,7 +11,7 @@
 <label class="field">Name of the workplace<input name="workplace_name" value="{{ a.person_name or '' }}" required maxlength="200"></label>
 {{ members_field(members_text) }}{{ zone_field(a.time_zone or '', time_zones) }}
 {{ choice('area', areas, area, area_other, 'Area', 'Choose an area') }}
-{{ choice('channel', channels, channel, channel_other, 'Where people talk', 'Choose a platform') }}
+{{ choice_grid('channel', channels, channel, channel_other, 'Where people talk') }}
 <h2 class="mini-h">About you</h2>
 <label class="field">Your name<input name="user_name" value="{{ a.user_name or '' }}" required maxlength="120"></label>
 {{ choice('user_role', roles, role, role_other, 'Your role', 'Choose your role') }}

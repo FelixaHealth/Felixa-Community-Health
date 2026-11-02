@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Step {{ step }} of {{ last }}{% endblock %}
-{% from "_fields.html" import choice, members_field, zone_field with context %}
+{% from "_fields.html" import choice, choice_grid, members_field, zone_field with context %}
 {% block content %}
 <div class="shell two">{% include "_rail.html" %}
 <section class="question-card">
@@ -19,7 +19,7 @@
 {{ choice('area', areas, area, area_other, 'Area', 'Choose an area') }}
 {% elif step == 4 %}
 <h1>How do people communicate?</h1><p class="lead">Choose the place where most of the conversation happens.</p>
-{{ choice('channel', channels, channel, channel_other, 'Where people talk', 'Choose a platform') }}
+{{ choice_grid('channel', channels, channel, channel_other, 'Where people talk') }}
 <div class="bot-offer" id="discord-offer" {% if channel != 'Discord' %}hidden{% endif %}><strong>Using Discord? Add the Vibe Check bot</strong>
 <p>The Vibe Check bot checks the mood of a Discord channel from inside Discord. Add it to your server with the button, choose the server in the window that opens, and the bot appears in your member list. This page stays open in this tab.</p>
 <p><a class="btn primary" href="{{ discord_url }}" target="_blank" rel="noopener noreferrer">{{ icon('link') }} Add the bot to my Discord server</a></p>

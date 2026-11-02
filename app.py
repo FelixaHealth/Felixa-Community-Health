@@ -811,7 +811,7 @@ def check_context(a, step):
            'dates': (label(stamps[0]), label(stamps[-1])) if stamps else None, 'period_form': period_form(a), 'presets': [(k, l) for k, l, _d in PRESETS], 'period_text': report.period_text(period),
            'sens_options': [(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
            'sensitivity': a['vibe_sensitivity'] or 'medium', 'extensions': ', '.join(config.UPLOAD_EXTENSIONS),
-           'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': a['channel'] == 'Discord',
+           'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': a['channel'] == 'Discord', 'channel_tip': workplace.CHANNEL_TIPS.get(a['channel'] or ''),
            'rail': wizard_rail(aid, workplace.CHECK_STEPS, f'/analysis/{aid}/check', step,
                                foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{aid}/workspace'}),
            'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}
