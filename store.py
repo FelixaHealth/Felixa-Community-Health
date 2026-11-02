@@ -113,6 +113,13 @@ CREATE TABLE IF NOT EXISTS vibe_history(
   created_at TEXT,
   snapshot_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS measure_history(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  analysis_id INTEGER NOT NULL,
+  created_at TEXT,
+  snapshot_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_measurehist_analysis ON measure_history(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_units_analysis ON communication_units(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_unit ON unit_ratings(unit_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_analysis ON jobs(analysis_id);
@@ -308,6 +315,22 @@ def timestamp_span(aid):
     return (min(stamps), max(stamps)) if stamps else None
 
 
+def rated_units(aid) -> list:
+    """The units of an analysis that have all of their signal ratings, in upload order: [{'id', 'timestamp', 'ratings': {signal: 0..3}}].
+    A unit with some ratings missing is left out, as `calculate_metrics` leaves it out of the metrics. No message text is read."""
+    with db() as c:
+        rows = c.execute('SELECT cu.id, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
+                         'JOIN unit_ratings ur ON ur.unit_id=cu.id WHERE cu.analysis_id=? ORDER BY cu.id', (aid,)).fetchall()
+    units, by_id = [], {}
+    for row in rows:
+        unit = by_id.get(row['id'])
+        if unit is None:
+            unit = by_id[row['id']] = {'id': row['id'], 'timestamp': row['timestamp'] or '', 'ratings': {}}
+            units.append(unit)
+        unit['ratings'][row['attribute']] = row['rating']
+    return units
+
+
 def count_units(aid) -> int:
     with db() as c:
         return c.execute('SELECT COUNT(*) n FROM communication_units WHERE analysis_id=?', (aid,)).fetchone()['n']
@@ -478,3 +501,26 @@ def vibe_history(aid) -> list:
     with db() as c:
         rows = c.execute('SELECT snapshot_json FROM vibe_history WHERE analysis_id=? ORDER BY id', (aid,)).fetchall()
     return [json.loads(r['snapshot_json']) for r in rows]
+
+
+# ---- measure history -------------------------------------------------------------
+def save_measure_snapshot(aid, snapshot: dict) -> int:
+    """Keeps the numbers of one check (see measures.snapshot): scores and counts only, never a message, a name or a file name."""
+    with db() as c:
+        return c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json) VALUES(?,?,?)',
+                         (aid, snapshot.get('created_at'), json.dumps(snapshot))).lastrowid
+
+
+def measure_history(aid) -> list:
+    """The saved numbers of every earlier check, oldest first. A row that cannot be read is skipped."""
+    with db() as c:
+        rows = c.execute('SELECT snapshot_json FROM measure_history WHERE analysis_id=? ORDER BY id', (aid,)).fetchall()
+    out = []
+    for row in rows:
+        try:
+            snap = json.loads(row['snapshot_json'])
+        except ValueError:
+            continue
+        if isinstance(snap, dict):
+            out.append(snap)
+    return out
