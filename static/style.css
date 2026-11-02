@@ -374,3 +374,5 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .rail-col{position:sticky;top:20px}.rail-col .rail{position:static}
 @media(max-width:860px){.rail-col{position:static}}
 @media print{.rail-col{display:none!important}}
+.stage>.setup{position:static;margin:0 0 18px}.setup-edit{margin:14px 0 0}
+.stage>.setup dl{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}

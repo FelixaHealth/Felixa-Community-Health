@@ -678,8 +678,9 @@ def wizard_rail(aid, steps, base, current, foot=None):
 
 
 def workplace_rail(aid, on):
+    empty = not store.count_units(aid)        # nothing to replace: start straight at step 1; otherwise the page asks before it replaces the messages and the report
     items = [{'icon': 'eye', 'label': 'Overview', 'href': f'/analysis/{aid}/workspace', 'state': 'on' if on == 'overview' else 'todo'},
-             {'icon': 'plus', 'label': 'New check', 'href': f'/analysis/{aid}/workspace#new', 'state': 'todo'},
+             {'icon': 'plus', 'label': 'New analytics', 'href': f'/analysis/{aid}/check/1' if empty else f'/analysis/{aid}/workspace#new', 'state': 'todo'},
              {'icon': 'target', 'label': 'Edit workplace', 'href': f'/analysis/{aid}/edit', 'state': 'on' if on == 'edit' else 'todo'}]
     return {'steps': items, 'foot': None}
 

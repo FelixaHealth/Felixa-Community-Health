@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, dropzone %}{% block title %}Felixa Community Health — New check, step {{ step }} of {{ last }}{% endblock %}
+{% extends "base.html" %}{% from "_icons.html" import icon, dropzone %}{% block title %}Felixa Community Health — New analytics, step {{ step }} of {{ last }}{% endblock %}
 {% macro engine_card(e) %}<label class="engine"><input type="radio" name="engine" value="{{ e.name }}" {% if e.name == engine %}checked{% endif %} {% if not e.installed %}disabled{% endif %}><span><b>{{ e.label }}</b>{% if e.default %} <em class="badge">Default</em>{% endif %}{% if e.tag %} <em class="tag tag-{{ e.tag|lower }}">{{ e.tag }}</em>{% endif %}<small>{{ e.size }}{% if e.kind == 'local' and not e.installed %} · not downloaded: run <code>ollama pull {{ e.name }}</code>{% elif e.kind == 'cloud' and not e.installed %} · needs a key on the server{% elif e.kind == 'login' and not e.installed %} · needs Claude Code, signed in on this computer{% endif %}</small></span>
 <span class="est"><strong>{{ e.estimate.text }}</strong>{% if e.price %}<small class="price">{{ e.price }}</small>{% endif %}<small>{{ '{:,}'.format(e.estimate.total) }} model calls for {{ '{:,}'.format(e.estimate.messages) }} messages</small></span></label>{% endmacro %}
 {% macro local_group() %}{% if local_enabled %}<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>{% endif %}
@@ -19,7 +19,7 @@
 {% block content %}
 <div class="shell three">{% include "_rail.html" %}
 <section class="question-card">
-<div class="eyebrow">New check · Step {{ step }} of {{ last }}</div>
+<div class="eyebrow">New analytics · Step {{ step }} of {{ last }}</div>
 {% if step == 1 %}
 <h1>Add what people have said</h1><p class="lead">Bring in the messages you want checked, in whichever way is easiest. You can use more than one.</p>
 <div class="tabs">

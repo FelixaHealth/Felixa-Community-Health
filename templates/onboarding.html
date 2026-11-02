@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Step {{ step }} of {{ last }}{% endblock %}
 {% from "_fields.html" import choice, members_field, zone_field with context %}
 {% block content %}
-<div class="shell three">{% include "_rail.html" %}
+<div class="shell two">{% include "_rail.html" %}
 <section class="question-card">
 <div class="eyebrow">Step {{ step }} of {{ last }}</div>
 {% if step == 1 %}<div class="welcome"><img class="welcome-logo" src="/static/logo_stacked.png" alt="Felixa Community Health" width="120"><div><h2>Hi, welcome to Felixa Community Health</h2><p>Felixa reads how people in a community or team talk to each other and shows how healthy it feels. Start by telling us about your workplace.</p></div></div>{% endif %}
@@ -38,4 +38,4 @@
 <div class="actions">{% if step > 1 %}<a class="btn" href="/analysis/{{ a.id }}/step/{{ step - 1 }}">{{ icon('back') }} Back</a>{% else %}<span></span>{% endif %}<button class="btn primary">{% if step == last %}Create workplace{% else %}Continue {{ icon('arrow') }}{% endif %}</button></div>
 </form>
 </section>
-{% include "_setup.html" %}</div>{% endblock %}
+</div>{% endblock %}

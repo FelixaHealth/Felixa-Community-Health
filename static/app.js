@@ -70,3 +70,9 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   const list = document.getElementById('zone-list');
   if (zone && list && [...list.options].some((o) => o.value === zone)) box.value = zone;
 })();
+
+// "New analytics" in the side tab jumps to the box that asks before it replaces the messages: open it.
+(() => {
+  const open = () => { if (location.hash === '#new') { const d = document.querySelector('details.new-confirm'); if (d) { d.open = true; d.querySelector('summary').focus(); } } };
+  open(); addEventListener('hashchange', open);
+})();

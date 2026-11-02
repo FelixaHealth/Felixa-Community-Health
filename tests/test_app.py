@@ -1717,7 +1717,7 @@ class PartialFailures(AppCase):
     def test_user_facing_text_names_the_product_and_defines_fas(self):
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/workspace').text
-        self.assertIn('Run a new check', page)
+        self.assertIn('Run new analytics', page)
         self.assertNotIn('Run FELIXA', page)
         job = self.run_job(aid)
         self.assertIn('Your report is ready: We rated', job['message'])
@@ -2135,7 +2135,7 @@ class Layout(AppCase):
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'Thanks all, great game!\nyou are trash\nnice work today\nwell played everyone\nplease stop, thank you',
                                                             'actor_role': 'SUBJECT'})
         self.assertEqual(self.run_job(aid)['status'], 'complete')
-        for path in ('step/6', 'workspace', 'report'):
+        for path in ('edit', 'workspace', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertEqual(page.count('<main class="page" id="main">'), 1, path)
             inside = page.split('<main class="page" id="main">', 1)[1].split('</main>', 1)[0]
@@ -3920,11 +3920,11 @@ class Workplaces(AppCase):
                          ('Online community', 'Night Owls', 'Gaming', 'Discord', 'Sam Rivera', 'Admin', 'ready'))
         self.assertEqual(json.loads(a['goals_json']), ['Is my community healthy?', 'Are people engaged?'])
         page = self.client.get(f'/analysis/{aid}/workspace').text
-        for needle in ('Night Owls', 'Online community', 'Gaming', 'Discord', 'Looked after by Sam Rivera, Admin', 'Run a new check'):
+        for needle in ('Night Owls', 'Online community', 'Gaming', 'Discord', 'Looked after by Sam Rivera, Admin', 'Run new analytics'):
             self.assertIn(needle, page)
-        panel = self.client.get(f'/analysis/{aid}/step/6').text
-        for needle in ('Night Owls', 'Online community', 'Discord', 'Sam Rivera, Admin', 'Is my community healthy?; Are people engaged?'):
-            self.assertIn(needle, panel)
+        for needle in ('Your workplace', 'Online community', 'Sam Rivera, Admin', 'Is my community healthy?; Are people engaged?', f'href="/analysis/{aid}/edit"'):
+            self.assertIn(needle, page)                                                             # the details of the workplace sit on its own page
+        self.assertNotIn('Your workplace', self.client.get(f'/analysis/{aid}/step/6').text, 'and no longer beside the setup steps')
 
     def test_every_choice_must_be_on_the_list_and_other_needs_text(self):
         aid = self.new_analysis()
@@ -4098,6 +4098,20 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertNotIn('new-confirm', page)
         self.assertIn(f'<form method="post" action="/analysis/{aid}/check/new">', page)
+
+    def test_new_analytics_in_the_side_tab_goes_somewhere_and_the_old_name_is_gone(self):
+        """The side-tab item used to link to a spot on the page the person was already on, so clicking it seemed to do nothing."""
+        empty = self.new_analysis(name='Fresh One')
+        page = self.client.get(f'/analysis/{empty}/workspace').text
+        self.assertIn(f'<span>New analytics</span>', page)
+        self.assertIn(f'href="/analysis/{empty}/check/1"', page, 'nothing to replace: it starts at step 1')
+        self.assertEqual(self.client.get(f'/analysis/{empty}/check/1').status_code, 200)
+        full = self.with_chat(name='Has Messages')
+        page = self.client.get(f'/analysis/{full}/workspace').text
+        self.assertIn(f'href="/analysis/{full}/workspace#new"', page, 'messages exist: it goes to the box that asks before replacing them')
+        self.assertIn('id="new"', page)
+        self.assertIn('Yes, start new analytics', page)
+        self.assertNotIn('New check', page.split('<main', 1)[1].split('</main>', 1)[0])
 
     def test_switching_incognito_on_after_a_run_says_to_run_the_check_again(self):
         """Names go out of the messages when a check runs, so Incognito turned on after results exist does not touch those results: the page says to run again."""
