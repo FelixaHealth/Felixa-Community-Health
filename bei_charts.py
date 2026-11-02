@@ -77,7 +77,7 @@ def attribute_table_rows(metrics) -> list:
 
 
 # ---- measures over time ----------------------------------------------------------------------------
-BAND_ROLES = {'hostile': ('good', 'warn', 'crit'), 'dig': ('good', 'warn', 'warn')}      # the colour of Rare, Some and Often (a band is a faint wash, never the only signal)
+BAND_ROLES = {'hostile': ('good', 'warn', 'crit'), 'dig': ('good', 'warn', 'warn'), 'care': ('neu', 'neu', 'good')}      # the colour of Rare, Some and Often (a band is a faint wash, never the only signal)
 BAND_WORDS = ('Rare', 'Some', 'Often')           # written inside a band where there is a clear spot for them, so the bands can be told apart in print and in grey
 NAME_ASCENT, NAME_DESCENT, NAME_INK = 0.95, 0.25, 0.77      # in text sizes: the box a line of text may take above and below its baseline in a browser, and the height of its tallest letter
 NAME_HEADROOM = 1.07                             # text_w measures Helvetica; the PDF's font and a Linux browser's run up to 6% wider
@@ -239,9 +239,6 @@ def measure_chart(card, stretches, bands=None, *, width=W):
                 b = min(b, top)
                 sc.rect(ml, Y(b), pw, Y(a) - Y(b), BAND_ROLES[kind][k], opacity=BAND_WASH)
                 named.append((Y(b), Y(a) - Y(b), BAND_WORDS[k]))
-    elif kind == 'care' and bands and bands[1] < top:
-        sc.rect(ml, Y(top), pw, Y(bands[1]) - Y(top), 'good', opacity=BAND_WASH)
-        named.append((Y(top), Y(bands[1]) - Y(top), BAND_WORDS[2]))
     step = pw / (n - 1)
     columns = []                                            # the shaded heated moments, as (left, right)
     for i, st in enumerate(stretches):

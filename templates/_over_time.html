@@ -1,6 +1,6 @@
 {# Measures over time. Needs `measures` (measures.build) and `measures_html` (measures_view.html). The wording comes from measures.py, the key to the charts too (`ms.chart_key`); only the headings are written here. The notes about the measures are printed here and the notes about the alerts under Alerts, so no note appears twice. The reason two checks are not alike is no note: it is printed once, with the comparison. #}
 {% set ms = measures %}{% set m = ms.m %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set charts = mh.charts or {} %}{% set verdict_tone = mh.verdict_tone or {} %}{% set h = ms.health %}
-{% set over_notes = ms.notes|selectattr('about', 'equalto', 'measures')|list %}
+{% set over_notes = ms.notes|rejectattr('about', 'equalto', 'alerts')|list %}
 <section class="panel vc" id="over-time" aria-labelledby="over-time-h"><div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>
 <p class="vc-note">{{ ms.basis_text }}</p>
 <p class="vc-caveat">{{ ms.caveats.measures }}</p>
@@ -20,7 +20,7 @@
 {% if mh.table %}<div class="vc-over-table vc-parts">{{ mh.table|safe }}</div>{% endif %}
 <div class="vc-card vc-health"><h3>{{ h.name }}</h3>
 <div class="vc-health-head"><div class="vc-score"><span class="vc-score-num">{{ mh.health_score }}</span><span class="vc-score-den">/ 100</span></div>
-<div class="vc-badge">{{ icons[h.tone]|safe }}<span>{{ h.status }}</span></div></div>
+<div class="vc-badge">{{ icons[h.tone]|safe }}<span>{{ h.status }}</span><span class="sr-only">, {{ h.tone_word }}</span></div></div>
 {% if mh.health %}{{ mh.health|safe }}{% endif %}
 <p class="vc-caveat">{{ h.caption }}</p>
 {% if h.trend %}<p class="vc-trendline">{{ h.trend }}</p>{% endif %}

@@ -3030,7 +3030,7 @@ class TrailAndRecordTests(unittest.TestCase):
     def test_a_record_of_a_whole_check_is_not_a_sample_and_takes_the_model_from_the_ratings_when_the_row_has_none(self):
         m = an(neutral(96))
         rec = measures.record(m, None, {'total': None, 'note': None, 'model': 'tiny-model'}, None, '2026-06-01T09:30:00')
-        self.assertEqual((rec['sampled'], rec['total'], rec['model'], rec['gen']), (0, 96, 'tiny-model', None))
+        self.assertEqual((rec['sampled'], rec['total'], rec['model'], rec.get('gen')), (0, 96, 'tiny-model', None))
         rec = measures.record(m)
         self.assertEqual((rec['model'], rec['period_start'], rec['sampled']), ('', '', 0))
         self.assertRegex(rec['created_at'], r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')
@@ -4211,6 +4211,55 @@ class FalseAlarmTests(unittest.TestCase):
             else:
                 missed.append(seed)
         self.assertGreaterEqual(seen, int(.85 * self.CHATS), f'seen in {seen} of {self.CHATS}; missed {missed[:8]}')
+
+
+class FinalTidyTests(unittest.TestCase):
+    """The last small rules: one message reads in the singular, an older record still compares by its model name, the chart key says UTC only when a
+    label shows a time, and a check too short to judge saves no count of heated moments."""
+
+    @staticmethod
+    def rec(**kw):
+        base = {'created_at': '2026-03-01T10:00:00', 'gen': 1, 'n': 100, 'total': 100, 'sampled': 0, 'basis': 'time', 'model': 'qwen2.5:7b', 'sensitivity': 'medium',
+                'health': 55.0, 'health_sd': 10.0, 'hostile_n': 5, 'care_n': 10, 'dig_n': 3, 'heated_n': 8}
+        base.update(kw)
+        return base
+
+    def test_one_message_reads_in_the_singular(self):
+        self.assertEqual(measures._messages(1, 1, 'were openly hostile.'), '1 of 1 message was openly hostile.')
+        self.assertEqual(measures._messages(0, 1, 'were openly hostile.'), '0 of 1 message was openly hostile.')
+        self.assertEqual(measures._messages(0, 5, 'were openly hostile.'), 'None of the 5 messages were openly hostile.')
+        self.assertEqual(measures._messages(2, 5, 'were openly hostile.'), '2 of 5 messages were openly hostile.')
+
+    def test_a_record_saved_before_the_fingerprint_still_compares_with_its_model_name(self):
+        old = self.rec()                                                          # no model_key, as an earlier build saved it
+        same = dict(self.rec(gen=2), model_key=measures._fingerprint('qwen2.5:7b'))
+        other = dict(self.rec(gen=2, model='another-model'), model_key=measures._fingerprint('another-model'))
+        self.assertTrue(measures.compare(same, old)['comparable'])
+        self.assertFalse(measures.compare(other, old)['comparable'])
+
+    def test_two_model_names_the_store_cannot_keep_are_still_told_apart(self):
+        a, b = 'x' * 130, 'y' * 130
+        first = dict(self.rec(model=''), model_key=measures._fingerprint(a))
+        again = dict(self.rec(gen=2, model=''), model_key=measures._fingerprint(a))
+        other = dict(self.rec(gen=2, model=''), model_key=measures._fingerprint(b))
+        self.assertTrue(measures.compare(again, first)['comparable'])
+        self.assertFalse(measures.compare(other, first)['comparable'])
+
+    def test_the_chart_key_says_utc_only_when_a_label_shows_a_time(self):
+        base = {'basis': 'time', 'utc': True, 'clock': True}
+        self.assertIn('Times are UTC.', measures.chart_key(base))
+        self.assertNotIn('UTC', measures.chart_key(dict(base, clock=False)))
+        self.assertNotIn('UTC', measures.chart_key(dict(base, utc=False)))
+        self.assertIn('rated message numbers', measures.chart_key({'basis': 'order'}))
+        self.assertTrue(measures.chart_key(base).startswith('Lines show messages per 100.'))
+
+    def test_a_check_too_short_to_judge_saves_no_count_of_heated_moments(self):
+        zero = {a: 0 for a in measures.analysis.ATTRIBUTES}
+        m = measures.analyse([{'id': i, 'timestamp': '', 'ratings': zero} for i in range(1, 11)])
+        rec = measures.record(m)
+        self.assertNotIn('episodes', rec)
+        self.assertNotIn('peak', rec)
+        self.assertEqual(rec, measures.store.clean_measure_snapshot(rec))          # and what is saved is exactly what is here
 
 
 # @@APPEND@@

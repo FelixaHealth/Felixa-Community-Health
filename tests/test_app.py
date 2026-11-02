@@ -2332,7 +2332,7 @@ class MeasureCharts(unittest.TestCase):
         self.assertEqual(len(moment), 1)
         self.assertGreaterEqual(moment[0], 3 * max(washes))                                          # clearly darker, in colour and in grey
         care = bei_charts.measure_chart({'name': 'Empathy', 'kind': 'care', 'series': [5, 8, 12, 30, 22, 9, 4, 3]}, self.parts(), (3, 10), width=360)
-        self.assertEqual([t['s'] for t in self.names(care)], ['Often'])                               # only the band that is washed carries a name
+        self.assertEqual([t['s'] for t in self.names(care)], ['Some', 'Often'])                        # every band is washed now; the name 'Rare' sits on the zero line here, so it is left out
         self.assertEqual(self.stray(care), [])
         self.assertEqual(self.names(bei_charts.measure_chart(dict(self.CARD, kind='heated', name='Escalation'), self.parts(), None, width=360)), [])
 
@@ -2596,7 +2596,7 @@ class MeasuresTemplates(AppCase):
         ctx = self.ctx()
         html = self.app.templates.env.get_template('_over_time.html').render(**ctx)
         words = re.findall(r'<span class="sr-only">, ([^<]+)</span>', html)
-        self.assertEqual(words, [card['tone_word'] for card in ctx['measures']['cards']])
+        self.assertEqual(words, [card['tone_word'] for card in ctx['measures']['cards']] + [ctx['measures']['health']['tone_word']])      # the four cards, then the health tile
         self.assertTrue(set(words) <= {'A good sign', 'Neutral', 'Worth a look', 'Look at this first'})
 
 

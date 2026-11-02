@@ -105,7 +105,9 @@ def _lap_var(k, n) -> float:
 
 
 def _messages(k, n, what) -> str:
-    return f'None of the {n:,} messages {what}' if k == 0 else f'{k:,} of {n:,} message{"" if n == 1 else "s"} {what}'
+    if n == 1:
+        return f'{k:,} of 1 message {what.replace("were ", "was ", 1)}'
+    return f'None of the {n:,} messages {what}' if k == 0 else f'{k:,} of {n:,} messages {what}'
 
 
 def _clears(k, n, cut) -> bool:
@@ -237,6 +239,12 @@ def _day(d) -> str:
     return short_date(d.isoformat())
 
 
+def _uses_clock(firsts, lasts, incognito) -> bool:
+    """True when the part labels carry a time of day: the data has times, the parts fall within three days and Incognito is off."""
+    timed = any(s.time() != _dt.time.min for s in firsts + lasts)
+    return bool(timed and (lasts[-1].date() - firsts[0].date()).days <= 3 and not incognito)
+
+
 def stretch_labels(spans, stamps, basis, utc=False, incognito=False):
     """For each stretch: (axis label, tooltip and table label). The axis label is '' where the previous stretch has the same one. Clock times appear
     only when the data has them, the stretches fall within three days, and Incognito is off."""
@@ -244,9 +252,7 @@ def stretch_labels(spans, stamps, basis, utc=False, incognito=False):
     if basis == 'order' or not spans:
         return [(f'#{a + 1}' if i % max(1, k // 6) == 0 else '', f'Part {i + 1} of {k}: rated messages {a + 1} to {b}') for i, (a, b) in enumerate(spans)]
     firsts, lasts = [stamps[a] for a, _ in spans], [stamps[b - 1] for _, b in spans]
-    timed = any(s.time() != _dt.time.min for s in firsts + lasts)
-    days = (lasts[-1].date() - firsts[0].date()).days
-    clock = timed and days <= 3 and not incognito
+    clock = _uses_clock(firsts, lasts, incognito)
     tz = ' UTC' if utc else ''
 
     def span(a, b):
@@ -365,7 +371,8 @@ def analyse(units, sensitivity='medium', today=None, incognito=False) -> dict | 
     first3, last3 = (merge(tallies[:g]), merge(tallies[-g:])) if tallies else (None, None)
     trend = {x: (rate_change(first3, last3, x) if verdicts else None) for x in ('hostile', 'care', 'dig', 'heated')}
     trend['health'] = health_change(first3, last3) if verdicts else None
-    return {'n': len(complete), 'incomplete': len(units) - len(complete), 'basis': basis, 'left_off': left_off, 'timeline_n': timeline_n, 'utc': utc,
+    clock = bool(basis == 'time' and spans and _uses_clock([stamps[a] for a, _ in spans], [stamps[b - 1] for _, b in spans], incognito))
+    return {'n': len(complete), 'incomplete': len(units) - len(complete), 'basis': basis, 'left_off': left_off, 'timeline_n': timeline_n, 'utc': utc, 'clock': clock,
             'has_series': bool(stretches), 'verdicts': verdicts, 'sensitivity': sensitivity if sensitivity in ('low', 'medium', 'high') else 'medium',
             'scale': LOW_SCALE if sensitivity == 'low' else 1.0, 'incognito': bool(incognito), 'overall': overall, 'stretches': stretches, 'episodes': eps,
             'first3': first3, 'last3': last3, 'trend': trend, 'opening_heated': bool(tallies) and rate(tallies[0], 'heated') >= 30,
@@ -474,6 +481,15 @@ def health_tile(m) -> dict:
 
 
 # ---- numbers kept after each check --------------------------------------------------------------
+def _fingerprint(name) -> str:
+    """A short, one-way code for a model name, so two names the store cannot keep (too long, odd characters) are still told apart."""
+    return hashlib.sha256(str(name).encode('utf-8', 'replace')).hexdigest()[:12] if name else ''
+
+
+def _model_key(rec) -> str:
+    return rec.get('model_key') or _fingerprint(rec.get('model'))
+
+
 def record(m, a=None, rated=None, gen=None, created_at=None) -> dict:
     """The record kept after a check: scores, counts and the names of its settings. No message, no name, no file name (the store checks this too)."""
     o = m['overall']
@@ -483,11 +499,11 @@ def record(m, a=None, rated=None, gen=None, created_at=None) -> dict:
     model = get('model_used') or (rated or {}).get('model') or ''
     rec = {'created_at': created_at or utc_now(), 'gen': gen, 'n': m['n'], 'total': (rated or {}).get('total') or m['n'], 'sampled': int(bool((rated or {}).get('note'))),
            'basis': m['basis'], 'stretches': len(m['stretches']), 'model': model,
-           'model_key': hashlib.sha256(str(model).encode('utf-8', 'replace')).hexdigest()[:12] if model else '', 'sensitivity': m['sensitivity'], 'period_start': get('period_start') or '', 'period_end': get('period_end') or '',
+           'model_key': _fingerprint(model), 'sensitivity': m['sensitivity'], 'period_start': get('period_start') or '', 'period_end': get('period_end') or '',
            'health': round(m['health'], 3), 'health_sd': round(math.sqrt(_d_var(o)) * 50 / HEALTH_DIVISOR, 3),
            'hostile_n': o['hostile'], 'care_n': o['care'], 'dig_n': o['dig'], 'heated_n': o['heated'],
-           'episodes': len(m['episodes']), 'peak': round(max((e['peak'] for e in m['episodes']), default=0.0), 3), 'sig': m['sig']}
-    return rec
+           'episodes': len(m['episodes']) if m['verdicts'] else None, 'peak': round(max((e['peak'] for e in m['episodes']), default=0.0), 3) if m['verdicts'] else None, 'sig': m['sig']}
+    return {k: v for k, v in rec.items() if v is not None}          # no empty fields: what is saved is exactly what is here
 
 
 def save_snapshot(aid, rated=None):
@@ -512,7 +528,7 @@ def compare(cur, prev) -> dict | None:
     if not prev:
         return None
     out = {'previous': prev, 'comparable': True, 'why': '', 'changes': {}}
-    if (cur.get('model_key') or cur.get('model') or '') != (prev.get('model_key') or prev.get('model') or ''):
+    if _model_key(cur) != _model_key(prev):
         out.update(comparable=False, why='Your last check used a different model, so part of the change may come from the model and not from the community.')
     elif (cur.get('sensitivity') or '') != (prev.get('sensitivity') or ''):
         out.update(comparable=False, why='Your last check used a different sensitivity, so part of the change may come from the setting and not from the community.')
@@ -880,7 +896,7 @@ def chart_key(m) -> str:
     parts = ['Lines show messages per 100.', 'Shaded bands show where Rare, Some and Often begin.', 'A darker band is a heated moment.']
     if m['basis'] == 'order':
         parts.append('The numbers under each chart are rated message numbers, in the order you added them.')
-    elif m.get('utc'):
+    elif m.get('utc') and m.get('clock'):
         parts.append('Times are UTC.')
     return ' '.join(parts)
 
