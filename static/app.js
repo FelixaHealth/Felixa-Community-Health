@@ -22,6 +22,8 @@
     const input = zone.querySelector('input[type=file]'), picked = zone.querySelector('.dz-picked');
     const show = () => { picked.textContent = [...input.files].map(f => f.name).join(', '); zone.classList.toggle('has-files', input.files.length > 0); };
     input.addEventListener('change', show);
+    // A file that is chosen or dropped is added at once: the button below the page used to be the only way, and people waited for Next to appear.
+    input.addEventListener('change', () => { const form = zone.closest('form'); if (form && input.files.length && form.dataset.autosubmit !== 'off') { zone.classList.add('busy'); picked.textContent = 'Adding ' + [...input.files].map(f => f.name).join(', ') + '…'; form.requestSubmit(); } });
     ['dragenter', 'dragover'].forEach(n => zone.addEventListener(n, () => zone.classList.add('drag')));
     ['dragleave', 'drop'].forEach(n => zone.addEventListener(n, () => zone.classList.remove('drag')));
     show();

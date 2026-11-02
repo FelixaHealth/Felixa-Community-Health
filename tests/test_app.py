@@ -4113,6 +4113,16 @@ class Workplaces(AppCase):
         self.assertIn('Yes, start new analytics', page)
         self.assertNotIn('New check', page.split('<main', 1)[1].split('</main>', 1)[0])
 
+    def test_a_file_that_is_chosen_is_added_at_once(self):
+        """Choosing or dropping a file used to wait for a small button far down the page, and Next only appeared after it, so the step seemed stuck."""
+        js = (pathlib.Path(__file__).resolve().parent.parent / 'static' / 'app.js').read_text()
+        self.assertIn("form.requestSubmit()", js)
+        self.assertIn("input.addEventListener('change'", js)
+        aid = self.new_analysis()
+        page = self.client.get(f'/analysis/{aid}/check/1').text
+        self.assertEqual(page.count('class="dropzone"'), 2, 'the file tab and the voice tab: both sit in a form the script submits')
+        self.assertIn('Add files', page, 'the button stays, for a browser without scripts')
+
     def test_switching_incognito_on_after_a_run_says_to_run_the_check_again(self):
         """Names go out of the messages when a check runs, so Incognito turned on after results exist does not touch those results: the page says to run again."""
         aid = self.with_chat()
