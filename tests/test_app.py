@@ -3800,8 +3800,10 @@ class Workplaces(AppCase):
         self.assertIn('Your Claude login', page)
         with self.claude_env():                                                                       # with a key, both are offered
             both = self.client.get(f'/analysis/{aid}/check/6').text
-            self.assertIn('Claude, in the cloud', both)
+            self.assertIn('Other engines', both)
+            self.assertIn('Anthropic API', both)
             self.assertIn('Your Claude login', both)
+            self.assertIn('tag-fastest', both)
         with mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1'}):                            # the one-click start: only your login, chosen from the start
             only = self.client.get(f'/analysis/{aid}/check/6').text
             self.assertRegex(only, r'name="engine" value="claudecode:haiku" checked')
