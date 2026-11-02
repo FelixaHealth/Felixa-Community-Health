@@ -350,7 +350,7 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
   .vc .vc-measure .vc-narrow{display:block!important}
   .vc .award{border:1px solid var(--vc-rule);border-left:3px solid var(--vc-edge)}
   /* Paper is read closer than a screen, so the text of these sections is set smaller: an alert is about a third shorter, and fewer pages end early because the next one would not fit. */
-  .vc p.vc-note,.vc p.vc-caveat{font-size:14px;line-height:1.5}
+  #summary p.vc-note,#alerts p.vc-note,#over-time p.vc-note,#badges p.vc-note,#alerts p.vc-caveat,#over-time p.vc-caveat,#badges p.vc-caveat{font-size:14px;line-height:1.5}
   .vc .vc-alerts li{padding:10px 0}
   .vc .vc-alert-title{font-size:16px}
   .vc .vc-alert .vc-alert-detail{font-size:14.5px;line-height:1.5}

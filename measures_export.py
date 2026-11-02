@@ -137,7 +137,7 @@ def _measure_rows(ms) -> list:
     rows = [['Measures over time'], [HOW, ms['caveats']['measures']], ['Basis', ms['basis_text']]]
     rows += [['Note', text] for text in _notes(ms, 'measures')]
     rows.append(['Measure', 'Level', 'Count (messages; heated moments for Escalation)', 'Out of (messages rated)', 'Trend', 'What we saw', 'Note', 'What it means',
-                 'Level in the latest part', MARK])
+                 'Level in the latest part' if m['basis'] == 'time' else 'Level in the last part', MARK])
     for c in ms['cards']:           # a card that could not be judged has no count (None): an empty cell, never a 0 that a spreadsheet would read as 'none'
         rows.append([c['name'], c['level'], _blank(c.get('count')), _blank(c.get('of')), c.get('trend') or '', c['headline'], c.get('note') or '', c['meaning'],
                      c.get('latest') or '', _tone(c)])
@@ -147,7 +147,7 @@ def _measure_rows(ms) -> list:
         for s in m['stretches']:
             r = s['rates']
             rows.append([_label(s, m.get('incognito')), s['n'], measures.whole(r['hostile']), measures.whole(r['care']), measures.whole(r['dig']), measures.whole(r['heated']),
-                         'Yes' if s.get('counted') else 'No', measures.whole(s['health'])])
+                         ('Yes' if s.get('counted') else 'No') if m['verdicts'] else '', measures.whole(s['health'])])      # not judged (under 48 messages): neither Yes nor No
     h = ms['health']
     rows += [[], ['Health score', measures.whole(h['score']), h['status'], _tone(h)]]          # the score, its status word and its mark in words
     if h.get('trend'):
@@ -365,7 +365,8 @@ def _cards(ms, p, draw) -> list:
     for card in ms['cards']:
         tone = _tone(card)
         cell = [p(f'{card["name"]}: {card["level"]}', 'BeiCardHead', tail=f'({tone})' if tone else ''), p(card['meaning'], 'BeiCardNote'), p(card['headline'], 'BeiCardText')]
-        texts.append(cell + [p(text, 'BeiCardNote') for text in (card.get('trend'), card.get('note')) if text])
+        trend = ' '.join(x for x in (card.get('trend'), f'{card.get("latest_label") or "Latest part"}: {card["latest"]}.' if card.get('latest') else '') if x)       # the level of the latest part, as the page prints it beside the level: in the line of the trend, so a card gains no line
+        texts.append(cell + [p(text, 'BeiCardNote') for text in (trend, card.get('note')) if text])
         charts.append(draw(lambda w, card=card: bei_charts.measure_chart(card, parts, _bands(card, m), width=w), SCENE_NARROW, CARD_W, CHART_SHRINK) if m['has_series'] else None)
     grids = []
     for i in range(0, len(texts), 2):

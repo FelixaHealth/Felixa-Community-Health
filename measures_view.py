@@ -69,7 +69,9 @@ def _parts_table(ms) -> str:
 
 
 def _of(r, kind) -> str:
-    return f'{r.get(kind + "_n") or 0:,} of {r.get("n") or 0:,}'
+    if r.get(kind + '_n') is None:
+        return 'Not known'
+    return f'{r[kind + "_n"]:,} of {r.get("n") or 0:,}'
 
 
 def _trail(ms) -> tuple:

@@ -10,7 +10,7 @@
 {% elif not said.no_lines %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
 <div class="vc-cols vc-measures">{% for c in ms.cards %}
 <div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
-<p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">Latest part: {{ c.latest }}</span>{% endif %}</p>
+<p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">{{ c.latest_label or 'Latest part' }}: {{ c.latest }}</span>{% endif %}</p>
 <p class="vc-meaning">{{ c.meaning }}</p>
 <p class="vc-headline">{{ c.headline }}</p>
 {% if c.trend %}<p class="vc-card-trend">{{ c.trend }}</p>{% endif %}

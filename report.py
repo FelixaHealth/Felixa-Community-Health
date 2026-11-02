@@ -39,7 +39,8 @@ def build(aid):
         'generated': datetime.date.today().isoformat(),
         'has_results': has_results(metrics, vibe), 'gaps': gaps(metrics, guidance, vibe), 'how': analysis.HOW_IT_WORKS,
     }
-    cov = {'sampled': ctx['sampled'], 'total': rated_total, 'scope': scope_n, 'added_since': ctx['added_since']}
+    cov = {'sampled': ctx['sampled'], 'total': rated_total, 'scope': scope_n, 'added_since': ctx['added_since'], 'left_out': max(0, rated_total - scope_n) if metrics else 0,
+           'vibe_stale': bool(notice)}
     ctx['measures'] = measures.build(aid, a, vibe, cov) if metrics else None
     ctx['measures_html'] = measures_view.html(ctx['measures'], a) if ctx['measures'] else {}
     ctx['chart_html'] = chart_html(metrics)

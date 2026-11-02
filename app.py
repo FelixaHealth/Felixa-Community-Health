@@ -782,7 +782,12 @@ def check_get(request: Request, aid: AnalysisId, step: int):
     return render(request, 'check.html', **check_context(a, step))
 
 
+BUSY_SETTINGS = 'Wait for the current task to finish before changing the check settings.'
+
+
 def check_saved(aid, step, error='', **fields):
+    if store.active_job(aid):                                     # a running task has already read its settings: a change now would say one thing and do another
+        return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
     if error:
         return redirect(f'/analysis/{aid}/check/{step}', error)
     store.update_analysis(aid, **fields)
@@ -810,10 +815,15 @@ async def check_volume(request: Request, aid: AnalysisId):
 
 @app.post('/analysis/{aid}/check/3')
 async def check_incognito(request: Request, aid: AnalysisId):
-    if not store.get_analysis(aid):
+    a = store.get_analysis(aid)
+    if not a:
         return not_found()
     choice = str((await request.form()).get('incognito', ''))
-    return check_saved(aid, 3, '' if choice in ('on', 'off') else 'Choose on or off.', incognito=int(choice == 'on'))
+    saved = check_saved(aid, 3, '' if choice in ('on', 'off') else 'Choose on or off.', incognito=int(choice == 'on'))
+    turned_on = choice == 'on' and not a['incognito']
+    if turned_on and saved.headers['location'] == f'/analysis/{aid}/check/4' and report.has_results(analysis.metrics_for(aid), store.latest_vibe(aid)):
+        return redirect(f'/analysis/{aid}/check/4', 'Incognito saved. Run the check again to take names out of the results you already have.')      # names go out when a check runs
+    return saved
 
 
 CLOCK = re.compile(r'([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?')
@@ -893,6 +903,8 @@ async def check_period(request: Request, aid: AnalysisId):
         start, end = utc_bound(start_day, start_clock, offset, False), utc_bound(end_day, end_clock, offset, True)
         if start and end and store.period_of({'period_start': start, 'period_end': end}) == (None, None):
             return check_saved(aid, 4, 'The end cannot be before the start.')
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
     changed = store.period_of(a) != store.period_of({'period_start': start, 'period_end': end})
     store.update_analysis(aid, period_start=start, period_end=end, period_tz=offset if start or end else None)
     if changed and report.has_results(analysis.metrics_for(aid), store.latest_vibe(aid)):

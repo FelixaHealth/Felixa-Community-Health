@@ -308,6 +308,41 @@ class MeasuresExport(AppCase):
         self.assertEqual(head[9], 'Mark')                                                              # the last column: the icon of the page, in words
         self.assertTrue({r[8] for r in table_after(rows, MEASURE_HEAD)} <= {'', 'Rare', 'Some', 'Often'})
 
+    def test_a_part_that_could_not_be_judged_says_neither_yes_nor_no_in_the_csv(self):
+        """Under 48 messages no heated moment is judged, so 'Counted as a heated moment' is empty: a 'No' would say that every part was judged and none counted."""
+        ms = self.ms('thin')
+        self.assertFalse(ms['m']['verdicts'])
+        rows = block(self.csv('thin'), 'Measures over time')
+        parts = table_after(rows, PARTS_HEAD)
+        self.assertEqual(len(parts), len(ms['m']['stretches']))
+        self.assertEqual({r[6] for r in parts}, {''})
+        judged = table_after(block(self.csv('three'), 'Measures over time'), PARTS_HEAD)
+        self.assertTrue({r[6] for r in judged} <= {'Yes', 'No'})
+
+    def test_when_the_lines_follow_the_order_added_the_level_is_that_of_the_last_part_not_the_latest(self):
+        ms = self.ms('undated')
+        self.assertEqual(ms['m']['basis'], 'order')
+        shown = [c for c in ms['cards'] if c.get('latest')]
+        self.assertTrue(shown)
+        self.assertEqual({c['latest_label'] for c in shown}, {'Last part'})
+        head = next(r for r in block(self.csv('undated'), 'Measures over time') if r[:1] == ['Measure'])
+        self.assertEqual(head[8], 'Level in the last part')
+        data, texts = self.pdf('undated')
+        text = ' '.join(our_pages(texts))
+        for c in shown:
+            self.assertIn(f'Last part: {c["latest"]}', text, c['key'])
+        self.assertNotIn('Latest part', text)
+        self.assertEqual({c['latest_label'] for c in self.ms('three')['cards'] if c.get('latest')}, {'Latest part'})
+
+    def test_the_pdf_prints_the_level_of_the_latest_part_as_the_page_and_the_csv_do(self):
+        ms = self.ms('three')
+        shown = [c for c in ms['cards'] if c.get('latest')]
+        self.assertEqual([c['key'] for c in shown], ['conflict', 'empathy', 'passive'])
+        text = ' '.join(our_pages(self.pdf('three')[1]))
+        for c in shown:
+            self.assertIn(f'Latest part: {c["latest"]}', text, c['key'])
+        self.assertNotIn('Latest part: None', text)
+
     def test_every_card_and_the_health_score_say_their_mark_in_words_in_the_csv(self):
         """The CSV cannot show the icon of the page. The last cell of each card row (the column Mark) and the fourth cell of the Health score row say it in the
         words of measures.py, so a reader can tell that Often is a good sign for Empathy and a look-at-this sign for Conflict."""

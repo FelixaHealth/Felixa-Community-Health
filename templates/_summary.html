@@ -1,6 +1,6 @@
 {# The summary strip. Needs `measures` (measures.build). Links point only at parts that are on the page. #}
 {% set ms = measures %}{% set vibe_ok = vibe and vibe.status == 'ok' %}{% set look = ms.alert_counts.high + ms.alert_counts.medium %}
-<section class="panel vc" id="summary" aria-labelledby="summary-h"><div class="eyebrow">Summary</div><h2 id="summary-h">How the community is doing</h2>
+<section class="panel vc" id="summary" aria-labelledby="summary-h"><div class="eyebrow">Summary</div><h2 id="summary-h">How these messages read</h2>
 <div class="vc-kpis vc-summary-kpis">
 {% if vibe_ok %}<div class="vc-kpi"><strong>{{ '%g'|format(vibe.score) }}<small> / 10</small></strong><span>{{ 'Impact score' if vibe.multi_source else 'Friendliness score' }}</span></div>
 {% else %}<div class="vc-kpi"><strong>Not run</strong><span>Vibe Check score</span></div>{% endif %}

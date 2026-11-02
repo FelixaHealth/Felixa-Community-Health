@@ -95,7 +95,7 @@ SECTIONS = ('summary', 'alerts', 'over-time', 'badges')                         
 BLOCKS = ('Alerts', 'Measures over time', 'Since your last check', 'Badges')    # the new blocks of the CSV, in their order
 HOSTILE = '<script>alert("x")</script> <img src=x onerror=alert(1)> & "q"'      # the string tests/test_app.py uses to try to break out of a page
 NOT_KNOWN = 'Not known'                                                         # what a row of Since your last check says for a count that the store had to drop
-HELD_BACK = 'Held back while a High priority alert stands.'                     # why the No serious flags tile is not shown beside a High priority alert
+HELD_BACK = 'Held back while an alert about serious flags or a High priority alert stands.'      # why the No serious flags tile is not shown beside such an alert
 GONE_NOTES = ('not_alike', 'opening')                                           # notes that no longer exist: the reason two checks are not alike is only ms['since']['why'], a tense start only a card note
 NOTE_SECTIONS = ('alerts', 'measures')                                          # the two sections a note can belong to
 MARK = 'Mark'                                                                   # the last column of the four cards in the CSV: the icon of the page, in words
@@ -580,7 +580,7 @@ class MeasuresCase(AppCase):
                 if part:
                     self.assertIn(norm(part), over, f'{where}: {card["key"]}')
             if card.get('latest'):
-                self.assertIn(f'Latest part: {card["latest"]}', over, where)
+                self.assertIn(f'{card["latest_label"]}: {card["latest"]}', over, where)
         self.assertEqual(cards_on_page(html), [(icon_svg(c['tone']), norm(c['level']), norm(c['tone_word'])) for c in ms['cards']], f'{where}: the mark of each card')
         self.assertIn(f'{measures.whole(h["score"])} / 100', over, where)
         self.assertEqual(health_mark_on_page(html), icon_svg(h['tone']), f'{where}: the mark of the health score')
@@ -758,7 +758,7 @@ class MeasuresCase(AppCase):
         if ms['m']['has_series']:
             self.assertEqual(rows_under(m, 'Part of the chat'),
                              [[s['label'], str(s['n']), str(w(s['rates']['hostile'])), str(w(s['rates']['care'])), str(w(s['rates']['dig'])), str(w(s['rates']['heated'])),
-                               'Yes' if s['counted'] else 'No', str(w(s['health']))] for s in ms['m']['stretches']], where)
+                               ('Yes' if s['counted'] else 'No') if ms['m']['verdicts'] else '', str(w(s['health']))] for s in ms['m']['stretches']], where)
         else:
             self.assertNotIn(['Part of the chat'], [r[:1] for r in m], where)
         self.assertIn(['Health score', str(w(h['score'])), h['status'], h['tone_word']], m, where)             # the score, its status and its mark in words
@@ -1136,7 +1136,7 @@ class Boundaries(MeasuresCase):
         self.assertEqual([n['key'] for n in a['notes']], ['order'])
         self.assertEqual([n['key'] for n in b['notes']], ['undated'])
         self.assert_says(b['notes'][0]['text'], 'Only 60 of 100 messages have a date', 'still count all 100')
-        self.assert_says(a['notes'][0]['text'], 'no usable dates', 'the order you added them')
+        self.assert_says(a['notes'][0]['text'], 'Only 59 of 100 messages have a usable date', 'the order you added them')
         self.assertTrue(all(s['label'].startswith(f'Part {s["i"] + 1} of 12: rated messages ') for s in a['m']['stretches']))
         self.assertEqual([s['axis'] for s in a['m']['stretches'] if s['axis']], ['#1', '#17', '#34', '#51', '#67', '#84'])
         self.assertFalse(any(s['axis'].startswith('#') for s in b['m']['stretches']))
@@ -1293,8 +1293,8 @@ class SeriousFlags(MeasuresCase):
         ms = self.ms(self.threats())
         (alert,) = ms['alerts']
         self.assertEqual((alert['level'], alert['key'], alert['title']), ('high', 'serious', 'Vibe Check flagged serious messages'))
-        self.assert_says(alert['detail'], 'flagged 2 messages as a threat and harassment', '2 scored 7 or more out of 10', 'A model can be wrong',
-                         'They are quoted under Flagged messages')                                  # what was flagged, in the plural for two messages, and how sure to be
+        self.assert_says(alert['detail'], 'flagged messages for threats (1) and harassment (1)', '2 scored 7 or more out of 10', 'A model can be wrong',
+                         'They are quoted under Flagged messages')                                  # what was flagged (each kind counted, never added up), and how sure to be
         self.assert_says(alert['base'], '48 messages')
         self.assert_says(alert['try'], 'Read the quoted messages')                                  # the alert sends the reader to the quotes, it does not repeat them
         self.assert_says(alert['try'], 'safety process', 'local emergency services')                # and, for a threat, to the community's safety process
@@ -1335,7 +1335,7 @@ class SeriousFlags(MeasuresCase):
         aid = self.checked(texts, at(12, days_ago(40)))
         ms = self.ms(aid)
         self.assertEqual((ms['m']['has_series'], [a['key'] for a in ms['alerts']], [a['level'] for a in ms['alerts']]), (False, ['serious'], ['high']))
-        self.assert_says(ms['alerts'][0]['detail'], 'flagged 1 message as a threat', 'It scored 7 or more out of 10', 'It is quoted under Flagged messages')       # one message: the singular
+        self.assert_says(ms['alerts'][0]['detail'], 'flagged 1 message as a threat', 'One scored 7 or more out of 10', 'It is quoted under Flagged messages')       # one message: the singular
         self.assertNotRegex(ms['alerts'][0]['detail'], r'1 messages|as threats|\bThey\b')
         self.assertEqual([n['key'] for n in ms['notes']], ['few'])
         self.assert_says(ms['badge_note'], 'Badges start at 30 messages', 'has 12')
@@ -1365,8 +1365,8 @@ class SeriousFlags(MeasuresCase):
         threat = self.threats()
         hate = self.scenario('hate', lambda: self.hate_speech([THREAT if i == 10 else t for i, t in enumerate(messages(48))]))
         harassment = self.scenario('harassment only', lambda: self.checked([HARASSMENT if i == 30 else t for i, t in enumerate(messages(48))], at(48, days_ago(40))))
-        for aid, count, kind in ((threat, 2, 'a threat'), (hate, 1, 'hate speech')):
-            self.assertRegex(self.ms(aid)['alerts'][0]['detail'], kind)
+        for aid, count, kind, said in ((threat, 2, 'a threat', r'threats \(1\)'), (hate, 1, 'hate speech', r'1 message as hate speech')):
+            self.assertRegex(self.ms(aid)['alerts'][0]['detail'], said)
             for what in ('workspace', 'report'):
                 html = self.page(aid, what)
                 text = Page(html[html.index('id="vibe-check"'):]).text
@@ -1787,7 +1787,7 @@ class Notes(MeasuresCase):
     tests put the cases together and say the sentences."""
 
     LOW = 'Your sensitivity is Low, so banter counts as normal. The bars for Conflict, Passive-aggressive and heated moments are higher.'
-    FIRST = 'This is your first check. Run another after your next batch of messages and this panel will show what moved.'
+    FIRST = 'This is your first check. Run another after your next batch of messages and this panel can show what moved, if both checks used the same settings.'
     NO_BADGES = 'No badges this time. Each one is earned only when the messages clearly show it.'
 
     def test_every_note_is_printed_once_in_its_own_section_on_the_pages_the_pdf_and_the_csv(self):
@@ -1800,7 +1800,7 @@ class Notes(MeasuresCase):
         by_key = {n['key']: n['text'] for n in ms['notes']}
         self.assertEqual(by_key['low_sensitivity'], self.LOW)
         self.assert_says(by_key['silent'], 'Almost no tone was found in these messages', 'The model may not have read this text')
-        self.assert_says(by_key['added'], '4 messages were added after this check and are not included', 'Run the check again to include them')
+        self.assert_says(by_key['added'], '4 messages fall inside the review period but were not rated, so they are not included', 'Run the check again to include them')
         self.assert_says(by_key['incomplete'], '1 message had incomplete ratings', 'left out')
         self.assertRegex(by_key['undated'], r'^Only \d+ of 99 messages have a date\.')
         self.assert_says(by_key['no_vibe'], 'Vibe Check', 'not an all clear')
@@ -1891,7 +1891,7 @@ class Notes(MeasuresCase):
             alerts = section_text(self.page(aid, what), 'alerts')
             self.assertIn('Nothing needs urgent attention in these 48 messages.', alerts)
             self.assertIn('Good news', alerts)
-            self.assertIn('Hostility is easing', alerts)
+            self.assertIn('Hostility is lower than at your last check', alerts)
         self.assert_everywhere(aid)
 
     def test_a_first_check_says_so_under_since_your_last_check_on_the_page_the_pdf_and_the_csv(self):
@@ -2262,13 +2262,22 @@ class Robustness(MeasuresCase):
         ctx = report.build(aid)
         self.assertEqual((ctx['period']['kept'], ctx['period']['outside']), (12, 36))              # the period really does leave most of the chat out
         after = ctx['measures']
-        for key in ('m', 'cards', 'health', 'alerts', 'alert_counts', 'notes', 'badges', 'badges_earned', 'basis_text', 'since', 'caveats'):
+        for key in ('m', 'cards', 'health', 'alerts', 'alert_counts', 'badges', 'badges_earned', 'basis_text', 'since', 'caveats'):
             self.assertEqual(after[key], before[key], key)
+        # the one thing that moves is a quiet note, said once in the section about the measures: the period now leaves out rated messages
+        self.assertEqual([n for n in after['notes'] if n['key'] != 'period'], before['notes'])
+        period_note = {'key': 'period', 'text': 'The review period now leaves out 36 messages that were rated. Run the check again to apply it.', 'about': 'measures'}
+        self.assertEqual([n for n in after['notes'] if n['key'] == 'period'], [period_note])
         self.assertEqual([r['hostile_n'] for r in after['trail']], [r['hostile_n'] for r in before['trail']])
         self.assertEqual((before['record']['period_start'], after['record']['period_start']), ('', day))   # only the settings the record names changed
         for what in ('workspace', 'report'):
             now = self.page(aid, what)
             for sid in SECTIONS:
+                if sid == 'over-time':                                                                # the same section, with the one note more
+                    self.assertEqual(quiet_notes(now, sid), quiet_notes(html[what], sid) + [period_note['text']], what)
+                    without = re.sub(r'<li>The review period now leaves out.*?</li>', '', section(now, sid)).replace('<ul class="vc-quiet"></ul>', '')
+                    self.assertEqual(same_markup(without), same_markup(section(html[what], sid)), f'{what}: {sid}')
+                    continue
                 self.assertEqual(same_markup(section(now, sid)), same_markup(section(html[what], sid)), f'{what}: {sid}')
         self.assert_everywhere(aid, 'after the period changed')
 
@@ -2486,7 +2495,7 @@ class Sampling(MeasuresCase):
         self.assertEqual(self.store.measure_history(aid)[0]['n'], 300)
         self.assertEqual(len(self.store.measure_history(aid)), 1, 'adding messages to a check is no new check')
         # and the measures say so in a note of their own, once, in the section about the measures
-        added = '20 messages were added after this check and are not included. Run the check again to include them.'
+        added = '20 messages fall inside the review period but were not rated, so they are not included. Run the check again to include them.'
         ms = self.assert_everywhere(aid, 'messages added')
         self.assertEqual([(n['key'], n['text'], n['about']) for n in ms['notes'] if n['key'] == 'added'], [('added', added, 'measures')])
         for what in ('workspace', 'report'):

@@ -1326,6 +1326,29 @@ class ReviewPeriod(AppCase):
         self.assertIn('Run the check again', flash(self.set_period(aid, '2026-03-01', '2026-03-05')))
         self.assertEqual(self.set_period(aid, '2026-03-01', '2026-03-05').headers['location'], f'/analysis/{aid}/check/5')   # unchanged: nothing to say
 
+    def test_settings_do_not_change_while_a_task_runs(self):
+        """A running task has already read its settings, so a change now would say one thing and the results another. Every settings step refuses, says why, and
+        keeps what was saved. When the task is over the same change goes through."""
+        aid = self.with_chat()
+        self.set_period(aid, '2026-03-01', '2026-03-02')
+        self.client.post(f'/analysis/{aid}/check/5', data={'vibe_sensitivity': 'medium'})
+        before = self.store.get_analysis(aid)
+        busy = self.store.create_job(aid, 'full')
+        changes = ((2, {'volume': '300'}), (2, {'volume': 'all'}), (4, {'period_start': '2026-03-03', 'period_end': '2026-03-05'}), (4, {'preset': '24h', 'tz_offset': '0'}),
+                   (4, {'all_dates': '1'}), (5, {'vibe_sensitivity': 'low'}))
+        for step, data in changes:
+            with self.subTest(step=step, data=data):
+                r = self.client.post(f'/analysis/{aid}/check/{step}', data=data)
+                self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/workspace'))
+                self.assertEqual(flash(r), 'Wait for the current task to finish before changing the check settings.')
+        after = self.store.get_analysis(aid)
+        for key in ('check_volume', 'period_start', 'period_end', 'period_tz', 'vibe_sensitivity'):
+            self.assertEqual(after[key], before[key], key)
+        self.store.job_update(busy, 'cancelled', 'done')                                          # the task is over: the same change is saved
+        r = self.client.post(f'/analysis/{aid}/check/5', data={'vibe_sensitivity': 'low'})
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/6')
+        self.assertEqual(self.store.get_analysis(aid)['vibe_sensitivity'], 'low')
+
     def test_the_time_frame_step_says_what_the_period_does(self):
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/check/4').text
@@ -4075,6 +4098,19 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertNotIn('new-confirm', page)
         self.assertIn(f'<form method="post" action="/analysis/{aid}/check/new">', page)
+
+    def test_switching_incognito_on_after_a_run_says_to_run_the_check_again(self):
+        """Names go out of the messages when a check runs, so Incognito turned on after results exist does not touch those results: the page says to run again."""
+        aid = self.with_chat()
+        r = self.post(aid, 'check/3', incognito='on')                                             # nothing has run yet: nothing to say
+        self.assertEqual((r.headers['location'], flash(r)), (f'/analysis/{aid}/check/4', ''))
+        self.post(aid, 'check/3', incognito='off')
+        self.run_job(aid, path='run-vibe')
+        r = self.post(aid, 'check/3', incognito='on')
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/4')
+        self.assertEqual(flash(r), 'Incognito saved. Run the check again to take names out of the results you already have.')
+        self.assertEqual(flash(self.post(aid, 'check/3', incognito='on')), '', 'already on: nothing new to say')
+        self.assertEqual(flash(self.post(aid, 'check/3', incognito='off')), '')
 
     def test_the_six_check_steps_save_their_choices(self):
         aid = self.with_chat()
