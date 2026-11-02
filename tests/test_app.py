@@ -296,10 +296,14 @@ class Journey(AppCase):
             p = _Balance()
             p.feed(html.text)
             self.assertEqual(p.errors, [], path)
+        method = self.client.get(f'/analysis/{aid}/report').text                          # the method text prints every entry of HOW_IT_WORKS, the one for the measures too
+        for heading, _text in self.app.analysis.HOW_IT_WORKS:
+            self.assertIn(f'<h3>{heading}</h3>', method)
         pdf = self.client.get(f'/analysis/{aid}/report.pdf')
         self.assertEqual((pdf.status_code, pdf.headers['content-type']), (200, 'application/pdf'))
         text = pdf_text(pdf.content)
-        for needle in ('Night Owls Guild', 'Summary and guidance', 'Measured behaviour', 'Vibe Check', 'Sentiment mix', 'Flagged messages', 'How this report works'):
+        for needle in ('Night Owls Guild', 'Summary and guidance', 'Measured behaviour', 'Vibe Check', 'Sentiment mix', 'Flagged messages', 'How this report works',
+                       'Measures, alerts and badges'):
             self.assertIn(needle, text)
         self.assertLess(len(pdf.content), 1_500_000)
         csv_text = self.client.get(f'/analysis/{aid}/export').content.decode('utf-8-sig')
@@ -579,7 +583,8 @@ class Journey(AppCase):
                       'An uploaded file itself is discarded once it has been read.', page)
         confirm = page[page.index('<details class="clear-confirm"'):]
         confirm = confirm[:confirm.index('</details>')]
-        for needle in ("erased from the app's database file", 'The analysis details (name, role and goals)', 'numeric Vibe Check history (scores and counts) are kept'):
+        for needle in ("erased from the app's database file", 'The analysis details (name, role and goals)',
+                       'the numbers of earlier checks (scores and counts, never messages, names or file names) are kept'):
             self.assertIn(needle, confirm)
 
     def test_new_check_controls_lock_while_a_task_runs_and_the_run_button_is_off_without_messages(self):
@@ -624,7 +629,8 @@ class Journey(AppCase):
         self.assertIn('permanently deletes the 1 communication unit.', page)                                  # no report to promise yet
         self.assertNotIn('PDF and CSV', page)
         self.assertEqual(flash(self.client.post(f'/analysis/{aid}/clear-units')),
-                         'Deleted 1 communication unit. The analysis details and the numeric Vibe Check history (scores and counts) are kept, so trends survive a re-upload.')
+                         'Deleted 1 communication unit. The analysis details and the numbers of earlier checks (scores and counts, never messages, names or file names) '
+                         'are kept, so trends survive a re-upload.')
         self.assertEqual(flash(self.client.post(f'/analysis/{aid}/clear-units')),
                          'There was no evidence to delete.')                                                  # a second click, or a stale tab
 
@@ -1775,8 +1781,8 @@ class PartialFailures(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertNotIn('report, PDF and CSV', page[page.index('<details class="clear-confirm"'):])   # the delete does not promise what was never made
         cleared = flash(self.client.post(f'/analysis/{aid}/clear-units'))
-        self.assertEqual(cleared, 'Deleted 76 communication units. The analysis details and the numeric Vibe Check history (scores and counts) are kept, '
-                                  'so trends survive a re-upload.')
+        self.assertEqual(cleared, 'Deleted 76 communication units. The analysis details and the numbers of earlier checks (scores and counts, never messages, '
+                                  'names or file names) are kept, so trends survive a re-upload.')
 
         aid = self.new_analysis()
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello\nhi', 'actor_role': 'SUBJECT'})
@@ -3369,6 +3375,41 @@ class Docs(unittest.TestCase):
                      'Press **New**', 'Incognito', 'faster-whisper'):
             self.assertIn(word, readme)
 
+    def test_the_readme_describes_the_measures_what_is_kept_and_the_new_tests(self):
+        """The README says where the measures sit in the report, what outlives a delete, which test modules cover them and where the rules are, and it no
+        longer says that only the numeric Vibe Check history is kept."""
+        readme = self.read('README.md')
+        for word in ('Measures over time', 'Alerts', 'Badges', 'Since your last check', 'health score', '[MEASURES.md](MEASURES.md)', '[DEV.md](DEV.md)',
+                     'Alerts and badges page', 'the numbers of earlier checks', 'never a message, a name or a file name', 'no message, no person\'s name and no file name',
+                     'tests.test_measures ', 'tests.test_measures_store', 'tests.test_measures_export'):
+            self.assertIn(word, readme)
+        self.assertNotIn('numeric Vibe Check history', readme)
+        for name in ('MEASURES.md', 'DEV.md'):
+            self.assertTrue((ROOT / name).is_file(), name)
+        dev = self.read('DEV.md')
+        for word in ('measures.py', 'measures_view.py', 'measures_export.py', '_over_time.html', 'tests.test_measures', 'FalseAlarmTests', 'MEASURE_FIELDS'):
+            self.assertIn(word, dev)
+
+    def test_the_method_text_has_an_entry_for_measures_alerts_and_badges_in_short_plain_sentences(self):
+        """analysis.HOW_IT_WORKS prints on the report page and in the PDF, and METHOD_NOTE is its entries joined. The entry for Measures, alerts and badges
+        is at most 8 sentences of at most 16 words, without the words the new sections keep off a page and without a formula or a symbol the standard
+        PDF fonts cannot draw."""
+        import analysis
+        self.assertEqual([heading for heading, _text in analysis.HOW_IT_WORKS],
+                         ['What it looks at', 'The 13 tone signals', 'How Vibe Check works', 'How far to trust it', 'Measures, alerts and badges'])
+        text = dict(analysis.HOW_IT_WORKS)['Measures, alerts and badges']
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)                              # "MEASURES.md" holds a dot that ends no sentence
+        self.assertLessEqual(len(sentences), 8)
+        for sentence in sentences:
+            self.assertLessEqual(len(sentence.split()), 16, sentence)
+        for banned in (r'\bFAS\b', r'(?i)\bstretch', r'(?i)\bepisode', r'(?i)\bbaseline', r'(?i)\bpeak', r'(?i)\btoxic', r'(?i)communication unit', r'(?i)standard error',
+                       r'(?i)z-score', r'[=<>≤≥−✓✔]'):
+            self.assertNotRegex(text, banned)
+        for needle in ('0 to 3', '2 or 3', 'Conflict', 'Empathy', 'Passive-aggressive', 'Escalation', 'MEASURES.md', 'not tested norms', 'not people'):
+            self.assertIn(needle, text)
+        self.assertNotIn('Alerts and badges', text)                                      # a PDF without measures has no page of that name, and says so (tests.test_measures_export)
+        self.assertIn(text, analysis.METHOD_NOTE)
+
     def test_no_stale_names_or_sandbox_text_remain(self):
         for name in ('README.md', 'DEV.md', 'VIBE_CHECK.md', 'demo/build_demo.py', 'vibe_check/engine.py'):
             text = self.read(name)
@@ -3587,7 +3628,8 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         confirm = page[page.index('<details class="new-confirm"'):]
         confirm = confirm[:confirm.index('</details>')]
-        for needle in ('replaces the messages and the report', 'score history stay', f'action="/analysis/{aid}/check/new"'):
+        for needle in ('replaces the messages and the report', 'the numbers of earlier checks (scores and counts, never messages, names or file names) stay',
+                       f'action="/analysis/{aid}/check/new"'):
             self.assertIn(needle, confirm)
         self.assertEqual(page.count(f'action="/analysis/{aid}/check/new"'), 1)
         history = len(self.store.vibe_history(aid))

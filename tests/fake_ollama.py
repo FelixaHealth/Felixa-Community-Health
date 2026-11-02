@@ -42,6 +42,8 @@ def rate(text: str):
         r['Agitated'] = 2
     if 'whatever' in t or 'sure,' in t or 'yeah right' in t:
         r['Sarcastic'] = 1
+    if any(k in t for k in ('oh brilliant', 'oh great, another', 'what a surprise', 'how original')):      # a dig: sarcasm that clearly shows (2), with no insult in it
+        r['Sarcastic'] = max(r['Sarcastic'], 2)
     if 'you always' in t or 'you never' in t or 'nobody likes' in t:
         r['Judgmental'] = 2
     return r, {a: f'keyword rule matched in "{text[:40]}"' for a, v in r.items() if v}

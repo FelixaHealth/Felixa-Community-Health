@@ -49,7 +49,7 @@
 <form method="post"><fieldset class="group"><legend class="sr-only">Hide people's names</legend><div class="option-grid">
 <label class="option"><input type="radio" name="incognito" value="off" required {% if not incognito %}checked{% endif %}><span><b>Off</b><small>Messages are read as they are</small></span></label>
 <label class="option"><input type="radio" name="incognito" value="on" {% if incognito %}checked{% endif %}><span><b>On: remove names</b><small>Speakers become Member 1, Member 2…</small></span></label></div></fieldset>
-<p class="small-note">Incognito replaces the name at the start of each chat line, @mentions and email addresses, and it does so in the saved messages too, for good. A name typed inside a sentence cannot be found reliably and stays, and so do file and channel names, so rename a file that has a person's name in it before adding it.</p>
+<p class="small-note">Incognito replaces the name at the start of each chat line, @mentions and email addresses, and it does so in the saved messages too, for good. A name typed inside a sentence cannot be found reliably and stays, and so do file and channel names, so rename a file that has a person's name in it before adding it. Times of day are left out of the labels, tables, PDF and CSV in the Over time section while Incognito is on.</p>
 <div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/2">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
 {% elif step == 4 %}
 <h1>Which dates should it look at?</h1><p class="lead">{% if dates %}Your messages run from {{ dates[0] }} to {{ dates[1] }} (UTC). {% endif %}Leave both blank to use every message. Messages with no readable date are always kept.</p>

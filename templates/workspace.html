@@ -13,9 +13,12 @@
 <section class="panel new-panel" id="new"><div class="new-text"><div class="eyebrow">Check</div><h2>Run a new check</h2><p>Add messages, choose how to read them and get a report on how healthy the conversation feels.</p></div>
 {% if busy %}<button class="btn primary large" disabled>A check is running…</button>
 {% elif units_n or has_results %}<details class="new-confirm"><summary class="btn primary large">{{ icon('plus') }} New</summary>
-<p>A new check replaces the messages and the report you have now. Download the PDF or CSV first if you need a copy. The workplace details and the score history stay, so the trend carries on.</p>
+<p>A new check replaces the messages and the report you have now. Download the PDF or CSV first if you need a copy. The workplace details and the numbers of earlier checks (scores and counts, never messages, names or file names) stay, so the trend carries on.</p>
 <form method="post" action="/analysis/{{ a.id }}/check/new"><button class="btn primary">Yes, start a new check</button></form></details>
 {% else %}<form method="post" action="/analysis/{{ a.id }}/check/new"><button class="btn primary large">{{ icon('plus') }} New</button></form>{% endif %}</section>
+
+{# Once there are results they come first: the summary, the alerts, the measures over time and the badges, then the rest of the report. #}
+{% if has_results %}{% include "_results.html" %}{% endif %}
 
 <div class="results-grid two-up">
 <section class="panel"><div class="eyebrow">Plan</div><h2>{{ pathway.name }}</h2><p>{{ pathway.question }}</p><div class="path-list">{% for x in pathway.actions %}<div><b>{{ loop.index }}</b><span>{{ x }}</span></div>{% endfor %}</div></section>
@@ -26,9 +29,9 @@
 {% if evidence %}<div class="table-wrap evidence-table"><table><caption class="sr-only">Evidence loaded</caption><thead><tr><th scope="col">Source</th><th scope="col">Type</th><th scope="col">Units</th><th scope="col">Period</th></tr></thead><tbody>{% for e in evidence %}<tr><td>{{ e.source_label }}</td><td>{{ e.source_type|title }}</td><td>{{ '{:,}'.format(e.n) }}</td><td>{% if e.first_ts %}{{ e.first_ts[:10] }}{% if e.last_ts and e.last_ts[:10] != e.first_ts[:10] %} – {{ e.last_ts[:10] }}{% endif %}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 <div class="unit-status"><span><strong>{{ '{:,}'.format(units_n) }}</strong> communication units loaded.{% if period_text %} {{ period_text }}{% endif %}</span>
 <details class="clear-confirm"><summary class="linkbtn"{% if busy %} aria-describedby="evidence-lock"{% endif %}>Delete evidence and results…</summary>
-<p>This permanently deletes the {{ '{:,}'.format(units_n) }} communication unit{{ '' if units_n == 1 else 's' }}{% if has_results %} and every result built from them (ratings, guidance, Vibe Check, report, PDF and CSV). Download the PDF or CSV first if you need a copy{% endif %}. The messages are erased from the app's database file. The analysis details (name, role and goals) and the numeric Vibe Check history (scores and counts) are kept. This cannot be undone.</p>
+<p>This permanently deletes the {{ '{:,}'.format(units_n) }} communication unit{{ '' if units_n == 1 else 's' }}{% if has_results %} and every result built from them (ratings, guidance, Vibe Check, report, PDF and CSV). Download the PDF or CSV first if you need a copy{% endif %}. The messages are erased from the app's database file. The analysis details (name, role and goals) and the numbers of earlier checks (scores and counts, never messages, names or file names) are kept. This cannot be undone.</p>
 <form method="post" action="/analysis/{{ a.id }}/clear-units"><button class="btn danger"{% if busy %} disabled aria-describedby="evidence-lock"{% endif %}>Yes, delete evidence and results</button></form></details></div>{% endif %}
 </section>{% endif %}
 
-{% include "_results.html" %}
+{% if not has_results %}{% include "_results.html" %}{% endif %}
 </div></div>{% endblock %}

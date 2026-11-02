@@ -285,7 +285,9 @@ def stored_guidance(a) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-# How the report works, in plain words. The report page and the PDF print these four paragraphs under their headings.
+# How the report works, in plain words. The report page and the PDF print these five paragraphs under their headings.
+# The fifth covers Measures over time, alerts and badges in short plain sentences: at most 8 sentences of at most 16 words, and none of the words that
+# section keeps off a page (FAS, stretch, episode, baseline, peak, toxic, standard error). Its rules and its wording live in measures.py; MEASURES.md lists them.
 HOW_IT_WORKS = [
     ('What it looks at', 'Felixa Community Health reads the messages you added, one by one. It looks at the words people used, never at who they are.'),
     ('The 13 tone signals', 'A language model gives each message a score from 0 to 3 for 13 tones, such as polite, encouraging, sarcastic or rude. '
@@ -297,5 +299,9 @@ HOW_IT_WORKS = [
      'with a rough forecast based on your past checks.'),
     ('How far to trust it', 'A language model makes these judgement calls, and trained human raters have not checked them yet. Use the results to start a conversation, '
      'and never to judge a person. The scores describe wording only. A very large upload is sampled evenly instead of read in full, and the report says when that happened.'),
+    ('Measures, alerts and badges', 'The four measures reuse the 0 to 3 ratings, so they cost no extra model time. A message counts when the model rated the tone 2 or 3. '
+     'Conflict counts openly hostile wording, and Empathy counts care and understanding. Passive-aggressive counts sarcasm without open hostility, '
+     'so friendly banter can count. Escalation looks for moments when the mood heats up fast. Alerts and badges follow fixed rules, and each one shows the numbers behind it. '
+     'The cut-offs are our own starting points, not tested norms. Every number here describes wording in these messages, not people.'),
 ]
 METHOD_NOTE = ' '.join(text for _heading, text in HOW_IT_WORKS)

@@ -1,0 +1,11 @@
+{# The summary strip. Needs `measures` (measures.build). Links point only at parts that are on the page. #}
+{% set ms = measures %}{% set vibe_ok = vibe and vibe.status == 'ok' %}{% set look = ms.alert_counts.high + ms.alert_counts.medium %}
+<section class="panel vc" id="summary" aria-labelledby="summary-h"><div class="eyebrow">Summary</div><h2 id="summary-h">How the community is doing</h2>
+<div class="vc-kpis vc-summary-kpis">
+{% if vibe_ok %}<div class="vc-kpi"><strong>{{ '%g'|format(vibe.score) }}<small> / 10</small></strong><span>{{ 'Impact score' if vibe.multi_source else 'Friendliness score' }}</span></div>
+{% else %}<div class="vc-kpi"><strong>Not run</strong><span>Vibe Check score</span></div>{% endif %}
+<div class="vc-kpi"><strong>{{ look }}</strong><span>thing{{ '' if look == 1 else 's' }} to look at first</span></div>
+<div class="vc-kpi"><strong>{{ ms.badges_earned }}</strong><span>badge{{ '' if ms.badges_earned == 1 else 's' }} earned</span></div>
+</div>
+<nav class="vc-links" aria-label="Parts of this page"><a class="chip-btn" href="#alerts">Alerts</a><a class="chip-btn" href="#over-time">Measures over time</a><a class="chip-btn" href="#badges">Badges</a>{% if metrics %}<a class="chip-btn" href="#behaviour">Signal profile</a>{% endif %}{% if guidance %}<a class="chip-btn" href="#guidance">Guidance</a>{% endif %}{% if vibe_html %}<a class="chip-btn" href="#vibe-check">Vibe Check</a>{% endif %}{% if vibe_ok %}<a class="chip-btn" href="#vc-flagged">Flagged messages</a><a class="chip-btn" href="#vc-toxicity">Content categories</a>{% endif %}</nav>
+</section>

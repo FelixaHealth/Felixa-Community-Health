@@ -1,0 +1,36 @@
+{# Measures over time. Needs `measures` (measures.build) and `measures_html` (measures_view.html). The wording comes from measures.py; the headings and the first-check sentence are written here. #}
+{% set ms = measures %}{% set m = ms.m %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set charts = mh.charts or {} %}{% set verdict_tone = mh.verdict_tone or {} %}{% set h = ms.health %}
+<section class="panel vc" id="over-time" aria-labelledby="over-time-h"><div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>
+<p class="vc-note">{{ ms.basis_text }}</p>
+<p class="vc-caveat">{{ ms.caveats.measures }}</p>
+{% if not m.has_series %}<p class="vc-note">There are no lines over time yet. The notes under Alerts say what is needed.</p>{% endif %}
+<div class="vc-cols vc-measures">{% for c in ms.cards %}
+<div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
+<p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong>{% if c.latest %}<span class="vc-latest">Latest part: {{ c.latest }}</span>{% endif %}</p>
+<p class="vc-meaning">{{ c.meaning }}</p>
+<p class="vc-headline">{{ c.headline }}</p>
+{% if c.trend %}<p class="vc-card-trend">{{ c.trend }}</p>{% endif %}
+{% if c.note %}<p class="vc-card-note">{{ c.note }}</p>{% endif %}
+{% if charts[c.key] %}{{ charts[c.key]|safe }}{% endif %}
+</div>{% endfor %}</div>
+{% if mh.table %}<div class="vc-over-table vc-parts">{{ mh.table|safe }}</div>{% endif %}
+<div class="vc-card vc-health"><h3>{{ h.name }}</h3>
+<div class="vc-health-head"><div class="vc-score"><span class="vc-score-num">{{ mh.health_score }}</span><span class="vc-score-den">/ 100</span></div>
+<div class="vc-badge">{{ icons[h.tone]|safe }}<span>{{ h.status }}</span></div></div>
+{% if mh.health %}{{ mh.health|safe }}{% endif %}
+<p class="vc-caveat">{{ h.caption }}</p>
+{% if h.trend %}<p class="vc-trendline">{{ h.trend }}</p>{% endif %}
+</div>
+<h3>Since your last check</h3>
+{% if not ms.since %}<p class="vc-trendline">This is your first check. Run another after your next batch of messages and this panel will show what moved.</p>
+{% else %}{% set alike = ms.since.comparable %}
+{% if not alike %}<div class="vc-callout"><strong>No comparison</strong>{{ ms.since.why }}</div>{% endif %}
+{# On a phone each row becomes a small block (see .vc-since in style.css); the roles keep it a table for a screen reader whatever the style does to it. #}
+<div class="table-wrap"><table class="vc-since" role="table"><caption class="sr-only">Your last check and this check</caption>
+<thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Measure</th><th scope="col" role="columnheader">Last check</th><th scope="col" role="columnheader">This check</th>{% if alike %}<th scope="col" role="columnheader">Change</th>{% endif %}</tr></thead>
+<tbody role="rowgroup">{% for r in ms.since.rows %}<tr role="row"><th scope="row" role="rowheader">{{ r.label }}</th><td role="cell" data-label="Last check">{{ r.before }}</td><td role="cell" data-label="This check">{{ r.now }}</td>{% if alike %}<td role="cell" data-label="Change">{% if r.verdict %}{{ icons[verdict_tone[r.verdict]]|safe }}{{ r.verdict }}{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
+{% endif %}
+{% if mh.trail %}<h3>Check by check</h3>
+<p class="vc-note">The health score at each check, oldest first.</p>
+<div class="vc-over-table vc-trail">{{ mh.trail|safe }}</div>{% endif %}
+</section>

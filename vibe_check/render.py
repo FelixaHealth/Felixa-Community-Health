@@ -183,7 +183,7 @@ def _flagged_html(vibe) -> str:
     flagged = vibe.get('flagged') or []
     total = vibe.get('flagged_total', len(flagged))
     if not total:
-        return '<h3>Flagged messages</h3><p class="vc-note">No messages were flagged.</p>'
+        return '<h3 id="vc-flagged">Flagged messages</h3><p class="vc-note">No messages were flagged.</p>'
 
     def item(f):
         who = {'SUBJECT': 'Person', 'AUDIENCE': 'Audience'}.get(str(f.get('role') or '').upper(), '')
@@ -196,7 +196,7 @@ def _flagged_html(vibe) -> str:
     rest = flagged[10:]
     more = (f'<details><summary>Show the other {"flagged message" if len(rest) == 1 else fmt_int(len(rest)) + " flagged messages"}</summary>'
             f'<ul class="vc-flags">{"".join(item(f) for f in rest)}</ul></details>') if rest else ''
-    return (f'<h3>Flagged messages ({fmt_int(total)})</h3>'
+    return (f'<h3 id="vc-flagged">Flagged messages ({fmt_int(total)})</h3>'
             '<p class="vc-note">Ordered by severity. Each message is copied from your upload, never paraphrased.</p>'
             f'<ul class="vc-flags">{head}</ul>{more}')
 
@@ -332,7 +332,7 @@ def render_html(vibe: dict | None, *, assets: bool = True, notice: str = '') -> 
     if vibe.get('recommendation'):
         out.append(f'<div class="vc-card"><h3>Recommendations</h3><p>{E(vibe["recommendation"])}</p></div>')
     out.append('</div>')
-    out += [_keep('<h3>Toxicity breakdown</h3>', _fig(lambda w: charts.toxicity_bars(vibe['toxicity_types'], width=w)) if has_tox
+    out += [_keep('<h3 id="vc-toxicity">Toxicity breakdown</h3>', _fig(lambda w: charts.toxicity_bars(vibe['toxicity_types'], width=w)) if has_tox
                   else '<p class="vc-note">No toxicity detected.</p>'), tox_tab, _flagged_html(vibe)]
     if vibe.get('multi_source'):
         out += [_keep('<h3>Impact score by source</h3>', f'<p class="vc-note">{E(IMPACT_NOTE)}</p>',

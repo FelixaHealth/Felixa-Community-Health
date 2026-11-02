@@ -1,4 +1,5 @@
 {{ assets|safe }}
+{% if measures %}{% include "_summary.html" %}{% include "_alerts.html" %}{% include "_over_time.html" %}{% include "_badges.html" %}{% endif %}
 {% if metrics %}
 <section class="panel" id="behaviour"><div class="eyebrow">Measured behaviour</div><h2>Observable communication signals</h2>
 <p class="small-note">{% if sampled %}{{ '{:,}'.format(rated_n) }} of {{ '{:,}'.format(rated_total) }} communication units were rated, sampled evenly through the upload.{% else %}{{ '{:,}'.format(rated_n) }} communication units were rated.{% endif %}{% if added_since %} <strong>{{ '{:,}'.format(added_since) }} communication unit{{ '' if added_since == 1 else 's' }} added after the signals were last rated {{ 'is' if added_since == 1 else 'are' }} not included. Run the check again.</strong>{% endif %} FAS runs from 0 to 100; 100 would mean every unit shows the signal at full strength.</p>

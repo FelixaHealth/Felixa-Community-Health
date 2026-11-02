@@ -1091,7 +1091,7 @@ def cleared_message(units, had_results):
     gone = f'{units:,} communication unit{"" if units == 1 else "s"}'
     if had_results:
         gone += ' and every result built from them (ratings, guidance, Vibe Check, report, PDF and CSV)'
-    return f'Deleted {gone}. The analysis details and the numeric Vibe Check history (scores and counts) are kept, so trends survive a re-upload.'
+    return f'Deleted {gone}. The analysis details and the numbers of earlier checks (scores and counts, never messages, names or file names) are kept, so trends survive a re-upload.'
 
 
 @app.post('/analysis/{aid}/clear-units')

@@ -1,8 +1,15 @@
 """SQLite storage for Felixa Community Health.
 
 The schema is the original FELIXA schema (analyses, sources, communication_units, unit_ratings,
-behavior_metrics, findings) plus `jobs` and `vibe_runs`. An existing felixa.db opens as is: missing
-tables and columns are added, nothing is dropped. History that names its sources is rewritten with fingerprints (see fingerprint_history).
+behavior_metrics, findings) plus `jobs`, `vibe_runs` and the two tables of earlier checks, `vibe_history` and `measure_history`. An existing
+felixa.db opens as is: missing tables and columns are added, nothing is dropped.
+
+What outlives the messages. Delete evidence and results (`clear_evidence`) and New check (`new_check`) remove the messages and every result built from
+them, and keep the analysis details (name, role, goals) and the numbers of earlier checks, so the next check can show what moved:
+  vibe_history      the scores and counts of each Vibe Check; every source only as a fingerprint (see fingerprint_history and vibe_check.forecast.source_key)
+  measure_history   the scores and counts of Measures over time for each check, and the names of the settings used (model, sensitivity, review period);
+                    a record is checked against the allow-list MEASURE_FIELDS when it is written and again when it is read
+Neither table holds a message, a person's name or a file name. A table added later that could hold one of those has to be cleared in `clear_evidence`.
 """
 import contextlib
 import datetime
@@ -387,8 +394,9 @@ def evidence_by_source(aid) -> list:
 
 def clear_evidence(aid):
     """Removes the messages and every result that quotes them, including full Vibe Check runs, and overwrites them in the database file.
-    The analysis itself (name, role, goals) and the numeric Vibe Check history stay, so trends survive a re-upload. The history holds
-    scores and counts, and each source name only as a fingerprint (see vibe_check.forecast.source_key): no message text, no file name.
+    The analysis itself (name, role, goals) and the numbers of earlier checks stay, so trends survive a re-upload: `vibe_history` (the scores and
+    counts of each Vibe Check, every source only as a fingerprint, see vibe_check.forecast.source_key) and `measure_history` (the scores and counts of
+    Measures over time and the names of the settings used, see MEASURE_FIELDS). Neither holds a message text, a person's name or a file name.
     The records of the imported files go with the messages (see has_upload), so a file can be uploaded again.
     Finished tasks go too: their message ("Your report is ready: ...") describes results that no longer exist.
     A queued or running task is never touched, so its worker still finds its row."""
@@ -419,7 +427,8 @@ def anonymise_units(aid) -> int:
 
 
 def new_check(aid):
-    """Starts a check from nothing: the messages and results of the last one go, its settings reset. The workplace and the numeric history stay."""
+    """Starts a check from nothing: the messages and results of the last one go, its settings reset. The workplace and the numbers of earlier checks
+    (`vibe_history` and `measure_history`: scores, counts and the names of settings, never a message, a name or a file name) stay."""
     clear_evidence(aid)
     update_analysis(aid, check_volume=None, incognito=0, engine=None, cloud_ok=0, period_start='', period_end='', period_tz=None)
 
@@ -512,7 +521,7 @@ def vibe_history(aid) -> list:
 _NUMBER = (int, float)
 MEASURE_FIELDS = {
     'created_at': re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?'), 'basis': ('time', 'order'), 'sensitivity': ('low', 'medium', 'high', ''),
-    'model': re.compile(r'[A-Za-z0-9._:/ ()+-]{0,64}'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
+    'model': re.compile(r'[A-Za-z0-9._:/ ()+@-]{0,120}'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
     'period_end': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'), 'sig': re.compile(r'\d+(?::\d+){0,6}'),
     'gen': int, 'n': int, 'total': int, 'sampled': int, 'stretches': int, 'hostile_n': int, 'care_n': int, 'dig_n': int, 'heated_n': int, 'episodes': int,
     'health': float, 'health_sd': float, 'peak': float,
@@ -520,7 +529,7 @@ MEASURE_FIELDS = {
 
 
 def clean_measure_snapshot(raw):
-    """The record with only the fields of MEASURE_FIELDS, each coerced to its type and dropped when it does not fit. None when it has no date or no count."""
+    """The record with only the fields of MEASURE_FIELDS, each coerced to its type and dropped when it does not fit. None when it has no date, count or health score."""
     if not isinstance(raw, dict):
         return None
     out = {}
@@ -544,7 +553,12 @@ def clean_measure_snapshot(raw):
                 out[key] = value
         except (TypeError, ValueError, OverflowError):
             continue
-    return out if 'created_at' in out and 'n' in out else None
+    if 'created_at' not in out or 'n' not in out or 'health' not in out:
+        return None                                       # a record the comparison cannot read is dropped like any other bad row
+    for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):
+        if key in out and out[key] > out['n']:
+            del out[key]                                  # a count above its own total is damage, never a number to compare
+    return out
 
 
 def evidence_generation(aid):

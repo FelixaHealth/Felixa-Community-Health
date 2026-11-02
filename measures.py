@@ -58,7 +58,7 @@ LOW_TENSION = 1.2          # and the Medium heated-moment cut-offs
 CUTS = {'hostile': (5, 12), 'dig': (5, 12), 'care': (3, 10)}      # per 100 messages: below the first is Rare, below the second Some, else Often
 SCALED = ('hostile', 'dig')
 ESCALATION_WORDS = ((40, 'steep'), (25, 'clear'), (15, 'small'), (0, 'none'))     # by the biggest counted climb
-ESCALATION_LABEL = {'none': 'None', 'small': 'Small', 'clear': 'Clear', 'steep': 'Steep'}
+ESCALATION_LABEL = {'none': 'None', 'small': 'Small', 'clear': 'Clear', 'steep': 'Steep', 'early': 'Too early'}
 
 # ---- alerts, comparisons and badges -------------------------------------------------------------
 LEVELS = ('high', 'medium', 'good')
@@ -87,7 +87,7 @@ def whole(x) -> int:
 def _rating(value) -> int:
     try:
         return int(clamp(int(value), 0, 3))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
@@ -262,6 +262,11 @@ def stretch_labels(spans, stamps, basis, utc=False, incognito=False):
     return [(axis[i], f'Part {i + 1} of {k}: ' + span(firsts[i], lasts[i])) for i in range(k)]
 
 
+def _stamp_text(stamp, incognito) -> str:
+    """A stretch's start or end as saved in the analysis: the whole moment, or only the day while Incognito is on (no clock time may leave this module)."""
+    return stamp.date().isoformat() if incognito else stamp.isoformat()
+
+
 def where_phrase(first, last, k) -> str:
     """Where in the check a heated moment fell, in words (never a clock time): 'near the start', 'around the middle' ..."""
     centre = (first + last + 1) / 2 / max(1, k)
@@ -336,7 +341,7 @@ def analyse(units, sensitivity='medium', today=None, incognito=False) -> dict | 
         t = tally([flags[u['id']] for u in ordered[a:b]])
         tallies.append(t)
         stretches.append({'i': i, 'n': t['n'], 'axis': labels[i][0], 'label': labels[i][1], 'health': health_mean(t),
-                          'start': stamps[a].isoformat() if basis == 'time' else None, 'end': stamps[b - 1].isoformat() if basis == 'time' else None,
+                          'start': _stamp_text(stamps[a], incognito) if basis == 'time' else None, 'end': _stamp_text(stamps[b - 1], incognito) if basis == 'time' else None,
                           'counts': {x: t[x] for x in KINDS}, 'rates': {x: rate(t, x) for x in KINDS}})
     timeline_n = len(ordered)
     verdicts = timeline_n >= MIN_VERDICT
@@ -414,6 +419,8 @@ def cards(m) -> list:
             peak = max((e['peak'] for e in eps), default=0.0)
             word = escalation_word(peak)
             card.update({'level': ESCALATION_LABEL[word], 'word': word, 'tone': {'none': 'good', 'small': 'info', 'clear': 'warn', 'steep': 'bad'}[word], 'peak': peak})
+            if not m['has_series'] or not m['verdicts']:                # nothing could be judged: never a green 'None'
+                card.update(level=ESCALATION_LABEL['early'], word='early', tone='info')
             if not m['has_series']:
                 card['headline'] = f'Needs at least {MIN_TIMELINE} messages to follow the mood over time.'
             elif not m['verdicts']:
@@ -424,13 +431,17 @@ def cards(m) -> list:
                 big = max(eps, key=lambda e: e['peak'])
                 card['headline'] = (f'1 heated moment, {big["where"]}.' if len(eps) == 1 else f'{len(eps)} heated moments, the biggest {big["where"]}.')
             card['trend'] = ''
-            card['note'] = ('The mood was already tense when the messages start. Escalation only counts a rise.' if m['opening_heated'] and m['verdicts'] else '')
+            hottest = max((s['rates']['heated'] for s in stretches), default=0.0)
+            card['note'] = ('The mood was already tense when the messages start. Escalation only counts a rise.' if m['opening_heated'] and m['verdicts'] else
+                            'Some parts were heated, but not by more than chance alone would give.' if m['verdicts'] and not eps and whole(hottest) >= 30 else '')
             card['count'] = len(eps)
         else:
             word = level_word(kind, rate(o, kind), m['scale'])
             what = {'hostile': 'were openly hostile.', 'care': 'showed care or understanding.', 'dig': 'had sarcasm without open hostility.'}[kind]
             card.update({'level': word, 'tone': _tone(kind, word), 'headline': _messages(o[kind], o['n'], what), 'count': o[kind], 'of': o['n'],
                          'trend': _trend_text(m['trend'][kind], kind, m), 'note': ''})
+            if m['n'] < MIN_VERDICT:                                      # too few messages to call it good or bad: a neutral mark
+                card['tone'] = 'info'
             if m['last3'] and m['verdicts']:
                 card['latest'] = level_word(kind, rate(m['last3'], kind), m['scale'])
         out.append(card)
@@ -501,6 +512,7 @@ def compare(cur, prev) -> dict | None:
         k1, n1, k2, n2 = prev.get(f'{kind}_n'), prev['n'], cur.get(f'{kind}_n'), cur['n']
         if k1 is None or k2 is None:
             continue
+        k1, k2 = min(max(int(k1), 0), n1), min(max(int(k2), 0), n2)        # a damaged record cannot push a count past its own total
         first, last = 100 * k1 / n1, 100 * k2 / n2
         se = 100 * math.sqrt(_lap_var(k1, n1) / n1 + _lap_var(k2, n2) / n2)
         out['changes'][label] = _change(first, last, se, max(CHANGE_MIN, Z_CLEAR * se), good='up' if kind == 'care' else 'down')
@@ -522,11 +534,22 @@ def _change(first, last, se, need, good) -> dict:
 
 def trail_of(history, live) -> list:
     """The check-by-check records ending with the current check: each earlier check once (the newest record of each set of evidence), then the live one."""
-    out = [r for r in history if r.get('gen') != live.get('gen') or live.get('gen') is None]
+    out, where = [], {}
+    for rec in history:
+        gen = rec.get('gen')
+        if gen is not None and gen == live.get('gen'):
+            continue                                    # that is the current check: the live record stands for it
+        if gen is not None and gen in where:
+            out[where[gen]] = rec                       # a later record of the same check replaces the earlier one
+            continue
+        if gen is not None:
+            where[gen] = len(out)
+        out.append(rec)
     return out + [live]
 
 
 # ---- alerts and notes ---------------------------------------------------------------------------
+NOTE_ABOUT = {'no_vibe': 'alerts', 'not_alike': 'alerts'}       # every other note is about the measures; a page prints each note once, in its own section
 def _alert(level, key, title, detail, step, base, when='') -> dict:
     return {'level': level, 'key': key, 'title': title, 'detail': detail, 'try': step, 'base': base, 'when': when}
 
@@ -551,7 +574,7 @@ def serious_flags(vibe) -> dict:
 
 
 def _list_kinds(kinds) -> str:
-    words = [SERIOUS_LABEL[k] for k in ('threats', 'hate_speech', 'harassment', 'bullying') if k in kinds]
+    words = [('a threat' if k == 'threats' and kinds[k] == 1 else SERIOUS_LABEL[k]) for k in ('threats', 'hate_speech', 'harassment', 'bullying') if k in kinds]
     return words[0] if len(words) == 1 else ', '.join(words[:-1]) + ' and ' + words[-1]
 
 
@@ -569,8 +592,9 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
         sf = serious_flags(vibe)
         if sf['total']:
             high = bool(sf['kinds'].get('threats') or sf['kinds'].get('hate_speech')) or sf['red'] > 0
-            quoted = f' {sf["red"]} scored {SERIOUS_SCORE} or more out of 10.' if sf['red'] else ''
-            where = 'They are quoted under Flagged messages.' if sf['quoted'] else 'They were counted, not quoted.'
+            one = sf['total'] == 1
+            quoted = f' {"It" if one else sf["red"]} scored {SERIOUS_SCORE} or more out of 10.' if sf['red'] else ''
+            where = (('It is quoted' if one else 'They are quoted') + ' under Flagged messages.') if sf['quoted'] else ('It was counted, not quoted.' if one else 'They were counted, not quoted.')
             step = ('Read the quoted messages in their context first: a model can mistake jokes, quotes and game talk for threats. If a message describes a real risk '
                     "to someone, follow your community's safety process or contact local emergency services. Otherwise, check in with whoever the message was aimed at, "
                     'and agree one shared goal for the next conversation.') if (sf['kinds'].get('threats') or sf['kinds'].get('hate_speech')) else (
@@ -586,7 +610,9 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
         notes.append({'key': 'few', 'text': f'We rated only {m["n"]:,} message{"" if m["n"] == 1 else "s"}, so there are no lines over time yet. With {MIN_TIMELINE} or more '
                                              'you will see how the mood moved, and with 48 or more, whether it is rising or falling.'})
     else:
-        if not m['verdicts']:
+        if not m['has_series']:
+            notes.append({'key': 'few_dated', 'text': f'Only {m["timeline_n"]:,} of {m["n"]:,} messages have a date, so there are no lines over time yet. Lines need at least {MIN_TIMELINE} messages with a date.'})
+        elif not m['verdicts']:
             notes.append({'key': 'no_verdict', 'text': f'The lines show what happened. A direction, or a heated moment, needs at least {MIN_VERDICT} messages on the timeline; this one has {m["timeline_n"]:,}.'})
         # a heated moment
         if m['episodes']:
@@ -599,8 +625,8 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
                 base = 'Before that, almost none were.' if before == 0 else f'Before that, about {before} in 100 were.'
                 found.append(_alert(level, 'heated', 'The mood heated up fast',
                                     f'{top["where"].capitalize()}, {top["heated"]:,} of {top["n"]:,} messages in one part of the chat were heated. {base}',
-                                    'Think about what was going on around then (an event, a deadline, a change) rather than who was speaking. A pinned reminder of the shared goal, '
-                                    'a thank-you to everyone who helped things settle and a lighter activity afterwards help the group reset.',
+                                    'Think about what was going on around then (an event, a deadline, a change) rather than who was speaking. A pinned reminder of the shared goal helps. '
+                                    'So does a thank-you to everyone who helped things settle, and a lighter activity afterwards.',
                                     f'Based on {top["n"]:,} messages in that part, {top["heated"]:,} of them heated.', when))
         # level alerts: conflict, then sarcasm. Each reads the latest third (when it holds enough messages) or the whole check, and needs the rate to clear its
         # cut-off by more than one standard error, with at least EVIDENCE_MIN messages that clearly show it.
@@ -624,10 +650,10 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
             else:
                 if floor_ok and _clears(count, tk['n'], scaled(DIG_MEDIUM)):
                     level, title = 'medium', 'Sarcastic wording is common'
-                    step = 'Make direct, kind feedback easy for everyone: a short pinned note such as "say it straight, say it kindly", with one example, helps the whole group.'
+                    step = 'Make direct, kind feedback easy for everyone. A short pinned note helps, such as "say it straight, say it kindly", with one example.'
                 detail = f'{count:,} {of} had sarcasm without open hostility (about {whole(rate(tk, kind))} in 100). Friendly banter can count too.'
                 rising_title, rising_text = 'Sarcastic wording is growing', 'Messages with sarcasm went from {a} of {n1} early on to {b} of {n2} lately.'
-                rising_step = 'Make direct, kind feedback easy for everyone: a short pinned note such as "say it straight, say it kindly", with one example, helps the whole group.'
+                rising_step = 'Make direct, kind feedback easy for everyone. A short pinned note helps, such as "say it straight, say it kindly", with one example.'
             base = read_base
             tr = m['trend'][kind]
             if level is None and tr and tr['strong'] and tr['call'] == 'rising' and m['last3'][kind] >= EVIDENCE_MIN and whole(tr['last']) >= whole(scaled(RISING_FLOOR)):
@@ -659,7 +685,8 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
     elif comparison:
         ch = comparison['changes']
         h = ch.get('health')
-        base = f'Based on {comparison["previous"]["n"]:,} and {m["n"]:,} messages.'
+        before_n = comparison['previous']['n']
+        base = f'Based on {m["n"]:,} messages in each check.' if before_n == m['n'] else f'Based on {before_n:,} and {m["n"]:,} messages.'
         if h and h['strong_verdict'] == 'worse':
             found.append(_alert('medium', 'mood_down', 'The overall mood slipped since your last check',
                                 f'The health score went from {whole(h["first"])} to {whole(h["last"])} out of 100.',
@@ -696,6 +723,15 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
     if cov.get('sampled'):
         notes.append({'key': 'sampled', 'text': f'Built from {m["n"]:,} of {cov.get("total", m["n"]):,} messages, an even sample. A short flare-up can fall between the samples. '
                                                  'Choose "all of them" for the volume to see every message.'})
+    if m['scale'] > 1:
+        notes.append({'key': 'low_sensitivity', 'text': 'Your sensitivity is Low, so banter counts as normal. The bars for Conflict, Passive-aggressive and heated moments are higher.'})
+    if m['n'] >= MIN_BADGE and SILENT_SHARE[1] * m['silent'] >= SILENT_SHARE[0] * m['n']:
+        notes.append({'key': 'silent', 'text': 'Almost no tone was found in these messages. The model may not have read this text well.'})
+    if cov.get('added_since'):
+        k = cov['added_since']
+        notes.append({'key': 'added', 'text': f'{k:,} message{"" if k == 1 else "s"} {"was" if k == 1 else "were"} added after this check and {"is" if k == 1 else "are"} not included. '
+                                              f'Run the check again to include {"it" if k == 1 else "them"}.'})
+    notes = [dict(n, about=NOTE_ABOUT.get(n['key'], 'measures')) for n in notes]
     # one verdict per measure: a good-news line is dropped when an alert about the same measure is standing
     standing = {a['key'] for a in found if a['level'] != 'good'}
     found = [a for a in found if not (a['level'] == 'good' and ((a['key'] == 'empathy_up' and 'empathy' in standing) or (a['key'] == 'conflict_down' and 'conflict' in standing)
@@ -711,7 +747,7 @@ BADGES = (
     ('encouraging', 'Encouraging', 'Encouraging wording in at least 12 messages in 100.'),
     ('lighthearted', 'Light-hearted', 'Funny wording in at least 12 messages in 100.'),
     ('calm', 'Calm waters', 'No heated moments, and fewer than 3 in 100 messages openly hostile. Needs every message to be read.'),
-    ('cools', 'Cools fast', 'A heated moment that settled within a few stretches of the chat. You do not need to aim for one. Needs every message to be read.'),
+    ('cools', 'Cools fast', 'A heated moment that settled soon after it began. You do not need to aim for one. Needs every message to be read.'),
     ('noflags', 'No serious flags', 'Vibe Check read at least 30 messages, flagged fewer than 1 serious message in 200, and none scored 7 or more. Needs every message to be read.'),
 )
 
@@ -753,12 +789,12 @@ def badges(m, vibe=None, cov=None) -> tuple:
     needs_line = cant or ('' if m['verdicts'] else f'Needs a timeline of at least {MIN_VERDICT} messages.')
     out.append(make('calm', m['verdicts'] and not m['episodes'] and hostile_low, f'No heated moments, and {o["hostile"]:,} of {n:,} messages openly hostile.', needs_line))
     cooled = _cooled(m)
-    out.append(make('cools', cooled is not None, 'A heated moment settled within a few stretches of the chat.', needs_line))
+    out.append(make('cools', cooled is not None, 'A heated moment settled soon after it began.', needs_line))
     sf = serious_flags(vibe) if ok else {'total': 0, 'red': 0}
     read = vibe.get('analyzed_n', 0) if ok else 0
     vibe_full = ok and read >= MIN_BADGE and (not cov.get('scope') or read >= 0.9 * cov['scope']) and full
     flag_needs = '' if vibe_full else (cant if ok and read >= MIN_BADGE else f'Needs a Vibe Check on at least {MIN_BADGE} messages.' if not ok or read < MIN_BADGE else cant)
-    out.append(make('noflags', vibe_full and 200 * sf['total'] < read and sf['red'] == 0, f'{read:,} messages read, with {sf["total"]:,} serious flag{"" if sf["total"] == 1 else "s"}.', flag_needs))
+    out.append(make('noflags', vibe_full and 200 * sf['total'] < read and sf['red'] == 0, f'{read:,} messages read, with {sf["total"]:,} serious flag{"" if sf["total"] == 1 else "s"} (threats, hate speech, harassment or bullying).', flag_needs))
     return out, (few or note)
 
 
@@ -775,7 +811,7 @@ def since_table(comparison, cur) -> dict | None:
     for key, label in SINCE_ROWS:
         ch = comparison['changes'].get(key) if comparison['comparable'] else None
         if key == 'health':
-            before, now = whole(prev['health']), whole(cur['health'])
+            before, now = whole(prev.get('health') or 0), whole(cur.get('health') or 0)
         else:
             kind = {'conflict': 'hostile', 'empathy': 'care', 'passive': 'dig', 'heated': 'heated'}[key]
             before, now = f'{prev.get(kind + "_n", 0):,} of {prev["n"]:,}', f'{cur.get(kind + "_n", 0):,} of {cur["n"]:,}'
@@ -784,16 +820,19 @@ def since_table(comparison, cur) -> dict | None:
 
 
 # ---- everything for one report ------------------------------------------------------------------
-CAVEAT_ALERTS = ('Alerts are prompts to look, not findings. A language model rated each message from 0 to 3, trained people have not checked those ratings, and a handful of '
-                 'messages can move a figure, so every alert says how many messages stand behind it. They describe wording in part of a chat, never a person or a team. '
-                 'High priority and Medium priority say how soon to look, not how bad it is.')
+CAVEAT_ALERTS = ('Alerts are prompts to look, not findings. A language model rated each message from 0 to 3. Trained people have not checked those ratings. '
+                 'A handful of messages can move a figure, so every alert says how many messages stand behind it. They describe wording in part of a chat, never a person or '
+                 'a team. High priority and Medium priority say how soon to look, not how bad it is.')
 CAVEAT_EMPTY = 'No alerts this time. That does not mean nothing happened: the model reads wording only, and a short or sampled check can miss things.'
 CAVEAT_MEASURES = ("These four measures come only from the model's 13 tone ratings. A message counts when the model rated the tone 2 or 3. Conflict counts wording rated "
-                   'aggressive, rude, disrespectful or judgmental. Passive-aggressive counts sarcasm that was not also rated one of those, so friendly banter can count too, '
+                   'aggressive, rude, disrespectful or judgmental. Passive-aggressive counts sarcasm that was not also rated one of those. Friendly banter can count too, '
                    'and the model cannot know what anyone meant. Rare, Some and Often are our own starting cut-offs, not norms. In a small group a part of the chat may come '
-                   'from one or two people, so read it as wording, not as anyone\'s behaviour.')
+                   "from one or two people. Read it as wording, not as anyone's behaviour.")
 CAVEAT_BADGES = ('Badges describe the wording in this check only. They are not awards to people, not a ranking of teams, and not for performance reviews. A language model '
                  'rated the messages and people have not checked the ratings. A badge never cancels an alert.')
+CAVEAT_SINCE = 'A change counts only when the two checks were made alike and the difference is bigger than chance would give. It describes wording, not people.'
+FIRST_CHECK = 'This is your first check. Run another after your next batch of messages and this panel will show what moved.'
+NO_BADGES = 'No badges this time. Each one is earned only when the messages clearly show it.'
 STRENGTH_ONLY = 'A language model rated these messages and people have not checked the ratings. These describe wording, not people.'
 
 
@@ -806,15 +845,20 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
         return None
     gen = store.evidence_generation(aid)
     live = record(m, a, {'total': cov.get('total'), 'note': cov.get('sampled')}, gen)
-    trail = trail_of([r for r in store.measure_history(aid) if r.get('gen') is not None and r.get('gen') != gen] + [], live)
+    live = store.clean_measure_snapshot(live) or live          # the same rules as a saved record, so two checks always compare like with like
+    trail = trail_of([r for r in store.measure_history(aid) if r.get('gen') is not None], live)      # a record with no evidence generation is not a check of its own
     previous = trail[-2] if len(trail) >= 2 else None
     comparison = compare(live, previous)
     found, notes = alerts(m, vibe, comparison, cov)
     earned, badge_note = badges(m, vibe, cov)
     counts = {level: sum(1 for x in found if x['level'] == level) for level in LEVELS}
+    ok_vibe = bool(vibe) and vibe.get('status') == 'ok'
+    all_clear = ok_vibe and not counts['high'] and not counts['medium'] and not any(n['key'] == 'silent' for n in notes)
     return {'m': m, 'cards': cards(m), 'health': health_tile(m), 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
             'badges_earned': sum(1 for b in earned if b['earned']), 'trail': trail, 'since': since_table(comparison, live), 'comparison': comparison, 'record': live,
-            'basis_text': basis_text(m, cov, vibe), 'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES}}
+            'basis_text': basis_text(m, cov, vibe), 'all_clear': all_clear,
+            'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES, 'since': CAVEAT_SINCE},
+            'texts': {'first_check': FIRST_CHECK, 'no_badges': NO_BADGES}}
 
 
 def basis_text(m, cov, vibe=None) -> str:

@@ -82,7 +82,7 @@ def has_results(metrics, vibe) -> bool:
     return bool(metrics or (vibe and vibe.get('status') == 'ok'))
 
 
-NO_BEHAVIOUR = ('Measured behaviour', 'The 13 communication signals have no ratings for this analysis: the rating was not run, or it did not finish. '
+NO_BEHAVIOUR = ('Measured behaviour', 'The 13 communication signals have no ratings for this analysis: the rating was not run, or it did not finish. Alerts, badges and the measures over time need these ratings too. '
                 'Run a check to rate them and write the guidance.')
 NO_GUIDANCE = ('Guidance', 'The written guidance has not been created: the step that writes it was not run, or it did not finish. '
                'Run the check again to write it.')

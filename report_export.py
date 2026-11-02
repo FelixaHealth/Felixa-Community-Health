@@ -1,4 +1,5 @@
-"""Felixa Community Health branded PDF report: summary and guidance, measured behaviour, Vibe Check, method."""
+"""Felixa Community Health branded PDF report: alerts, badges and measures over time (measures_export.py), summary and guidance, measured behaviour,
+Vibe Check, method. Every page after the cover carries the footer note FOOTER_NOTE."""
 import io
 import os
 import re
@@ -11,7 +12,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Flowable, Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 import analysis
 import bei_charts
@@ -22,6 +23,7 @@ from vibe_check.charts import pdf_safe, to_drawing
 from vibe_check.common import fmt_int
 
 FONTS = ('FelixaSans', 'FelixaSansBold')
+FOOTER_NOTE = 'Model-rated wording. Not a verdict on people.'      # printed in the footer of every page after the cover
 
 
 def _register_fonts():
@@ -65,10 +67,17 @@ def pdf(ctx, base: Path) -> bytes:
     styles.add(ParagraphStyle('BeiHead', fontName=FONTS[1], fontSize=23, leading=29, spaceAfter=16, textColor=ink, keepWithNext=True))
     styles.add(ParagraphStyle('BeiSub', fontName=FONTS[1], fontSize=13, leading=18, spaceAfter=8, textColor=ink, keepWithNext=True))
     styles.add(ParagraphStyle('BeiSmall', fontName=FONTS[0], fontSize=8.5, leading=12, spaceAfter=8, textColor=soft, wordWrap='CJK'))
+    # Measures over time sits in table cells and narrow columns, so its type is set tighter than the body text. These styles wrap at spaces: the CJK wrap of
+    # BeiSmall cuts a word in two when the line before it is short, which a 40 point column makes happen all the time.
+    styles.add(ParagraphStyle('BeiCell', fontName=FONTS[0], fontSize=8.5, leading=12, spaceAfter=8, textColor=soft))
+    styles.add(ParagraphStyle('BeiCardHead', fontName=FONTS[1], fontSize=11, leading=14, spaceAfter=3, textColor=ink))
+    styles.add(ParagraphStyle('BeiCardText', fontName=FONTS[0], fontSize=9, leading=12.5, spaceAfter=3, textColor=ink))
+    styles.add(ParagraphStyle('BeiCardNote', fontName=FONTS[0], fontSize=8.5, leading=11.5, spaceAfter=3, textColor=soft))
+    styles.add(ParagraphStyle('BeiBig', fontName=FONTS[1], fontSize=32, leading=36, spaceAfter=2, textColor=ink))
     story = []
 
     def p(text, style='BeiBody'):
-        t = pdf_safe(escape(str(text or ''))).replace('\n', '<br/>')
+        t = pdf_safe(escape('' if text is None else str(text))).replace('\n', '<br/>')       # a 0 is text too: `text or ''` would drop it
         t = re.sub(r'\*\*(.+?)\*\*', rf'<font name="{FONTS[1]}">\1</font>', t)
         return Paragraph(t, styles[style])
 
@@ -77,7 +86,8 @@ def pdf(ctx, base: Path) -> bytes:
         story.append(p(text, 'BeiHead'))
 
     def table(rows, widths):
-        data = [[p(x, 'BeiSmall') for x in row] for row in rows]
+        """A table. A cell is text (set in the small style) or a flowable already made with p()."""
+        data = [[x if isinstance(x, Flowable) else p(x, 'BeiSmall') for x in row] for row in rows]
         t = Table(data, colWidths=widths, repeatRows=1, hAlign='LEFT')
         t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F2F2F2')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#F27435')),
@@ -175,6 +185,8 @@ def pdf(ctx, base: Path) -> bytes:
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.HexColor('#555555'))
         canvas.drawString(54, 32, f'Felixa Community Health | {ctx["generated"]}')
+        if doc.page > 1:
+            canvas.drawCentredString(306, 32, pdf_safe(FOOTER_NOTE))       # every page after the cover says the wording was rated by a model
         canvas.drawRightString(558, 32, str(doc.page))
 
     SimpleDocTemplate(out, pagesize=(612, 792), rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=60,
