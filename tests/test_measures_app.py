@@ -12,29 +12,34 @@ The chats are small and made on purpose:
 
 What the classes cover:
 
-    FlareUp        one heated moment, its alert, its badge and its cards, with the same numbers on both pages, in the PDF and in the CSV; times shown while Incognito is off
+    FlareUp        one heated moment, its alert, its badge and its cards, with the same numbers on both pages, in the PDF and in the CSV; times shown while Incognito is off;
+                   the No serious flags tile held back beside the High priority alert (and not beside a Medium one)
     CalmChat       no alert to act on, Calm waters earned, and the sentence that an empty list is not an all clear
-    Boundaries     23 and 24 messages, 47 and 48 messages, 59 and 60 in 100 dated
-    TooEarly       Escalation reads Too early and the rate cards are grey while a check is too short to judge, and the card note for a hot part that chance could give
+    Boundaries     23 and 24 messages, 47 and 48 messages, 59 and 60 in 100 dated, a check of one message
+    TooEarly       Escalation reads Too early (no count: an empty cell in the CSV) and the rate cards and the health tile are grey while a check is too short to judge,
+                   and the card note for a hot part that chance could give
     SeriousFlags   a threat and a harassment message (High and Medium priority), one message or several, the badge for no serious flags, and the safety sentence under
-                   the flagged messages of the Vibe Check part
-    Checks         one record per check, Since your last check, the check-by-check chart, the same evidence again, a failing guidance, no Vibe Check,
-                   Vibe Check alone, a cancel, a check made with another sensitivity or model, or with a model whose name is long
-    Notes          every quiet note once, in its own section, on the pages, in the PDF and in the CSV; the sentence for an all clear; the two fixed sentences and the caveats
-    Privacy        what survives Delete evidence, and no time of day anywhere while Incognito is on
+                   the flagged messages of the Vibe Check part (the pages, the PDF, and a Note row of the CSV)
+    Checks         one record per check, Since your last check, the check-by-check chart, the same evidence again, a failing guidance, no Vibe Check (the Not checked tile),
+                   Vibe Check alone, a cancel, a check made with another sensitivity or model, with a model whose name is long, or with two long names that differ
+    Notes          every quiet note once, in its own section, on the pages, in the PDF and in the CSV; the sentence for an all clear (never for a silent chat, whatever its
+                   size); the two fixed sentences and the caveats; the marks in words
+    Privacy        what survives Delete evidence, and no time of day anywhere while Incognito is on, the check-by-check chart included
     Dates          no dates, 30 in 100 undated, too few dated for lines, strange dates, UTC
-    Robustness     5,000 messages, a missing rating, a changed review period, a poisoned saved record, a record that lost its health score, a year of checks
+    Robustness     5,000 messages, a missing rating, a changed review period, a poisoned saved record, a record that lost its health score or is off the 0 to 100 scale,
+                   a count above its total (Not known), a year of checks
     Sarcasm, Sampling, Thresholds   digs and banter, a sampled check, 30 messages for badges, a tense start, Low sensitivity and the note that says so
-    PageStructure  order of the sections, caveats outside every fold, words that stay out (looked for in the words a person reads, never in the markup), the
-                   Content-Security-Policy, sound markup, print and phone rules, the home list
+    PdfLayout      the PDF read back page by page: a first check is one page, the health score tile never starts a page or stands without its cards, the Evidence page
+                   keeps the evidence, the model line and the whole method together with room to spare
+    PageStructure  order of the sections, the key to the charts (ms['chart_key']), caveats outside every fold, words that stay out (looked for in the words a person
+                   reads, never in the markup), symbols the PDF fonts cannot print, the Content-Security-Policy, sound markup, print and phone rules, the home list
 
 What the four surfaces share is checked once, in the helpers of MeasuresCase (assert_everywhere): every note is printed once, in its own section (the notes about the
-alerts under Alerts, the others under Measures over time), 'Nothing needs urgent attention' only when ms['all_clear'] says so, the two fixed sentences of ms['texts'],
-the five caveats, and, where there is no icon (the PDF), the mark of each card in words (tone_word).
-
-One test is marked as an expected failure: Notes.test_the_marks_of_the_cards_are_said_in_words_in_the_csv_too holds a gap found while writing these tests (the CSV
-does not say the marks in words, though MEASURES.md says it should; see its docstring). When the CSV does, the test starts to pass and unittest reports an unexpected
-success: remove the decorator then.
+alerts under Alerts, the others under Measures over time), and no note says why two checks are not alike (ms['since']['why'] is printed once, with the comparison),
+'Nothing needs urgent attention' only when ms['all_clear'] says so, the Not checked tile only while Vibe Check did not run and nothing stands, the two fixed sentences
+of ms['texts'], the five caveats, ms['chart_key'] once above the four cards (page and PDF), the mark of each card and of the health tile (the icon on the pages, in
+words with tone_word in the PDF and in the column Mark of the CSV), an empty count for a card that could not be judged, and that the health score tile is not alone
+on a page of the PDF.
 
 Dates are counted back from today (days_ago), so a chat is always dated inside the usable range, whatever day the tests run.
 Run with:
@@ -89,6 +94,11 @@ SYMBOLS = ''.join(map(chr, (0x2713, 0x2714, 0x2717, 0x2718, 0x2265, 0x2264, 0x22
 SECTIONS = ('summary', 'alerts', 'over-time', 'badges')                          # the new sections of the page, in their order
 BLOCKS = ('Alerts', 'Measures over time', 'Since your last check', 'Badges')    # the new blocks of the CSV, in their order
 HOSTILE = '<script>alert("x")</script> <img src=x onerror=alert(1)> & "q"'      # the string tests/test_app.py uses to try to break out of a page
+NOT_KNOWN = 'Not known'                                                         # what a row of Since your last check says for a count that the store had to drop
+HELD_BACK = 'Held back while a High priority alert stands.'                     # why the No serious flags tile is not shown beside a High priority alert
+GONE_NOTES = ('not_alike', 'opening')                                           # notes that no longer exist: the reason two checks are not alike is only ms['since']['why'], a tense start only a card note
+NOTE_SECTIONS = ('alerts', 'measures')                                          # the two sections a note can belong to
+MARK = 'Mark'                                                                   # the last column of the four cards in the CSV: the icon of the page, in words
 
 
 def days_ago(n):
@@ -137,6 +147,18 @@ def norm(text) -> str:
 def squeeze(text) -> str:
     """Without any white space: a table cell of the PDF wraps its text at the width of the column, so a sentence comes back from it cut in pieces."""
     return re.sub(r'\s+', '', unescape(str(text)))
+
+
+def strings(obj):
+    """Every string inside a nested structure of dicts, lists and tuples."""
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for value in obj.values():
+            yield from strings(value)
+    elif isinstance(obj, (list, tuple)):
+        for value in obj:
+            yield from strings(value)
 
 
 class Page(HTMLParser):
@@ -291,6 +313,12 @@ def cards_on_page(html) -> list:
     return [(icon, norm(level), norm(word)) for icon, level, word in found]
 
 
+def health_mark_on_page(html) -> str:
+    """The status icon beside the status word of the health score tile, as markup (to be compared with icon_svg(tone)); '' when the tile has none."""
+    found = re.search(r'<div class="vc-badge">(<svg.*?</svg>)<span>', section(html, 'over-time'), re.S)
+    return found.group(1) if found else ''
+
+
 def same_markup(html) -> str:
     """Markup with the numbers that make each drawing's ids new on every page load taken out, so two renderings of the same results compare equal."""
     return re.sub(r'vc\d+-', 'vcN-', html)
@@ -303,6 +331,22 @@ FOOTER = re.compile(r'^Felixa Community Health \| \d{4}-\d{2}-\d{2}(?: Model-rat
 def pdf_pages(data) -> list:
     import pypdf
     return [norm(page.extract_text()) for page in pypdf.PdfReader(io.BytesIO(data)).pages]
+
+
+BOTTOM_MARGIN, FOOTER_RULE = 60, 45          # points from the foot of the page: where the text column ends, and the line above the footer (the footer text is drawn at 32)
+
+
+def lowest_body_y(data, page_no) -> float:
+    """How far from the foot of a page of the PDF (in points) the lowest line of its text sits, the footer left out. The text column ends BOTTOM_MARGIN points up, so
+    this less BOTTOM_MARGIN is the room the page has left under its text."""
+    import pypdf
+    found = []
+
+    def visit(text, cm, tm, font_dict, font_size):
+        if text.strip():
+            found.append(tm[4] * cm[1] + tm[5] * cm[3] + cm[5])
+    pypdf.PdfReader(io.BytesIO(data)).pages[page_no].extract_text(visitor_text=visit)
+    return min(y for y in found if y > FOOTER_RULE)
 
 
 def feature_bodies(pages) -> list:
@@ -325,11 +369,15 @@ def alerts_pdf(pages) -> str:
     return ' '.join(bodies[:lines])
 
 
+def lines_bodies(pages) -> list:
+    """The pages that hold Measures over time and Since your last check, one text for each: from the page that opens Measures over time, footer left out."""
+    bodies = feature_bodies(pages)
+    return bodies[next((i for i, text in enumerate(bodies) if text.startswith('Measures over time')), len(bodies)):]
+
+
 def lines_pdf(pages) -> str:
     """The part that holds Measures over time and Since your last check: from the page that opens Measures over time."""
-    bodies = feature_bodies(pages)
-    lines = next((i for i, text in enumerate(bodies) if text.startswith('Measures over time')), len(bodies))
-    return ' '.join(bodies[lines:])
+    return ' '.join(lines_bodies(pages))
 
 
 def csv_blocks(rows) -> dict:
@@ -358,9 +406,12 @@ def rows_under(block, first_cell) -> list:
 
 
 def count_cells(value) -> list:
-    """The two numbers of a cell of the Since table as the CSV writes them: 'x of n' is [x, n], and the health score (a whole number) is a number out of 100."""
+    """The two numbers of a cell of the Since table as the CSV writes them: 'x of n' is [x, n], the health score (a whole number) is a number out of 100, and a
+    count that the store had to drop ('Not known') stays those words with nothing out of it."""
     if isinstance(value, int):
         return [str(value), '100']
+    if value == NOT_KNOWN:
+        return [NOT_KNOWN, '']
     found = re.fullmatch(r'([\d,]+) of ([\d,]+)', str(value))
     return [found.group(1).replace(',', ''), found.group(2).replace(',', '')]
 
@@ -411,6 +462,24 @@ class MeasuresCase(AppCase):
         self.assertEqual(self.store.get_analysis(aid)['incognito'], 1)
         return self.check(aid, data, name)
 
+    def many_notes(self) -> int:
+        """A check with six quiet notes at once: Vibe Check did not run (a note about the alerts), Low sensitivity, 30 in 100 undated, one message with an incomplete
+        rating, almost no tone found and four messages added after the check (notes about the measures)."""
+        def make():
+            stamps = ['' if i % 10 in (1, 4, 8) else s for i, s in enumerate(at(100, days_ago(40), step=20))]
+            aid = self.new_analysis()
+            self.upload(aid, ('chat.csv', chat_csv([NEUTRAL] * 100, stamps), 'text/csv'))
+            self.store.update_analysis(aid, vibe_sensitivity='low')
+            self.fake.fail_next('vibe', 99)
+            job = self.run_job_fast(aid, path='check/6', engine='')
+            self.fake.failures.clear()
+            self.assertEqual(job['status'], 'complete')
+            with self.store.db() as c:
+                c.execute("DELETE FROM unit_ratings WHERE unit_id=? AND attribute='Rude'", (self.store.rated_units(aid)[7]['id'],))
+            self.upload(aid, ('more.csv', chat_csv([NEUTRAL] * 4, at(4, days_ago(10))), 'text/csv'))
+            return aid
+        return self.scenario('six notes', make)
+
     def ms(self, aid) -> dict:
         ctx = report.build(aid)
         self.assertIsNotNone(ctx['measures'])
@@ -456,7 +525,16 @@ class MeasuresCase(AppCase):
             self.assert_plain_words(Page(section(html, sid)).human, f'{where} {sid}')                 # the text, the hover words and the screen reader words
         m, h, caveats = ms['m'], ms['health'], ms['caveats']
         look = ms['alert_counts']['high'] + ms['alert_counts']['medium']
-        self.assertIn(f'{look} thing{"" if look == 1 else "s"} to look at first', text['summary'], where)
+        self.assertTrue(all(n['about'] in NOTE_SECTIONS for n in ms['notes']), f'{where}: every note belongs to the alerts or to the measures')
+        self.assertEqual({n['key'] for n in ms['notes']} & set(GONE_NOTES), set(), f'{where}: a note that no longer exists')
+        vibe_ran = 'no_vibe' not in {n['key'] for n in ms['notes']}                          # the note for a Vibe Check that did not run is the one sign of it that ms holds
+        if look == 0 and not vibe_ran:                                                       # nothing to look at, but nothing was looked for either: not '0 things'
+            self.assertIn('Not checked things to look at first', text['summary'], where)
+            self.assertNotIn('0 things to look at first', text['summary'], where)
+        else:
+            self.assertIn(f'{look} thing{"" if look == 1 else "s"} to look at first', text['summary'], where)
+            self.assertNotIn('Not checked', text['summary'], where)
+        self.assertEqual('Not run Vibe Check score' in text['summary'], not vibe_ran, f'{where}: the tile for the Vibe Check score')
         self.assertIn(f'{ms["badges_earned"]} badge{"" if ms["badges_earned"] == 1 else "s"} earned', text['summary'], where)
         self.assertNotIn('/ 100', text['summary'], where)                                    # the headline stays the Vibe Check score; the health score is a tile below
         # the alerts, in the order of the list: the two priorities, then at most three lines of good news
@@ -482,10 +560,21 @@ class MeasuresCase(AppCase):
             self.assertEqual(quiet_notes(html, sid), [], f'{where}: {sid} holds no quiet note')
         for note in ms['notes']:
             copies = text['alerts'].count(norm(note['text'])) + text['over-time'].count(norm(note['text']))
-            self.assertEqual(copies, 2 if note['key'] == 'not_alike' else 1, f'{where}: {note["key"]}')      # a check that is not alike: its reason is also under Since your last check
+            self.assertEqual(copies, 1, f'{where}: {note["key"]} is printed once')
+            self.assertNotIn(norm(note['text']), text['summary'] + ' ' + text['badges'], f'{where}: {note["key"]} sits in a section it is not about')
         # the four measures and the health score
         over = text['over-time']
         self.assertIn(norm(ms['basis_text']), over, where)
+        # the key to the charts: ms['chart_key'] once, above the four cards and in no other section, and only while there are charts for it to explain
+        key = norm(ms['chart_key'])
+        if m['has_series']:
+            self.assertEqual(over.count(key), 1, f'{where}: the key to the charts')
+            self.assertLess(over.index(key), over.index(norm(ms['cards'][0]['meaning'])), f'{where}: the key to the charts is above the cards')
+            self.assertIn(key, Page(section(html, 'over-time')).visible_outside_folds, f'{where}: the key to the charts is never folded')
+        else:
+            self.assertNotIn('Lines show messages per 100', over, f'{where}: a key to charts that are not there')
+        for sid in ('summary', 'alerts', 'badges'):
+            self.assertNotIn(key, text[sid], f'{where}: the key to the charts sits in {sid}')
         for card in ms['cards']:
             for part in (card['name'], card['level'], card['meaning'], card['headline'], card['tone_word'], card.get('trend'), card.get('note')):
                 if part:
@@ -494,6 +583,7 @@ class MeasuresCase(AppCase):
                 self.assertIn(f'Latest part: {card["latest"]}', over, where)
         self.assertEqual(cards_on_page(html), [(icon_svg(c['tone']), norm(c['level']), norm(c['tone_word'])) for c in ms['cards']], f'{where}: the mark of each card')
         self.assertIn(f'{measures.whole(h["score"])} / 100', over, where)
+        self.assertEqual(health_mark_on_page(html), icon_svg(h['tone']), f'{where}: the mark of the health score')
         for part in (h['name'], h['status'], h['caption'], h['trend']):
             if part:
                 self.assertIn(norm(part), over, where)
@@ -506,19 +596,25 @@ class MeasuresCase(AppCase):
                                              str(w(s['rates']['heated'])), str(w(s['health']))] for s in m['stretches']], where)
         else:
             self.assertEqual(parts, [], where)
-            self.assertIn('There are no lines over time yet.', over, where)
+            self.assertEqual(over.lower().count('no lines over time'), 1, f'{where}: that there are no lines is said once, by the note that explains why')
         # since your last check, and the check-by-check table (from the third check)
         since = [t for t in tables if t and t[0][:3] == ['Measure', 'Last check', 'This check']]
         if ms['since']:
             alike = ms['since']['comparable']
+            self.assertEqual((ms['comparison']['comparable'], ms['comparison']['why']), (alike, ms['since']['why']), f'{where}: the table and the comparison give one reason')
+            self.assertEqual(bool(ms['since']['why']), not alike, f'{where}: a reason only when the two checks are not alike')
             self.assertIn(norm(caveats['since']), Page(section(html, 'over-time')).visible_outside_folds, f'{where}: the caveat of the comparison is always shown')
             self.assertNotIn(norm(ms['texts']['first_check']), over, f'{where}: the sentence for a first check, after a second')
             self.assertEqual(len(since), 1, where)
             self.assertEqual(since[0][0], ['Measure', 'Last check', 'This check'] + (['Change'] if alike else []), where)
             self.assertEqual(since[0][1:], [[r['label'], str(r['before']), str(r['now'])] + ([r['verdict']] if alike else []) for r in ms['since']['rows']], where)
-            if not alike:
+            if not alike:                                                                  # the reason is said once, with the comparison, and not as a note under Alerts
                 self.assertIn('No comparison', over, where)
-                self.assertIn(norm(ms['since']['why']), over, where)
+                self.assertEqual(over.count(norm(ms['since']['why'])), 1, f'{where}: the reason two checks are not alike, once')
+                self.assertLess(over.index('Since your last check'), over.index(norm(ms['since']['why'])), f'{where}: the reason sits under the heading of the comparison')
+                self.assertNotIn(norm(ms['since']['why']), text['alerts'], f'{where}: the reason two checks are not alike is no note under Alerts')
+            else:
+                self.assertNotIn('No comparison', over, where)
         else:
             self.assertEqual(since, [], where)
             self.assertIn(norm(ms['texts']['first_check']), Page(section(html, 'over-time')).visible_outside_folds, f'{where}: the sentence for a first check')
@@ -568,13 +664,21 @@ class MeasuresCase(AppCase):
         for note in ms['notes']:
             own, other = (in_alerts, in_lines) if note['about'] == 'alerts' else (in_lines, in_alerts)
             self.assertIn(squeeze(note['text']), own, f'{where}: {note["key"]} is not in its own part')
-            if note['key'] != 'not_alike':                                                  # (its reason is also under Since your last check)
-                self.assertNotIn(squeeze(note['text']), other, f'{where}: {note["key"]} is in the other part as well')
-                self.assertEqual(ours.count(squeeze(note['text'])), 1, f'{where}: {note["key"]} is printed more than once')
+            self.assertNotIn(squeeze(note['text']), other, f'{where}: {note["key"]} is in the other part as well')
+            self.assertEqual(ours.count(squeeze(note['text'])), 1, f'{where}: {note["key"]} is printed more than once')
+        self.assertEqual({n['key'] for n in ms['notes']} & set(GONE_NOTES), set(), f'{where}: a note that no longer exists')
         these = 'this message' if ms['m']['n'] == 1 else 'these {:,} messages'.format(ms['m']['n'])
         if not ms['all_clear']:
             self.assertNotIn(squeeze(f'Nothing needs urgent attention in {these}'), ours, f'{where}: an all clear that ms does not give')
         has(ms['basis_text'])
+        # the key to the charts is ms['chart_key'], once, above the first card; with no charts there is no key
+        key = squeeze(ms['chart_key'])
+        if ms['m']['has_series']:
+            self.assertEqual(ours.count(key), 1, f'{where}: the key to the charts')
+            self.assertLess(ours.index(key), ours.index(squeeze(f'{ms["cards"][0]["name"]}: {ms["cards"][0]["level"]}')), f'{where}: the key to the charts is above the cards')
+            self.assertEqual(squeeze(alerts_pdf(pages)).count(key), 0, f'{where}: the key to the charts sits with the lines, not with the alerts')
+        else:
+            self.assertNotIn(squeeze('Lines show messages per 100'), ours, f'{where}: a key to charts that are not there')
         # a card: its name and level, the mark in words (the PDF has no icon), what it means, what we saw, the trend and the note, in this order
         for card in ms['cards']:
             at = -1
@@ -602,12 +706,21 @@ class MeasuresCase(AppCase):
                     has(r['label'], r['before'], r['now'], r['verdict'])
             else:
                 has('No comparison.', ms['since']['why'])
+                self.assertEqual(ours.count(squeeze(ms['since']['why'])), 1, f'{where}: the reason two checks are not alike, once')
+                self.assertLess(ours.index(squeeze('Since your last check')), ours.index(squeeze(ms['since']['why'])), f'{where}: the reason sits under the heading of the comparison')
+                self.assertNotIn(squeeze(ms['since']['why']), squeeze(alerts_pdf(pages)), f'{where}: the reason two checks are not alike is no note under Alerts')
         else:
             has('Since your last check', ms['texts']['first_check'])                       # a first check says there is nothing to compare yet, and does not leave the heading out
         if len(ms['trail']) >= 3:
             has('Health score, check by check')
         else:
             self.assertNotIn(squeeze('Health score, check by check'), ours, where)
+        # the health score tile never starts a page and never stands without the last row of cards: no page is left with the tile and a sentence
+        tiles = [body for body in lines_bodies(pages) if 'out of 100' in body]
+        self.assertEqual(len(tiles), 1, f'{where}: the tile is on one page')
+        self.assertIsNone(re.match(r'^\d+ out of 100', tiles[0]), f'{where}: a page starts with the health score tile')
+        self.assertIn(f'Passive-aggressive: {ms["cards"][3]["level"]}', tiles[0], f'{where}: the tile is not on the page of the last row of cards')
+        self.assertLess(tiles[0].index('Passive-aggressive:'), tiles[0].index('out of 100'), f'{where}: the tile sits under the last row of cards')
         for symbol in SYMBOLS:
             self.assertNotIn(symbol, measures_pdf(pages), f'{where}: the PDF fonts turn {symbol!r} into a question mark')
 
@@ -635,16 +748,20 @@ class MeasuresCase(AppCase):
         m = blocks['Measures over time']
         self.assertEqual(m[1], ['How to read this', caveats['measures']], where)
         self.assertIn(['Basis', ms['basis_text']], m, where)
-        self.assertEqual([r[:2] + r[4:6] + r[7:] for r in rows_under(m, 'Measure')],
-                         [[c['name'], c['level'], c.get('trend') or '', c['headline'], c['meaning'], c.get('latest') or ''] for c in ms['cards']], where)
-        self.assertEqual([r[2:4] for r in rows_under(m, 'Measure')], [[str(c.get('count', '')), str(c.get('of', ''))] for c in ms['cards']], where)
+        head = next(r for r in m if r[:1] == ['Measure'])
+        self.assertEqual((len(head), head[:2], head[-1]), (10, ['Measure', 'Level'], MARK), f'{where}: the cards end with a column for the mark in words')
+        cards = rows_under(m, 'Measure')
+        self.assertEqual([r[:2] + r[4:] for r in cards],
+                         [[c['name'], c['level'], c.get('trend') or '', c['headline'], c.get('note') or '', c['meaning'], c.get('latest') or '', c['tone_word']] for c in ms['cards']], where)
+        # the count is a number of messages (of heated moments for Escalation); a card that could not be judged has an empty cell, never a 0 that reads as 'none'
+        self.assertEqual([r[2:4] for r in cards], [['' if c.get('count') is None else str(c['count']), str(c.get('of', ''))] for c in ms['cards']], where)
         if ms['m']['has_series']:
             self.assertEqual(rows_under(m, 'Part of the chat'),
                              [[s['label'], str(s['n']), str(w(s['rates']['hostile'])), str(w(s['rates']['care'])), str(w(s['rates']['dig'])), str(w(s['rates']['heated'])),
                                'Yes' if s['counted'] else 'No', str(w(s['health']))] for s in ms['m']['stretches']], where)
         else:
             self.assertNotIn(['Part of the chat'], [r[:1] for r in m], where)
-        self.assertIn(['Health score', str(w(h['score'])), h['status']], m, where)
+        self.assertIn(['Health score', str(w(h['score'])), h['status'], h['tone_word']], m, where)             # the score, its status and its mark in words
         self.assertIn(['About the health score', h['caption']], m, where)
         s = blocks['Since your last check']
         self.assertEqual(s[1], ['How to read this', caveats['since']], where)
@@ -655,10 +772,13 @@ class MeasuresCase(AppCase):
                 self.assertEqual(rows_under(s, 'Measure'), [[r['label'], *count_cells(r['before']), *count_cells(r['now']), r['verdict']] for r in ms['since']['rows']], where)
             else:
                 self.assertIn(['No comparison', ms['since']['why']], s, where)
+                self.assertEqual([r for r in rows if ms['since']['why'] in r], [['No comparison', ms['since']['why']]], f'{where}: the reason two checks are not alike, once')
                 self.assertEqual(rows_under(s, 'Measure'), [[r['label'], *count_cells(r['before']), *count_cells(r['now'])] for r in ms['since']['rows']], where)
             if len(ms['trail']) >= 3:                                                                # the table behind the check-by-check chart: the day of each check, never the time
-                self.assertEqual([r[:4] for r in rows_under(s, 'Check')],
-                                 [[f'Check {i}' + (' (this check)' if i == len(ms['trail']) else ''), r['created_at'][:10], str(r['n']), str(w(r['health']))]
+                cell = lambda r, key: '' if r.get(key) is None else str(r[key])                       # noqa: E731  (a count the store dropped is an empty cell)
+                self.assertEqual([r[:9] for r in rows_under(s, 'Check')],
+                                 [[f'Check {i}' + (' (this check)' if i == len(ms['trail']) else ''), r['created_at'][:10], str(r['n']), str(w(r['health'])),
+                                   cell(r, 'hostile_n'), cell(r, 'care_n'), cell(r, 'dig_n'), cell(r, 'heated_n'), cell(r, 'episodes')]
                                   for i, r in enumerate(ms['trail'], 1)], where)
             else:
                 self.assertNotIn(['Check'], [r[:1] for r in s], where)
@@ -733,11 +853,54 @@ class FlareUp(MeasuresCase):
         aid, start = self.flare()
         ms = self.ms(aid)
         earned = {b['name']: b for b in ms['badges'] if b['earned']}
-        self.assertEqual(sorted(earned), ['Cools fast', 'No serious flags'])
+        self.assertEqual(sorted(earned), ['Cools fast'])                                         # No serious flags would be earned, but a High priority alert stands (see below)
         self.assertTrue(earned['Cools fast']['evidence'])
-        self.assertEqual(ms['badges_earned'], 2)
+        self.assertEqual(ms['badges_earned'], 1)
         calm = next(b for b in ms['badges'] if b['key'] == 'calm')
         self.assertEqual((calm['earned'], calm['needs']), (False, ''))                           # not earned because of the heated moment, not for want of data
+
+    def test_the_no_serious_flags_tile_is_held_back_beside_a_high_priority_alert_and_the_fold_says_so(self):
+        """MEASURES.md: the No serious flags tile is held back while a High priority alert stands (it would read as praise beside it); the fold says so. Vibe Check
+        flagged no serious message here (a threat, hate speech, harassment or bullying: its insults and curses are not serious flags) and read all 48 messages, so the
+        badge would be earned on its own rule. The page, the PDF and the CSV list it as not yet, with the reason."""
+        aid, start = self.flare()
+        ms = self.ms(aid)
+        self.assertEqual(ms['alert_counts']['high'], 1)
+        self.assertEqual(ms['m']['n'], 48)
+        noflags = next(b for b in ms['badges'] if b['key'] == 'noflags')
+        self.assertEqual((noflags['earned'], noflags['evidence'], noflags['needs']), (False, '', HELD_BACK))
+        vibe = self.store.latest_vibe(aid)
+        self.assertEqual((measures.serious_flags(vibe)['total'], vibe['analyzed_n']), (0, 48))        # the rule alone would have earned it
+        for what in ('workspace', 'report'):
+            html = self.page(aid, what)
+            badges = section_text(html, 'badges')
+            self.assertNotIn('Earned No serious flags', badges, what)                              # no tile for it beside the alert
+            self.assertEqual(badges.count(HELD_BACK), 1, what)
+            self.assertIn(f'No serious flags {norm(noflags["how"])} {HELD_BACK}', badges, what)    # listed with its rule, and why it is held back, under the fold
+            fold = ' '.join(re.findall(r'<details>.*?</details>', section(html, 'badges'), re.S))
+            self.assertIn(HELD_BACK, unescape(fold), what)
+            self.assertEqual(len(re.findall(r'<div class="award">', section(html, 'badges'))), 1, what)         # one tile (Cools fast), and not the held back one
+        pdf = squeeze(measures_pdf(self.pdf(aid)))
+        self.assertIn(squeeze(f'No serious flags Not yet {HELD_BACK}'), pdf)
+        self.assertEqual(pdf.count(squeeze(HELD_BACK)), 1)
+        rows = [r for r in self.csv(aid) if r[:1] == ['No serious flags']]
+        self.assertEqual([r[:3] for r in rows], [['No serious flags', 'Not yet', HELD_BACK]])
+        self.assert_everywhere(aid)
+
+    def test_a_medium_priority_alert_does_not_hold_the_no_serious_flags_tile_back(self):
+        """Only a High priority alert holds the tile back. A quarter of the messages being digs raises a Medium alert, and Vibe Check flagged nothing."""
+        aid = self.checked([DIG if i % 4 == 0 else CALM[i % 6] for i in range(48)], at(48, days_ago(40)))
+        ms = self.ms(aid)
+        self.assertEqual(ms['alert_counts'], {'high': 0, 'medium': 1, 'good': 0})
+        noflags = next(b for b in ms['badges'] if b['key'] == 'noflags')
+        self.assertEqual((noflags['earned'], noflags['needs']), (True, ''))
+        self.assertTrue(noflags['evidence'])
+        for what in ('workspace', 'report'):
+            self.assertIn('Earned No serious flags', section_text(self.page(aid, what), 'badges'), what)
+            self.assertNotIn(HELD_BACK, section_text(self.page(aid, what), 'badges'), what)
+        self.assertIn(squeeze('No serious flags Earned'), squeeze(measures_pdf(self.pdf(aid))))
+        self.assertNotIn(squeeze(HELD_BACK), squeeze(measures_pdf(self.pdf(aid))))
+        self.assert_everywhere(aid)
 
     def test_the_workplace_page_and_the_report_page_show_it(self):
         aid, start = self.flare()
@@ -778,6 +941,10 @@ class FlareUp(MeasuresCase):
         self.assert_csv_agrees(self.ms(aid), rows)
         escalation = next(r for r in rows if r[:1] == ['Escalation'])
         self.assertEqual(escalation[:3], ['Escalation', 'Steep', '1'])                               # name, level, number of heated moments
+        self.assertEqual(escalation[-1], 'Look at this first')                                      # the last column is the mark of the page, in words
+        conflict = next(r for r in rows if r[:1] == ['Conflict'])
+        self.assertEqual((conflict[1], conflict[-1]), ('Some', 'Worth a look'))                     # a level word says how often; the mark says whether that is good
+        self.assertIn(['Health score', '58', 'Fair', 'Neutral'], rows)                              # the health tile: score, status, mark
         self.assertEqual(next(r for r in rows if r[:1] == ['Cools fast'])[1], 'Earned')
 
     def test_every_part_of_the_chat_has_the_same_numbers_on_both_pages_and_in_the_csv(self):
@@ -803,7 +970,7 @@ class FlareUp(MeasuresCase):
             summary = section_text(html, 'summary')
             self.assertIn(f'{vibe["score"]:g} / 10', summary)                                         # the Vibe Check score stays the headline
             self.assertIn('1 thing to look at first', summary)
-            self.assertIn('2 badges earned', summary)
+            self.assertIn('1 badge earned', summary)                                                # Cools fast; No serious flags is held back beside the High priority alert
             self.assertNotIn('Health score', summary)
             self.assertIn('Health score', section_text(html, 'over-time'))
             self.assertRegex(section_text(html, 'over-time'), r'the two can differ')                # the caption of the health tile says the two scores can differ
@@ -896,12 +1063,13 @@ class Boundaries(MeasuresCase):
                 titles = Page(section(html, 'over-time')).titles
                 self.assertEqual('Conflict over time' in titles, lines, what)                   # a drawing for each measure only when there is a timeline
                 self.assertEqual('View the four charts as a table' in section(html, 'over-time'), lines, what)
-                self.assertEqual('There are no lines over time yet.' in section_text(html, 'over-time'), not lines, what)
-                self.assertEqual('Lines show messages per 100. Bands mark Rare, Some and Often. A darker band is a heated moment.' in section_text(html, 'over-time'), lines, what)       # the key to the charts
+                self.assertEqual('no lines over time yet' in section_text(html, 'over-time'), not lines, what)       # said by the note that explains it, once
+                self.assertEqual(norm(ms['chart_key']) in section_text(html, 'over-time'), lines, what)             # the key to the charts is ms['chart_key'], and only where there are charts
                 self.assert_page_agrees(ms, html, f'{what} {ms["m"]["n"]}')
             pdf, rows = self.pdf(aid), self.csv(aid)
             self.assert_pdf_agrees(ms, pdf)
             self.assert_csv_agrees(ms, rows)
+            self.assertEqual(squeeze(ms['chart_key']) in squeeze(measures_pdf(pdf)), lines)
             self.assertEqual('Lines show messages per 100.' in measures_pdf(pdf), lines)
             self.assertEqual(any(r[:1] == ['Part of the chat'] for r in rows), lines)
 
@@ -935,6 +1103,24 @@ class Boundaries(MeasuresCase):
         self.assertNotIn('1 heated moment', page47)
         self.assertIn(b['cards'][1]['trend'], section_text(self.page(s48, 'workspace'), 'over-time'))
 
+    def test_a_check_of_one_message_reads_in_the_singular_and_every_surface_still_opens(self):
+        """One rated message: 'the 1 message that was rated', 'only 1 message', 'has 1'. Vibe Check needs 5 messages, so this is not an all clear either, and the
+        tile of the summary says Not checked."""
+        aid = self.checked(['Thanks for the update on the release'], at(1, days_ago(40)))
+        ms = self.ms(aid)
+        self.assertEqual(ms['basis_text'], 'Built from the 1 message that was rated.')
+        self.assertEqual([(n['key'], n['about']) for n in ms['notes']], [('no_vibe', 'alerts'), ('few', 'measures')])
+        self.assert_says(ms['notes'][1]['text'], 'We rated only 1 message,', 'no lines over time yet')
+        self.assertNotRegex(ms['notes'][1]['text'] + ms['basis_text'] + ms['badge_note'], r'\b1 messages|\b1 message that were|has 1 messages')
+        self.assert_says(ms['badge_note'], 'Badges start at 30 messages', 'has 1.')
+        self.assertEqual((ms['m']['n'], ms['m']['has_series'], ms['alerts'], ms['all_clear'], ms['badges_earned']), (1, False, [], False, 0))
+        for what in ('workspace', 'report'):
+            html = self.page(aid, what)
+            self.assertIn(ms['basis_text'], section_text(html, 'over-time'), what)
+            self.assertIn('Not checked things to look at first', section_text(html, 'summary'), what)
+        self.assertIn(['Basis', 'Built from the 1 message that was rated.'], self.csv(aid))
+        self.assert_everywhere(aid)
+
     def dated_hundred(self, dated):
         """100 calm messages 20 minutes apart. Every message whose number leaves 1 or 3 when divided by 5 has no date (40 of them), and with `dated` = 59 so has message 5."""
         stamps = at(100, days_ago(40), step=20)
@@ -962,9 +1148,13 @@ class Boundaries(MeasuresCase):
         order_markup, clock_markup = section(self.page(order, 'workspace'), 'over-time'), section(self.page(clock, 'workspace'), 'over-time')
         self.assertIn('>#17</text>', order_markup)
         self.assertNotIn('>#17</text>', clock_markup)
-        key = 'The numbers under each chart are rated message numbers, in the order you added them.'       # the key to the labels of the axis, where the lines follow the order
-        self.assertIn(key, Page(order_markup).text)
-        self.assertNotIn(key, Page(clock_markup).text)
+        # the key to the charts is ms['chart_key']; where the lines follow the order it also says what the numbers under the charts are, and where they follow the clock it does not
+        self.assert_says(a['chart_key'], 'Lines show messages per 100.', 'rated message numbers', 'the order you added them')
+        self.assert_says(b['chart_key'], 'Lines show messages per 100.')
+        self.assertNotIn('rated message numbers', b['chart_key'])
+        self.assertIn(norm(a['chart_key']), Page(order_markup).text)
+        self.assertIn(norm(b['chart_key']), Page(clock_markup).text)
+        self.assertNotIn('rated message numbers', Page(clock_markup).text)
 
 
 # =============================================================================================================================================
@@ -983,7 +1173,7 @@ class TooEarly(MeasuresCase):
         aid = self.thin()
         ms = self.ms(aid)
         card = ms['cards'][0]
-        self.assertEqual((card['level'], card['word'], card['tone'], card['tone_word'], card['count']), ('Too early', 'early', 'info', 'Neutral', 0))
+        self.assertEqual((card['level'], card['word'], card['tone'], card['tone_word'], card['count']), ('Too early', 'early', 'info', 'Neutral', None))       # not judged: no count, and not a 0
         self.assert_says(card['headline'], 'at least 48 messages')
         self.assertEqual((ms['m']['has_series'], ms['m']['verdicts']), (True, False))
         for what in ('workspace', 'report'):
@@ -995,7 +1185,9 @@ class TooEarly(MeasuresCase):
         self.assertIn(squeeze('Escalation: Too early (Neutral)'), text)
         self.assertNotIn(squeeze('Escalation: None'), text)
         escalation = next(r for r in self.csv(aid) if r[:1] == ['Escalation'])
-        self.assertEqual(escalation[:3], ['Escalation', 'Too early', '0'])
+        self.assertEqual(escalation[:4], ['Escalation', 'Too early', '', ''])                         # no count: an empty cell, never a 0 that a spreadsheet would read as 'none'
+        self.assertEqual(escalation[-1], 'Neutral')                                                  # and its mark in words
+        self.assertEqual([r[2] for r in rows_under(csv_blocks(self.csv(aid))['Measures over time'], 'Measure')[1:]], [str(c['count']) for c in ms['cards'][1:]])      # messages are still counted
         self.assert_everywhere(aid)
 
     def test_conflict_empathy_and_sarcasm_are_grey_below_48_rated_messages_and_not_from_48(self):
@@ -1017,6 +1209,25 @@ class TooEarly(MeasuresCase):
 
     def hostile_check(self, n):
         return self.scenario(f'hostile {n}', lambda: self.checked(hostile_ending(n), at(n, days_ago(40))))
+
+    def test_the_health_tile_is_grey_below_48_rated_messages_and_has_the_mark_of_its_status_from_48(self):
+        """MEASURES.md: the health tile's mark is neutral below 48 messages. Its status word (Good, Needs attention) is still said; only the mark is grey. A calm chat
+        scores Good and an openly hostile one Needs attention, so at 48 the marks are the green and the red one, and at 47 both are grey."""
+        chats = {('calm', n): self.scenario(f'calm {n}', lambda n=n: self.checked(messages(n), at(n, days_ago(40)))) for n in (47, 48)}
+        chats.update({('rude', n): self.scenario(f'rude {n}', lambda n=n: self.checked([INSULT] * n, at(n, days_ago(40)))) for n in (47, 48)})
+        want = {('calm', 47): ('Good', 'info', 'Neutral'), ('calm', 48): ('Good', 'good', 'A good sign'),
+                ('rude', 47): ('Needs attention', 'info', 'Neutral'), ('rude', 48): ('Needs attention', 'bad', 'Look at this first')}
+        for (kind, n), (status, tone, word) in want.items():
+            aid, ms = chats[kind, n], self.ms(chats[kind, n])
+            h = ms['health']
+            self.assertEqual((ms['m']['n'], h['status'], h['tone'], h['tone_word']), (n, status, tone, word), (kind, n))
+            for what in ('workspace', 'report'):
+                html = self.page(aid, what)
+                self.assertEqual(health_mark_on_page(html), icon_svg(tone), f'{what} {kind} {n}')                # the icon beside the status word
+                self.assertIn(status, section_text(html, 'over-time'), f'{what} {kind} {n}')                     # the status word is said either way
+            self.assertIn(squeeze(f'Health score: {status} ({word})'), squeeze(measures_pdf(self.pdf(aid))), (kind, n))
+            self.assertIn(['Health score', str(measures.whole(h['score'])), status, word], self.csv(aid), (kind, n))
+            self.assert_everywhere(aid, f'{kind} {n}')
 
     def test_the_rate_cards_judge_the_rated_messages_and_escalation_the_messages_on_the_timeline(self):
         stamps = at(70, days_ago(40))
@@ -1148,9 +1359,9 @@ class SeriousFlags(MeasuresCase):
         with mock.patch.object(self.fake, '_vibe', relabel):
             return self.checked(texts, at(len(texts), days_ago(40)))
 
-    def test_the_flagged_messages_carry_the_safety_sentence_for_a_threat_or_hate_speech_on_the_pages_and_in_the_pdf(self):
+    def test_the_flagged_messages_carry_the_safety_sentence_for_a_threat_or_hate_speech_on_the_pages_in_the_pdf_and_in_the_csv(self):
         """A threat or hate speech among the flagged messages puts the safety sentence directly under the heading of the flagged messages, in the Vibe Check part of
-        the page and of the PDF (the alert points there). Nothing is added for the other kinds."""
+        the page and of the PDF (the alert points there), and as a Note row of the CSV right before the flagged messages. Nothing is added for the other kinds."""
         threat = self.threats()
         hate = self.scenario('hate', lambda: self.hate_speech([THREAT if i == 10 else t for i, t in enumerate(messages(48))]))
         harassment = self.scenario('harassment only', lambda: self.checked([HARASSMENT if i == 30 else t for i, t in enumerate(messages(48))], at(48, days_ago(40))))
@@ -1164,6 +1375,12 @@ class SeriousFlags(MeasuresCase):
             pdf = norm(' '.join(self.pdf(aid)))
             self.assertEqual(pdf.count(self.SAFETY), 1, kind)
             self.assertIn(f'Flagged messages ({count}) {self.SAFETY}', pdf, kind)
+            rows = self.csv(aid)                                                                      # the CSV says it once, in a Note row, right before the flagged messages
+            at_note = [i for i, row in enumerate(rows) if row == ['Note', self.SAFETY]]
+            self.assertEqual(len(at_note), 1, kind)
+            self.assertEqual(rows[at_note[0] + 1], ['Severity', 'Type', 'Source', 'Flagged message'], kind)
+            quoted = rows[at_note[0] + 2:next((i for i in range(at_note[0] + 2, len(rows)) if rows[i] == []), len(rows))]
+            self.assertEqual(len(quoted), count, kind)                                                # the quoted messages follow, as many as were flagged
         for what in ('workspace', 'report'):                                                          # harassment alone: the alert is High (a message scored 7), the sentence is not added
             html = self.page(harassment, what)
             self.assertNotIn(self.SAFETY, Page(html[html.index('id="vibe-check"'):]).text, what)
@@ -1171,6 +1388,9 @@ class SeriousFlags(MeasuresCase):
         pdf = norm(' '.join(self.pdf(harassment)))
         self.assertNotIn(self.SAFETY, pdf)
         self.assertIn('Flagged messages (1)', pdf)
+        rows = self.csv(harassment)
+        self.assertNotIn(['Note', self.SAFETY], rows)
+        self.assertIn(['Severity', 'Type', 'Source', 'Flagged message'], rows)                       # the flagged message is still listed, with no safety sentence before it
 
     def test_harassment_that_scored_below_seven_is_medium_priority(self):
         stub = self.fake._vibe
@@ -1337,10 +1557,35 @@ class Checks(MeasuresCase):
             html = self.page(aid, what)
             self.assertIn(note, section_text(html, 'alerts'))
             self.assertNotIn('Nothing needs urgent attention', section_text(html, 'alerts'))        # that line is only for a check that Vibe Check read as well
-            self.assertIn('Not run Vibe Check score', section_text(html, 'summary'))
+            summary = section_text(html, 'summary')
+            self.assertIn('Not run Vibe Check score', summary)
+            self.assertIn('Not checked things to look at first', summary)                           # nothing was looked for, so it is not '0 things to look at first'
+            self.assertNotIn('0 things', summary)
         self.assert_everywhere(aid)
         self.assertIn(['Note', note], self.csv(aid))
         self.assertEqual(len(self.store.measure_history(aid)), 1)
+
+    def test_without_a_vibe_check_the_summary_says_not_checked_only_while_no_alert_stands(self):
+        """The strip's tile reads 'Not checked' when Vibe Check did not run and no alert stands (a count of 0 would read as an all clear). An alert from the ratings
+        alone is a thing to look at whether Vibe Check ran or not, so then the tile counts."""
+        aid = self.new_analysis()
+        self.upload(aid, ('chat.csv', chat_csv(messages(48, hot=(16, 23)), at(48, days_ago(40))), 'text/csv'))
+        self.fake.fail_next('vibe', 99)
+        self.assertEqual(self.run_job_fast(aid, path='check/6', engine='')['status'], 'complete')
+        self.fake.failures.clear()
+        ms = self.ms(aid)
+        self.assertEqual(([a['key'] for a in ms['alerts']], [n['key'] for n in ms['notes']]), (['heated'], ['no_vibe']))
+        for what in ('workspace', 'report'):
+            summary = section_text(self.page(aid, what), 'summary')
+            self.assertIn('1 thing to look at first', summary, what)
+            self.assertNotIn('Not checked', summary, what)
+            self.assertIn('Not run Vibe Check score', summary, what)
+        self.assert_everywhere(aid)
+        with_vibe = self.scenario('calm', lambda: self.checked(messages(48), at(48, days_ago(40))))              # Vibe Check ran and nothing stands: a true 0
+        for what in ('workspace', 'report'):
+            summary = section_text(self.page(with_vibe, what), 'summary')
+            self.assertIn('0 things to look at first', summary, what)
+            self.assertNotIn('Not checked', summary, what)
 
     def test_a_check_made_with_another_sensitivity_or_another_model_is_compared_with_nothing(self):
         aid = self.checked(messages(48, hot=(16, 28)), at(48, days_ago(60)))
@@ -1352,19 +1597,22 @@ class Checks(MeasuresCase):
         self.assertFalse(ms['since']['comparable'])
         self.assert_says(why, 'different sensitivity', 'not from the community')
         self.assertEqual([r['verdict'] for r in ms['since']['rows']], [''] * 5)
-        self.assertEqual((sorted(n['key'] for n in ms['notes']), ms['alerts']), (['low_sensitivity', 'not_alike'], []))        # no Better or Worse, so no good news and no slipping mood
-        self.assertEqual({n['key']: n['about'] for n in ms['notes']}, {'not_alike': 'alerts', 'low_sensitivity': 'measures'})
+        self.assertEqual(([(n['key'], n['about']) for n in ms['notes']], ms['alerts']), ([('low_sensitivity', 'measures')], []))   # the reason two checks are not alike is no note; no Better or Worse, so no good news and no slipping mood
         for what in ('workspace', 'report'):
             html = self.page(aid, what)
             over = section_text(html, 'over-time')
             table = next(t for t in section_tables(html, 'over-time') if t[0][:3] == ['Measure', 'Last check', 'This check'])
             self.assertEqual(table[0], ['Measure', 'Last check', 'This check'], what)               # no Change column
             self.assertIn('No comparison', over)
-            self.assertIn(norm(why), section_text(html, 'alerts'))                                  # the note under Alerts says it as well
+            self.assertEqual(over.count(norm(why)), 1, what)                                        # the reason is said once, with the comparison ...
+            self.assertNotIn(norm(why), section_text(html, 'alerts'), what)                         # ... and not as a note under Alerts
             for word in ('Better', 'Worse', 'About the same'):
                 self.assertNotIn(word, over, what)
         text = measures_pdf(self.pdf(aid))
         self.assertIn('No comparison.', text)
+        self.assertEqual(squeeze(text).count(squeeze(why)), 1)
+        self.assertNotIn(squeeze(why), squeeze(alerts_pdf(self.pdf(aid))))
+        self.assertEqual([r for r in self.csv(aid) if why in r], [['No comparison', why]])         # in the CSV too: once, in the block of the comparison, and not as a Note row
         for word in ('Better', 'Worse', 'About the same'):
             self.assertNotIn(word, text)
         # another model, with the sensitivity of the check before: still nothing to compare
@@ -1383,7 +1631,8 @@ class Checks(MeasuresCase):
     def test_two_checks_made_with_a_long_model_name_are_compared(self):
         """MEASURES.md: the model name kept in a record is up to 120 characters of letters, digits and . _ : / @ + - ( ) and spaces. A Hugging Face tag of 65 characters
         used to be dropped from the saved record while the record of the check being shown kept it, so two checks made with the same model read "Your last check used
-        a different model", for every check from then on. Now both keep it, and a name too long for either is dropped from both."""
+        a different model", for every check from then on. Now both keep it, and a name too long for either is dropped from both. Each record also carries a short
+        fingerprint of the name (model_key), so two checks made with the same long name compare (see the next test for two different ones)."""
         for name, kept in (('hf.co/mradermacher/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF:Q4_K_M', True), ('hf.co/' + 'q' * 114, True), ('hf.co/' + 'q' * 115, False)):
             with self.subTest(length=len(name)):
                 self.assertEqual(len(name) <= 120, kept)
@@ -1402,8 +1651,34 @@ class Checks(MeasuresCase):
                 if kept:
                     self.assertEqual(ms['record'].get('model'), name)
                 self.assertEqual(ms['record'].get('model'), self.store.measure_history(aid)[-1].get('model'), 'the record of this check follows the same rules as a saved one')
+                keys = [r.get('model_key') for r in self.store.measure_history(aid)]                    # the fingerprint of the name is kept whether the name is or not
+                self.assertTrue(all(re.fullmatch(r'[0-9a-f]{12}', key or '') for key in keys), keys)
+                self.assertEqual(len(set(keys)), 1, 'the same model, the same fingerprint')
+                self.assertEqual(ms['record'].get('model_key'), keys[-1])
                 self.assertTrue(ms['since']['comparable'], ms['since']['why'])
-                self.assertEqual([n['key'] for n in ms['notes'] if n['key'] == 'not_alike'], [])
+                self.assertEqual(ms['notes'], [])
+
+    def test_two_different_model_names_that_the_store_cannot_keep_are_never_taken_for_one_model(self):
+        """Two names of 121 characters that differ in the last letter are both too long for a record, so neither is kept. Each record keeps the fingerprint of its
+        name (model_key), and the comparison goes by the fingerprint: two checks made with different models are not alike, whether or not the names were kept."""
+        first, second = 'hf.co/' + 'q' * 115, 'hf.co/' + 'q' * 114 + 'r'
+        self.assertEqual((len(first), len(second)), (121, 121))
+        self.fake.extra_models = [{'name': first, 'details': {'parameter_size': '70B'}}, {'name': second, 'details': {'parameter_size': '70B'}}]
+        try:
+            aid = self.new_analysis()
+            self.check(aid, chat_csv(messages(48, hot=(16, 28)), at(48, days_ago(60))), engine=first)
+            self.new_check(aid)
+            self.check(aid, chat_csv(messages(48), at(48, days_ago(30))), 'two.csv', engine=second)
+        finally:
+            self.fake.extra_models = []
+        history = self.store.measure_history(aid)
+        self.assertEqual([r.get('model') for r in history], [None, None])                                   # neither name could be kept ...
+        self.assertEqual(len({r['model_key'] for r in history}), 2)                                         # ... and the two fingerprints differ
+        ms = self.assert_everywhere(aid, 'two long names')
+        self.assertFalse(ms['since']['comparable'])
+        self.assert_says(ms['since']['why'], 'different model', 'not from the community')
+        self.assertEqual([r['verdict'] for r in ms['since']['rows']], [''] * 5)
+        self.assertEqual(ms['alerts'], [])                                                                 # no Better or Worse, so no good news and no slipping mood
 
     def test_each_workplace_keeps_its_own_history(self):
         first, second = self.new_analysis(name='First place'), self.new_analysis(name='Second place')
@@ -1518,17 +1793,7 @@ class Notes(MeasuresCase):
     def test_every_note_is_printed_once_in_its_own_section_on_the_pages_the_pdf_and_the_csv(self):
         """Six notes at once: Vibe Check did not run (about the alerts), and Low sensitivity, 30 in 100 undated, one message with an incomplete rating, almost no tone
         and four messages added later (about the measures)."""
-        stamps = ['' if i % 10 in (1, 4, 8) else s for i, s in enumerate(at(100, days_ago(40), step=20))]
-        aid = self.new_analysis()
-        self.upload(aid, ('chat.csv', chat_csv([NEUTRAL] * 100, stamps), 'text/csv'))
-        self.store.update_analysis(aid, vibe_sensitivity='low')
-        self.fake.fail_next('vibe', 99)
-        job = self.run_job_fast(aid, path='check/6', engine='')
-        self.fake.failures.clear()
-        self.assertEqual(job['status'], 'complete')
-        with self.store.db() as c:
-            c.execute("DELETE FROM unit_ratings WHERE unit_id=? AND attribute='Rude'", (self.store.rated_units(aid)[7]['id'],))
-        self.upload(aid, ('more.csv', chat_csv([NEUTRAL] * 4, at(4, days_ago(10))), 'text/csv'))
+        aid = self.many_notes()
         ms = self.ms(aid)
         self.assertEqual({n['key']: n['about'] for n in ms['notes']},
                          {'no_vibe': 'alerts', 'undated': 'measures', 'incomplete': 'measures', 'low_sensitivity': 'measures', 'silent': 'measures', 'added': 'measures'})
@@ -1567,8 +1832,37 @@ class Notes(MeasuresCase):
             self.assertIn(silent, section_text(html, 'over-time'), what)                                   # the warning is where the figures are, and not only under the badges
             self.assertNotIn(silent, section_text(html, 'alerts'), what)
             self.assertIn(ms['badge_note'], section_text(html, 'badges'), what)
-            self.assertIn('0 things to look at first', section_text(html, 'summary'), what)
+            self.assertIn('0 things to look at first', section_text(html, 'summary'), what)          # Vibe Check ran, so this is a true 0 (not 'Not checked')
+            # MEASURES.md: the marks are neutral when almost no tone was found. Nothing in a silent chat is good news: the green None of Escalation (60 messages are
+            # enough to judge it), Rare for Conflict and sarcasm, and the green marks that go with them would say the chat is calm when the model read nothing.
+            self.assertEqual(cards_on_page(html), [(icon_svg('info'), c['level'], 'Neutral') for c in ms['cards']], what)
+            self.assertEqual(health_mark_on_page(html), icon_svg('info'), what)
+        self.assertEqual([(c['key'], c['level'], c['tone'], c['tone_word']) for c in ms['cards']],
+                         [('escalation', 'None', 'info', 'Neutral'), ('conflict', 'Rare', 'info', 'Neutral'), ('empathy', 'Rare', 'info', 'Neutral'), ('passive', 'Rare', 'info', 'Neutral')])
+        self.assertEqual((ms['health']['status'], ms['health']['tone'], ms['health']['tone_word']), ('Fair', 'info', 'Neutral'))
+        pdf = squeeze(measures_pdf(self.pdf(aid)))
+        for line in ('Escalation: None (Neutral)', 'Conflict: Rare (Neutral)', 'Empathy: Rare (Neutral)', 'Passive-aggressive: Rare (Neutral)', 'Health score: Fair (Neutral)'):
+            self.assertIn(squeeze(line), pdf)
+        marks = [r[-1] for r in rows_under(csv_blocks(self.csv(aid))['Measures over time'], 'Measure')]
+        self.assertEqual(marks, ['Neutral'] * 4)
         self.assert_everywhere(aid)
+
+    def test_a_silent_chat_is_no_all_clear_whatever_its_size_and_the_note_about_it_needs_30_messages(self):
+        """MEASURES.md: ms['all_clear'] counts silence at any number of messages (19 in 20 rated all 0 is silence); the note about it needs at least 30 messages."""
+        for n in (12, 29, 30, 60):
+            aid = self.scenario(f'silent {n}', lambda n=n: self.checked([NEUTRAL] * n, at(n, days_ago(40))))
+            ms = self.ms(aid)
+            self.assertEqual((ms['m']['n'], ms['all_clear'], ms['alerts'], ms['alert_counts']), (n, False, [], {'high': 0, 'medium': 0, 'good': 0}), n)
+            self.assertEqual('silent' in [note['key'] for note in ms['notes']], n >= 30, n)                  # the note needs 30 messages; the refusal to say all clear does not
+            self.assertTrue(ms['badge_note'], n)                                                            # below 30 messages: badges have not started; from 30: none was given, and why
+            for what in ('workspace', 'report'):
+                alerts = section_text(self.page(aid, what), 'alerts')
+                self.assertNotIn('Nothing needs urgent attention', alerts, f'{what} {n}')
+                self.assertIn(norm(ms['caveats']['empty']), alerts, f'{what} {n}')                          # the empty list is said not to be an all clear
+            self.assertNotIn(squeeze('Nothing needs urgent attention'), squeeze(' '.join(self.pdf(aid))), n)
+            self.assertFalse([c for c in measure_cells(self.csv(aid)) if 'Nothing needs urgent attention' in c], n)
+            self.assertIn(['No alerts', ms['caveats']['empty']], self.csv(aid), n)
+            self.assert_everywhere(aid, f'{n} silent messages')
 
     def test_the_sentence_for_an_all_clear_is_on_the_pages_only_for_a_check_that_may_say_it(self):
         calm = self.scenario('calm', lambda: self.checked(messages(48), at(48, days_ago(40))))
@@ -1644,25 +1938,29 @@ class Notes(MeasuresCase):
         self.assertNotIn(squeeze(self.FIRST), squeeze(measures_pdf(self.pdf(aid))))
 
     def test_the_marks_of_the_cards_are_said_in_words_in_the_pdf(self):
-        """The PDF cannot draw the icon, so each card and the health tile say their mark in words, from tone_word (the CSV does not yet: see the known gap below)."""
+        """The PDF cannot draw the icon, so each card and the health tile say their mark in words, from tone_word, in brackets after the level. (The CSV does it in a
+        column of its own: see the next test.)"""
         aid = self.scenario('flare', lambda: self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40))))
         text = squeeze(measures_pdf(self.pdf(aid)))
         for line in ('Escalation: Steep (Look at this first)', 'Conflict: Some (Worth a look)', 'Empathy: Often (A good sign)', 'Passive-aggressive: Rare (A good sign)',
                      'Health score: Fair (Neutral)'):
             self.assertIn(squeeze(line), text)
 
-    @unittest.expectedFailure
     def test_the_marks_of_the_cards_are_said_in_words_in_the_csv_too(self):
-        """KNOWN GAP, reported with this change. MEASURES.md and DEV.md say a surface that cannot show the icon (the PDF and the CSV) says the mark in words, from
-        tone_word on every card and on the health tile. The PDF does; the CSV has no column or row for it (the Measures over time block holds the level word, Rare or
-        Some or Often, which says how often and not whether that is good). When the CSV says the marks the test starts to pass: remove the decorator then."""
+        """MEASURES.md: a surface that cannot show the icon (the PDF and the CSV) says the mark in words, from tone_word on every card and on the health tile. In the
+        CSV the last column of the four cards is Mark, and the Health score row ends with its mark. A level word says how often, and the mark says whether that is good:
+        Some is Worth a look for Conflict, and Often is A good sign for Empathy."""
         aid = self.scenario('flare', lambda: self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40))))
         ms = self.ms(aid)
         block = csv_blocks(self.csv(aid))['Measures over time']
-        cells = [cell for row in block for cell in row]
-        for card in ms['cards']:
-            self.assertIn(card['tone_word'], cells, card['key'])
-        self.assertIn(ms['health']['tone_word'], cells)
+        self.assertEqual(next(row for row in block if row[:1] == ['Measure'])[-1], MARK)
+        cards = rows_under(block, 'Measure')
+        self.assertEqual([(row[0], row[1], row[-1]) for row in cards],
+                         [('Escalation', 'Steep', 'Look at this first'), ('Conflict', 'Some', 'Worth a look'), ('Empathy', 'Often', 'A good sign'), ('Passive-aggressive', 'Rare', 'A good sign')])
+        self.assertEqual([row[-1] for row in cards], [card['tone_word'] for card in ms['cards']])
+        self.assertLessEqual({row[-1] for row in cards}, set(measures.TONE_WORDS.values()))        # always one of the four phrases of measures.py
+        self.assertEqual([row for row in block if row[:1] == ['Health score'] and len(row) == 4], [['Health score', '58', 'Fair', ms['health']['tone_word']]])
+        self.assertEqual(ms['health']['tone_word'], 'Neutral')
 
 
 # =============================================================================================================================================
@@ -1688,7 +1986,7 @@ class Privacy(MeasuresCase):
         with self.store.db() as c:
             kept = [json.loads(r['snapshot_json']) for r in c.execute('SELECT snapshot_json FROM measure_history WHERE analysis_id=?', (aid,))]
         self.assertEqual(len(kept), 1, 'the record of the check stays')
-        words = {'created_at', 'basis', 'sensitivity', 'model', 'period_start', 'period_end', 'sig'}      # the names of settings and the date: the only text
+        words = {'created_at', 'basis', 'sensitivity', 'model', 'model_key', 'period_start', 'period_end', 'sig'}      # the names of settings, a short fingerprint of the model name, and the date: the only text
         numbers = {'gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n', 'dig_n', 'heated_n', 'episodes', 'health', 'health_sd', 'peak'}
         self.assertLessEqual(set(kept[0]), words | numbers, 'a new field in the kept record needs a look: only dates, settings and numbers may be kept')
         self.assertLessEqual({'created_at', 'n', 'health', 'hostile_n', 'care_n', 'dig_n', 'heated_n', 'episodes', 'peak', 'gen'}, set(kept[0]))
@@ -1696,6 +1994,8 @@ class Privacy(MeasuresCase):
             self.assertIsInstance(value, str if key in words else (int, float), key)
             self.assertNotIsInstance(value, bool, key)
         self.assertEqual((kept[0]['n'], kept[0]['hostile_n'], kept[0]['heated_n'], kept[0]['episodes']), (48, 5, 7, 1))
+        self.assertRegex(kept[0]['model_key'], r'^[0-9a-f]{12}$')                                   # a fingerprint of the model name (so two names the store cannot keep are told apart) ...
+        self.assertNotEqual(kept[0]['model_key'], kept[0]['model'])                                  # ... and not the name
         self.assertEqual(self.store.measure_history(aid), kept)
         self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
         self.assertEqual(self.client.get(f'/analysis/{aid}/workspace').status_code, 200)
@@ -1755,8 +2055,15 @@ class Privacy(MeasuresCase):
             self.assertFalse([tip['t'] for tip in tips if CLOCK.search(tip['t']) or 'UTC' in tip['t']])
             table = next(t for t in section_tables(html, 'over-time') if t[0][:2] == ['Check', 'Date'])
             self.assertEqual(len(table) - 1, 3)
+            labels = [label for label in re.findall(r'<text[^>]*>([^<]*)</text>', trail_figure(over)) if label.startswith('Check')]
+            self.assertEqual(labels, ['Check 1', 'Check 2', 'Check 3'] * 2, what)                    # under the points: the number of each check, in both layouts, and no time of day
+            self.assertEqual([row[1] for row in table[1:]], [long_date(r['created_at']) for r in ms['trail']], what)           # the table names the day of a check, and no time
             kept[what] = (same_markup(trail_figure(over)), table)
-        self.assertIn('Health score, check by check', measures_pdf(self.pdf(aid)))
+        text = measures_pdf(self.pdf(aid))
+        self.assertIn('Health score, check by check', text)
+        self.assertIn(squeeze('Check 1 Check 2 Check 3'), squeeze(text))                              # the PDF draws the same chart, labelled by number
+        trail = rows_under(csv_blocks(self.csv(aid))['Since your last check'], 'Check')
+        self.assertEqual([row[1] for row in trail], [r['created_at'][:10] for r in ms['trail']])      # and its table in the CSV names the day only
         # the same three checks with Incognito off: the same chart and the same table
         self.store.update_analysis(aid, incognito=0)
         for what in ('workspace', 'report'):
@@ -1841,7 +2148,8 @@ class Dates(MeasuresCase):
         for what in ('workspace', 'report'):
             html = self.page(aid, what)
             over = section_text(html, 'over-time')
-            self.assertIn('There are no lines over time yet.', over, what)
+            self.assertEqual(over.count('no lines over time yet'), 1, what)                         # said once, by the note that gives both counts
+            self.assertNotIn('There are no lines over time yet.', over, what)                        # and not again as a sentence of its own
             self.assertEqual(quiet_notes(html, 'over-time'), [ms['notes'][0]['text']], what)
             self.assertNotIn('The lines show what happened', over, what)                            # the note about lines that are not drawn would mislead
             self.assertEqual(Page(section(html, 'over-time')).titles.count('Conflict over time'), 0, what)
@@ -1970,7 +2278,7 @@ class Robustness(MeasuresCase):
         good = {'created_at': '2026-05-01T10:00:00', 'n': 48, 'total': 48, 'sampled': 0, 'basis': 'time', 'stretches': 6, 'model': 'qwen2.5:7b', 'sensitivity': 'medium',
                 'health': 60.0, 'health_sd': 10.0, 'hostile_n': 1, 'care_n': 3, 'dig_n': 0, 'heated_n': 1, 'episodes': 0, 'peak': 0.0, 'sig': '48:1:1:1:1'}
         poisoned = [dict(good, gen=gen + 1, created_at=HOSTILE),                                   # no readable date: the whole record goes
-                    dict(good, gen=gen + 2, model=HOSTILE, sensitivity=HOSTILE, sig=HOSTILE, basis=HOSTILE, period_start=HOSTILE, period_end=HOSTILE,
+                    dict(good, gen=gen + 2, model=HOSTILE, model_key=HOSTILE, sensitivity=HOSTILE, sig=HOSTILE, basis=HOSTILE, period_start=HOSTILE, period_end=HOSTILE,
                          extra='<script>alert(2)</script>', note='<b>x</b>', hostile_n='<script>alert(3)</script>'),
                     dict(good, gen=gen + 3, model='=HYPERLINK("http://evil.example","x")'),
                     dict(good, gen=gen + 4, model='@cmd|calc', care_n=-4, heated_n=10 ** 30, peak='<img src=x onerror=alert(4)>')]
@@ -1987,6 +2295,7 @@ class Robustness(MeasuresCase):
             for value in record.values():
                 self.assertNotRegex(str(value), r'[<>"=@]')
         self.assertEqual(kept[1].get('model'), None)
+        self.assertNotIn('model_key', kept[1])                                                     # a fingerprint is twelve hex digits and nothing else
         self.assertEqual(kept[2].get('model'), None)
         self.assertNotIn('care_n', kept[3])
         self.assertNotIn('heated_n', kept[3])
@@ -2008,14 +2317,16 @@ class Robustness(MeasuresCase):
     def test_a_year_of_weekly_checks_still_renders_everywhere(self):
         aid = self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40)))
         gen = self.store.evidence_generation(aid)
+        live = self.ms(aid)['record']                                                               # the 52 earlier checks were made with this model and this sensitivity
         with self.store.db() as c:
             for k in range(52):
                 row = {'created_at': f'2025-{1 + k // 5:02d}-{1 + (k % 5) * 5:02d}T10:00:00', 'gen': gen + 1 + k, 'n': 48, 'total': 48, 'sampled': 0, 'basis': 'time', 'stretches': 6,
-                       'model': 'qwen2.5:7b', 'sensitivity': 'medium', 'health': 45.0 + k % 20, 'health_sd': 10.0, 'hostile_n': k % 5, 'care_n': 3 + k % 4, 'dig_n': 0,
-                       'heated_n': k % 7, 'episodes': k % 2, 'peak': 0.0, 'sig': f'48:{k}:1:1:1'}
+                       'model': live['model'], 'model_key': live['model_key'], 'sensitivity': live['sensitivity'], 'health': 45.0 + k % 20, 'health_sd': 10.0, 'hostile_n': k % 5,
+                       'care_n': 3 + k % 4, 'dig_n': 0, 'heated_n': k % 7, 'episodes': k % 2, 'peak': 0.0, 'sig': f'48:{k}:1:1:1'}
                 c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), row['gen']))
         ms = self.ms(aid)
         self.assertEqual(len(ms['trail']), 53)
+        self.assertTrue(ms['since']['comparable'], ms['since']['why'])                              # the last of them is a check made like this one: the table has its Change column
         began = time.perf_counter()
         self.surfaces_render(aid)
         self.assertLess(time.perf_counter() - began, 20)
@@ -2023,19 +2334,21 @@ class Robustness(MeasuresCase):
         self.assertEqual(len(next(t for t in section_tables(self.page(aid, 'workspace'), 'over-time') if t[0][:2] == ['Check', 'Date'])) - 1, 53)
 
     def test_a_saved_record_with_a_date_and_a_count_but_no_health_score_does_not_break_the_pages(self):
-        """MEASURES.md: a record without a date, a count of messages or a health score is dropped as damaged. It used to be kept, and measures.since_table then raised
-        a KeyError for it on every page of the analysis (the workplace page, the report, the PDF and the CSV), for good, because the records stay through Delete
-        evidence. A record like that comes from a hand-edited database or an older build."""
+        """MEASURES.md: a record without a date, a count of messages or a health score, or with a health score off the 0 to 100 scale, is dropped as damaged. It used
+        to be kept, and measures.since_table then raised a KeyError for it on every page of the analysis (the workplace page, the report, the PDF and the CSV), for
+        good, because the records stay through Delete evidence. A record like that comes from a hand-edited database or an older build."""
         aid = self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40)))
         gen = self.store.evidence_generation(aid)
         base = {'created_at': '2026-05-01T10:00:00', 'n': 48, 'model': 'qwen2.5:7b', 'sensitivity': 'medium'}
         no_key = dict(base, gen=gen + 1)
         damaged = [dict(base, gen=gen + 2, health='not a number'), no_key, dict(base, gen=gen + 3, health=None), dict(base, gen=gen + 4, health=[50.0]),
                    dict(base, gen=gen + 5, health=1e300), dict(base, gen=gen + 6, health=True), dict(base, gen=gen + 7, health={'a': 1})]
+        for k, off_the_scale in enumerate((-0.001, 100.001, -1, 101, 250, -1000, float('nan'), float('inf'))):       # a number, but not a score out of 100
+            damaged.append(dict(base, gen=gen + 8 + k, health=off_the_scale))
         with self.store.db() as c:
             for row in damaged:
                 c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), row['gen']))
-        self.assertEqual([r['gen'] for r in self.store.measure_history(aid)], [gen], 'not one of the seven comes back: they are left out as damaged')
+        self.assertEqual([r['gen'] for r in self.store.measure_history(aid)], [gen], f'not one of the {len(damaged)} comes back: they are left out as damaged')
         self.surfaces_render(aid)
         ms = self.assert_everywhere(aid, 'damaged records')
         self.assertEqual(len(ms['trail']), 1)
@@ -2048,13 +2361,34 @@ class Robustness(MeasuresCase):
         self.assertEqual(len(ms['trail']), 2)
         self.assertTrue(ms['since']['comparable'])
 
+    def test_a_saved_record_at_either_end_of_the_health_scale_is_kept_and_compared(self):
+        """The two ends of the 0 to 100 scale are real scores (an all-hostile chat scores near 0), so a record with a health score of exactly 0 or 100 is not damage:
+        the store keeps it, and Since your last check reads it. The record carries the fingerprint of the model (model_key), so that it is a check made like this one."""
+        aid = self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40)))
+        gen = self.store.evidence_generation(aid)
+        live = self.ms(aid)['record']
+        base = {'created_at': '2026-05-01T10:00:00', 'n': 48, 'total': 48, 'model': live['model'], 'model_key': live['model_key'], 'sensitivity': live['sensitivity'],
+                'health_sd': 10.0, 'hostile_n': 2, 'care_n': 4, 'dig_n': 0, 'heated_n': 2, 'episodes': 0, 'peak': 0.0, 'gen': gen + 1}
+        for edge, verdict in ((100.0, 'Worse'), (0.0, 'Better')):
+            with self.store.db() as c:
+                c.execute('DELETE FROM measure_history WHERE analysis_id=? AND gen>?', (aid, gen))
+                c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)',
+                          (aid, base['created_at'], json.dumps(dict(base, health=edge)), base['gen']))
+            self.assertEqual([r['health'] for r in self.store.measure_history(aid)][1:], [edge])
+            ms = self.assert_everywhere(aid, f'a last check that scored {edge:g}')
+            self.assertTrue(ms['since']['comparable'], ms['since']['why'])
+            self.assertEqual((ms['since']['rows'][0]['label'], ms['since']['rows'][0]['before'], ms['since']['rows'][0]['verdict']), ('Health score', int(edge), verdict))
+            table = next(t for t in section_tables(self.page(aid, 'workspace'), 'over-time') if t[0][:3] == ['Measure', 'Last check', 'This check'])
+            self.assertEqual(table[1][:2], ['Health score', str(int(edge))])                          # a 0 is printed as a 0 and not left out as though it were empty
+
     def test_a_saved_record_with_a_count_above_its_total_keeps_its_other_numbers_and_the_pages_work(self):
         """MEASURES.md: a count of hostile, care, dig or heated messages that is higher than the number of messages is left out of its record. The comparison used to
         raise 'math domain error' for a count that passed its total by 2 or more."""
         aid = self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40)))
         gen = self.store.evidence_generation(aid)
-        row = {'created_at': '2026-05-01T10:00:00', 'n': 48, 'total': 48, 'model': 'qwen2.5:7b', 'sensitivity': 'medium', 'gen': gen + 1, 'health': 60.0, 'health_sd': 10.0,
-               'hostile_n': 500, 'care_n': 10 ** 9, 'dig_n': 2, 'heated_n': 50, 'episodes': 0, 'peak': 0.0}
+        live = self.ms(aid)['record']                                                               # the saved check is made like this one: same model (and fingerprint), same sensitivity
+        row = {'created_at': '2026-05-01T10:00:00', 'n': 48, 'total': 48, 'model': live['model'], 'model_key': live['model_key'], 'sensitivity': live['sensitivity'],
+               'gen': gen + 1, 'health': 60.0, 'health_sd': 10.0, 'hostile_n': 500, 'care_n': 10 ** 9, 'dig_n': 2, 'heated_n': 50, 'episodes': 0, 'peak': 0.0}
         with self.store.db() as c:
             c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), row['gen']))
         kept = self.store.measure_history(aid)[-1]
@@ -2063,10 +2397,23 @@ class Robustness(MeasuresCase):
                                                                                                                  'health': 60.0, 'n': 48})
         self.surfaces_render(aid)
         ms = self.assert_everywhere(aid, 'a count above its total')
+        self.assertTrue(ms['since']['comparable'], ms['since']['why'])                              # the two checks are alike, so a '' below is a number that is not there, not a refusal
         rows = {r['label']: r for r in ms['since']['rows']}
-        self.assertEqual(rows['Health score']['before'], 60)
+        self.assertEqual((rows['Health score']['before'], rows['Health score']['verdict']), (60, 'About the same'))
         self.assertEqual((rows['Conflict']['verdict'], rows['Empathy']['verdict'], rows['Heated messages']['verdict']), ('', '', ''), 'no call is made on a number that is not there')
         self.assertEqual(rows['Passive-aggressive']['before'], '2 of 48')
+        self.assertEqual(rows['Passive-aggressive']['verdict'], 'About the same')
+        # a count the store had to drop is said so in words ('Not known'), not as a 0 of 48 that would read as none
+        self.assertEqual([rows[label]['before'] for label in ('Conflict', 'Empathy', 'Heated messages')], [NOT_KNOWN] * 3)
+        self.assertEqual(rows['Conflict']['now'], f'{ms["m"]["overall"]["hostile"]} of 48')            # this check has its numbers
+        for what in ('workspace', 'report'):
+            table = next(t for t in section_tables(self.page(aid, what), 'over-time') if t[0][:3] == ['Measure', 'Last check', 'This check'])
+            self.assertEqual([row[:2] for row in table[1:]], [['Health score', '60'], ['Conflict', NOT_KNOWN], ['Empathy', NOT_KNOWN], ['Passive-aggressive', '2 of 48'], ['Heated messages', NOT_KNOWN]], what)
+            self.assertEqual([row[3] for row in table[1:]], ['About the same', '', '', 'About the same', ''], what)           # no verdict beside a count that is not known
+        block = csv_blocks(self.csv(aid))['Since your last check']
+        self.assertEqual([row[:3] for row in rows_under(block, 'Measure')],
+                         [['Health score', '60', '100'], ['Conflict', NOT_KNOWN, ''], ['Empathy', NOT_KNOWN, ''], ['Passive-aggressive', '2', '48'], ['Heated messages', NOT_KNOWN, '']])
+        self.assertIn(squeeze('Conflict Not known'), squeeze(lines_pdf(self.pdf(aid))))
 
 
 # =============================================================================================================================================
@@ -2121,7 +2468,10 @@ class Sampling(MeasuresCase):
         self.assertEqual((ms['m']['n'], ms['record']['total'], ms['record']['sampled']), (300, 330, 1))
         self.assert_says(ms['basis_text'], '300 messages', 'an even sample of 330')
         note = next(x for x in ms['notes'] if x['key'] == 'sampled')
-        self.assert_says(note['text'], '300 of 330 messages', 'an even sample', 'all of them')
+        self.assert_says(note['text'], 'A short flare-up can fall between the samples', '"all of them"', 'every message')     # what a sample can miss, and how to see everything
+        self.assertNotRegex(note['text'], r'330|300|an even sample')                              # the size of the sample is the basis line's to say (above), once
+        over = section_text(self.page(aid, 'workspace'), 'over-time')
+        self.assertEqual((over.count('an even sample of 330'), over.count(note['text'])), (1, 1))
         cant = "Can't tell yet: only part of the chat was read."
         needs = {b['key']: b['needs'] for b in ms['badges']}
         self.assertEqual((needs['calm'], needs['cools'], needs['noflags']), (cant, cant, cant))
@@ -2182,22 +2532,35 @@ class Thresholds(MeasuresCase):
         self.assertEqual([r['verdict'] for r in small['since']['rows']], [''] * 5)
         self.assert_everywhere(aid, '47 and 60')
 
-    def test_a_chat_that_starts_tense_says_a_climb_before_it_cannot_be_seen(self):
+    def test_a_chat_that_starts_tense_says_so_once_on_the_escalation_card_and_its_none_is_grey(self):
+        """MEASURES.md: if the very first part is already tense (30 or more in 100 heated), a climb before the start cannot be seen. That is said once, on the
+        Escalation card, and not again as a note of the page ('opening' no longer exists). A None that rests on a chat that was hot from its first part is not good
+        news, so its mark is neutral and not the green one."""
         aid = self.checked(messages(48, hot=(0, 8)), at(48, days_ago(40)))
         ms = self.ms(aid)
+        card = ms['cards'][0]
         self.assertTrue(ms['m']['opening_heated'])
-        self.assertIn('opening', [n['key'] for n in ms['notes']])
-        self.assert_says(ms['cards'][0]['note'], 'already tense', 'only counts a rise')
-        self.assertEqual(ms['cards'][0]['level'], 'None')
-        self.assertTrue(ms['cards'][0]['headline'].startswith('No heated moment'), ms['cards'][0]['headline'])
+        self.assertEqual([n['key'] for n in ms['notes']], [])                                        # no note: it is a note of the card
+        self.assert_says(card['note'], 'already tense', 'only counts a rise')
+        self.assertEqual((card['level'], card['tone'], card['tone_word'], card['count']), ('None', 'info', 'Neutral', 0))     # judged (48 messages) and no heated moment, but no green mark
+        self.assertTrue(card['headline'].startswith('No heated moment'), card['headline'])
         self.assert_everywhere(aid)
-        note = next(n['text'] for n in ms['notes'] if n['key'] == 'opening')
-        self.assert_says(note, 'already tense', 'cannot be seen')
         for what in ('workspace', 'report'):
             html = self.page(aid, what)
-            self.assertIn(note, section_text(html, 'over-time'), what)
-            self.assertIn(ms['cards'][0]['note'], section_text(html, 'over-time'), what)
-        self.assertIn(['Note', note], self.csv(aid))
+            self.assertEqual(section_text(html, 'over-time').count(card['note']), 1, what)           # once, on the card
+            self.assertNotIn(card['note'], section_text(html, 'alerts'), what)
+            self.assertEqual(quiet_notes(html, 'over-time'), [], what)
+            self.assertEqual(cards_on_page(html)[0], (icon_svg('info'), 'None', 'Neutral'), what)
+            self.assertNotEqual(cards_on_page(html)[0][0], icon_svg('good'), what)
+        pdf = squeeze(measures_pdf(self.pdf(aid)))
+        self.assertEqual(pdf.count(squeeze(card['note'])), 1)
+        self.assertIn(squeeze('Escalation: None (Neutral)'), pdf)
+        rows = self.csv(aid)
+        escalation = next(r for r in rows if r[:1] == ['Escalation'])
+        self.assertEqual((escalation[6], escalation[-1]), (card['note'], 'Neutral'))                 # the note sits in the Note cell of its row, with the mark in words after the rest
+        self.assertEqual(sum(row.count(card['note']) for row in rows), 1)
+        control = self.scenario('calm', lambda: self.checked(messages(48), at(48, days_ago(40))))      # the same words on a chat that did not start tense: the green mark
+        self.assertEqual((self.ms(control)['cards'][0]['level'], self.ms(control)['cards'][0]['tone']), ('None', 'good'))
 
     def test_low_sensitivity_raises_the_cut_offs_for_conflict_and_sarcasm(self):
         texts = [INSULT if i % 6 == 0 else CALM[i % 6] for i in range(48)]                       # 8 hostile messages in 48: 17 in 100
@@ -2234,6 +2597,107 @@ class Thresholds(MeasuresCase):
         self.assertEqual(medium_ms['notes'], [])
         self.assertNotIn(self.LOW_NOTE, ' '.join(measure_cells(self.csv(medium))))
         self.assertNotIn(squeeze(self.LOW_NOTE), squeeze(measures_pdf(self.pdf(medium))))
+
+
+# =============================================================================================================================================
+class PdfLayout(MeasuresCase):
+    """Where things land in the PDF, read back with pypdf (the text of each page, and where its lowest line sits): the Measures over time part of a first check fits
+    one page, the health score tile never starts a page and is never left without the last row of cards, and the Evidence page keeps the list of evidence, the model
+    line and the whole method together with room to spare (a long list sends the whole method to the next page)."""
+
+    def flare(self):
+        return self.scenario('flare', lambda: self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40))))
+
+    def three(self):
+        def make():
+            aid = self.new_analysis()
+            for k, hot in enumerate(((16, 28), (0, 0), (30, 42))):
+                if k:
+                    self.new_check(aid)
+                self.check(aid, chat_csv(messages(48, hot=hot), at(48, days_ago(90 - 30 * k))), f'c{k}.csv')
+            return aid
+        return self.scenario('three', make)
+
+    def test_a_first_check_without_a_note_is_one_page_in_the_order_of_the_page(self):
+        aid = self.flare()
+        ms = self.ms(aid)
+        self.assertEqual((ms['notes'], ms['since']), ([], None))
+        lines = lines_bodies(self.pdf(aid))
+        self.assertEqual(len(lines), 1, 'Measures over time of a first check without a note fits one page')
+        text = squeeze(lines[0])
+        parts = ('Measures over time', ms['caveats']['measures'], ms['basis_text'], ms['chart_key'], 'Escalation: Steep', 'Conflict: Some', 'Empathy: Often', 'Passive-aggressive: Rare',
+                 f'{measures.whole(ms["health"]["score"])} out of 100', f'Health score: {ms["health"]["status"]}', ms['health']['caption'], 'Since your last check', ms['texts']['first_check'])
+        found = [text.find(squeeze(part)) for part in parts]
+        self.assertNotIn(-1, found, [part for part, at in zip(parts, found) if at < 0])
+        self.assertEqual(found, sorted(found), 'the caveat, the basis and the key to the charts above the four cards, the tile under them, then the sentence for a first check')
+
+    def test_the_health_score_tile_never_starts_a_page_and_never_stands_without_the_last_row_of_cards(self):
+        """Seen from the PDF a person reads: no page of Measures over time starts with the tile, or holds it without the Empathy and Passive-aggressive cards above it,
+        whether the check is a first one or a third, is short, has no dates, or has six notes before the cards."""
+        thin = self.scenario('thin', lambda: self.checked(messages(30, hot=(10, 18)), at(30, days_ago(40))))
+        undated = self.scenario('undated', lambda: self.checked(messages(48, hot=(16, 23)), None))
+        two = self.scenario('two', lambda: self.two_checks())
+        scenarios = {'a first check': self.flare(), 'a short chat': thin, 'a chat without dates': undated, 'six notes': self.many_notes(), 'a second check': two,
+                     'a third check': self.three()}
+        for name, aid in scenarios.items():
+            ms = self.ms(aid)
+            lines = lines_bodies(self.pdf(aid))
+            tiles = [i for i, body in enumerate(lines) if 'out of 100' in body]
+            self.assertEqual(len(tiles), 1, name)
+            body = lines[tiles[0]]
+            self.assertNotRegex(body, r'^\d+ out of 100', f'{name}: a page starts with the tile')
+            self.assertLess(body.index('Passive-aggressive:'), body.index('out of 100'), f'{name}: the last row of cards is above the tile')
+            self.assertLess(body.index('Empathy:'), body.index('out of 100'), name)
+            heading = next(i for i, text in enumerate(lines) if 'Since your last check' in text)
+            if ms['since'] is None:
+                self.assertEqual(heading, tiles[0], f'{name}: the sentence for a first check follows the tile on its page')
+            else:
+                self.assertIn(heading, (tiles[0], tiles[0] + 1), f'{name}: the comparison follows the tile on its page, else it starts the next')
+
+    def two_checks(self):
+        aid = self.new_analysis()
+        self.check(aid, chat_csv(messages(48, hot=(16, 28)), at(48, days_ago(90))))
+        self.new_check(aid)
+        self.check(aid, chat_csv(messages(48), at(48, days_ago(60))), 'two.csv')
+        return aid
+
+    def evidence_of(self, sources) -> int:
+        return self.scenario(f'{sources} sources', lambda: self.checked(messages(48, hot=(16, 23)), at(48, days_ago(40)), sources=[f'#room-{i % sources}' for i in range(48)]))
+
+    def test_the_evidence_page_keeps_the_list_the_model_line_and_the_whole_method_together_with_room_to_spare(self):
+        """Up to four sources: the list of evidence, the Model line and all the entries of How this report works sit on the last page, in that order, with at least
+        40 points left under the last line (so that a little more text, or a wider font, does not push the last entry alone onto a page of its own)."""
+        import analysis
+        for sources in (1, 2, 4):
+            aid = self.evidence_of(sources)
+            data = self.client.get(f'/analysis/{aid}/report.pdf').content
+            pages = pdf_pages(data)
+            self.assertEqual([i for i, text in enumerate(pages) if 'Evidence loaded' in text], [len(pages) - 1], f'{sources} sources: the evidence is on the last page')
+            page = squeeze(FOOTER.sub('', pages[-1]))
+            self.assertEqual(len(self.store.evidence_by_source(aid)), sources)
+            order = [page.find(squeeze(part)) for part in ('Evidence and how this report works', 'Evidence loaded', 'Model: qwen2.5:7b.', 'How this report works')]
+            self.assertNotIn(-1, order, sources)
+            self.assertEqual(order, sorted(order), sources)
+            at_last = -1
+            for heading, text in analysis.HOW_IT_WORKS:                                                  # every entry of the method is whole on this page, in order
+                found = page.find(squeeze(text))
+                self.assertGreater(found, at_last, f'{sources} sources: {heading}')
+                at_last = found
+            spare = lowest_body_y(data, len(pages) - 1) - BOTTOM_MARGIN
+            self.assertGreaterEqual(spare, 40, f'{sources} sources: the last page has {spare:.0f} points left')
+
+    def test_a_long_list_of_evidence_sends_the_whole_method_to_a_page_of_its_own(self):
+        import analysis
+        aid = self.evidence_of(12)
+        pages = pdf_pages(self.client.get(f'/analysis/{aid}/report.pdf').content)
+        evidence = next(i for i, text in enumerate(pages) if 'Evidence loaded' in text)
+        self.assertEqual(evidence, len(pages) - 2)
+        self.assertIn('Model: qwen2.5:7b.', pages[evidence])                                             # the model line stays under the evidence it rated
+        method = FOOTER.sub('', pages[-1])
+        self.assertTrue(method.startswith('How this report works'), method[:80])                        # the method starts the page, heading first, and is not cut
+        for heading, text in analysis.HOW_IT_WORKS:
+            self.assertIn(squeeze(text), squeeze(method), heading)
+            self.assertNotIn(squeeze(text), squeeze(pages[evidence]), heading)
 
 
 # =============================================================================================================================================
@@ -2386,6 +2850,83 @@ class PageStructure(MeasuresCase):
             self.assertEqual(names[:4], ['Escalation over time', 'Conflict over time', 'Empathy over time', 'Passive-aggressive over time'])
             self.assertEqual(len(names), 5, names)
             self.assertIn('Health score', names[4])
+
+    CHART_KEY = 'Lines show messages per 100. Shaded bands show where Rare, Some and Often begin. A darker band is a heated moment.'
+
+    def test_the_key_to_the_charts_is_the_sentence_of_measures_above_the_cards_on_the_page_and_in_the_pdf(self):
+        """MEASURES.md: ms['chart_key'] is the one sentence that explains the four small charts, for the page and the PDF. It is the base sentence, followed where it
+        matters by the sentence that says the numbers under the charts are rated message numbers (lines that follow the order the messages were added in) or by
+        'Times are UTC.'. It stands once above the four cards, outside every fold, and where there are no charts there is no key."""
+        start = days_ago(40)
+        dated = self.flare()
+        order = self.scenario('undated', lambda: self.checked(messages(48, hot=(16, 23)), None))
+        utc = self.scenario('utc', lambda: self.checked(messages(48), [s + 'Z' for s in at(48, start)]))
+        short = self.scenario('short 23', lambda: self.checked(hostile_ending(23), at(23, start)))
+        self.assertEqual(self.ms(dated)['chart_key'], self.CHART_KEY)
+        self.assertEqual(self.ms(utc)['chart_key'], self.CHART_KEY + ' Times are UTC.')
+        self.assertTrue(self.ms(order)['chart_key'].startswith(self.CHART_KEY + ' '), self.ms(order)['chart_key'])
+        self.assert_says(self.ms(order)['chart_key'][len(self.CHART_KEY):], 'rated message numbers', 'the order you added them')      # what the numbers under the charts are
+        for aid in (dated, order, utc):
+            ms = self.ms(aid)
+            key = ms['chart_key']
+            for what in ('workspace', 'report'):
+                html = self.page(aid, what)
+                found = re.findall(r'<p class="vc-note vc-chart-key">(.*?)</p>', html, re.S)
+                self.assertEqual([unescape(text) for text in found], [key], what)                       # once, as ms wrote it
+                self.assertLess(html.index('vc-chart-key'), html.index('class="vc-cols vc-measures"'), f'{what}: the key stands above the four cards')
+                self.assertNotIn('Bands mark', html, what)                                                # (the old wording of the page)
+            text = squeeze(measures_pdf(self.pdf(aid)))
+            self.assertEqual(text.count(squeeze(key)), 1)
+            self.assertLess(text.index(squeeze(key)), text.index(squeeze('Escalation:')))
+            self.assertNotIn('Bands mark', text)
+        self.assertEqual(self.ms(short)['m']['has_series'], False)
+        for what in ('workspace', 'report'):
+            self.assertNotIn('vc-chart-key', self.page(short, what), what)                              # nothing to explain
+        self.assertNotIn(squeeze('Lines show messages per 100'), squeeze(' '.join(self.pdf(short))))
+
+    def test_a_planted_key_to_the_charts_is_printed_as_it_is_and_no_surface_has_wording_of_its_own(self):
+        aid = self.flare()
+        planted = 'A planted key to the charts, which no template and no page of the PDF writes itself.'
+        real = measures.build
+
+        def build(*args, **kwargs):
+            ms = real(*args, **kwargs)
+            ms['chart_key'] = planted
+            return ms
+        with mock.patch.object(measures, 'build', build):
+            pages = {what: self.page(aid, what) for what in ('workspace', 'report')}
+            pdf = measures_pdf(self.pdf(aid))
+        for what, html in pages.items():
+            text = section_text(html, 'over-time')
+            self.assertEqual(text.count(planted), 1, what)
+            self.assertNotIn('Lines show messages per 100', text, what)
+            self.assertNotIn('Shaded bands', text, what)
+        self.assertEqual(squeeze(pdf).count(squeeze(planted)), 1)
+        self.assertNotIn('Lines show messages per 100', pdf)
+        self.assertNotIn('Shaded bands', pdf)
+
+    def wording_of_real_checks(self):
+        """(name, ms) of a flare-up, three checks, a threat and six notes: the strings of these results are all the wording the pages, the PDF and the CSV print."""
+        threats = self.scenario('threats', lambda: self.checked([THREAT if i == 10 else HARASSMENT if i == 30 else t for i, t in enumerate(messages(48))], at(48, days_ago(40))))
+        out = [(name, self.ms(aid)) for name, aid in (('flare', self.flare()), ('three checks', self.three_checks()), ('threats', threats), ('six notes', self.many_notes()))]
+        for name, ms in out:
+            self.assertGreater(len(list(strings(ms))), 100, name)                                      # (the control: there is wording to look at)
+        return out
+
+    def test_no_sentence_of_the_measures_holds_a_symbol_the_pdf_fonts_cannot_print(self):
+        """No tick, no cross, no inequality sign, no minus sign, bullet, arrow or star in any string that reaches the PDF or the CSV (the standard PDF fonts print each
+        as a question mark). Read from the strings of the result, the one place the wording is written."""
+        for name, ms in self.wording_of_real_checks():
+            for text in strings(ms):
+                self.assertEqual(set(text) & set(SYMBOLS), set(), f'{name}: {text[:80]!r}')
+
+    def test_no_sentence_of_the_measures_is_longer_than_22_words(self):
+        """House rule for the new sections: short direct sentences, at most 22 words. Read from the strings of real checks, so that the numbers and the words built into a
+        sentence (the counts of an alert, the place of a heated moment) are counted too."""
+        for name, ms in self.wording_of_real_checks():
+            for text in strings(ms):
+                for sentence in re.split(r'(?<=[.!?])\s+', text.strip()):
+                    self.assertLessEqual(len(sentence.split()), 22, f'{name}: {sentence[:80]!r}')
 
     def test_print_rules_keep_each_new_component_whole_and_a_phone_layout_exists(self):
         aid = self.flare()

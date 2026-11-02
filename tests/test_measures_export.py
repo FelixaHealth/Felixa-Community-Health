@@ -36,7 +36,7 @@ CLOCK = re.compile(r'\b\d{1,2}:\d{2}\b')
 BANNED = (r'\bFAS\b', r'(?i)\bstretch', r'(?i)\bepisode', r'(?i)\bbaseline', r'(?i)\bpeak', r'(?i)\btoxic', r'(?i)communication unit', r'(?i)standard error', r'(?i)z-score')
 BLOCKS = ('Alerts', 'Measures over time', 'Since your last check', 'Badges')
 MEASURE_HEAD = ['Measure', 'Level', 'Count (messages; heated moments for Escalation)', 'Out of (messages rated)', 'Trend', 'What we saw', 'Note', 'What it means',
-                'Level in the latest part']
+                'Level in the latest part', 'Mark']
 PARTS_HEAD = ['Part of the chat', 'Messages', 'Conflict per 100 messages', 'Empathy per 100 messages', 'Passive-aggressive per 100 messages', 'Heated per 100 messages',
               'Counted as a heated moment', 'Health score']
 SINCE_HEAD = ['Measure', 'Last check', 'Last check: out of', 'This check', 'This check: out of', 'Change']
@@ -55,15 +55,18 @@ def days_ago(n):
     return (datetime.datetime.now() - datetime.timedelta(days=n)).replace(hour=18, minute=0, second=0, microsecond=0)
 
 
-def chat(n=72, hot=(0, 0), start=None, step=2, calm=CALM, heated=HOT, first=None):
-    """A CSV chat of `n` messages two minutes apart. The messages in `hot` come from `heated`, the first `first[0]` from `first[1]`, the rest from `calm`."""
+def chat(n=72, hot=(0, 0), start=None, step=2, calm=CALM, heated=HOT, first=None, dated=True, utc=False, sources=('general',)):
+    """A CSV chat of `n` messages two minutes apart. The messages in `hot` come from `heated`, the first `first[0]` from `first[1]`, the rest from `calm`. Without
+    `dated` there is no timestamp column at all (the lines then follow the order the messages were added in); with `utc` every timestamp carries a 'Z'. The
+    messages come from the `sources`, in turn."""
     start = start or days_ago(90)
     out = io.StringIO()
     writer = csv.writer(out)
-    writer.writerow(['timestamp', 'source', 'text'])
+    writer.writerow((['timestamp'] if dated else []) + ['source', 'text'])
     for i in range(n):
         pool = heated if hot[0] <= i < hot[1] else first[1] if first and i < first[0] else calm
-        writer.writerow([(start + datetime.timedelta(minutes=step * i)).isoformat(), 'general', f'{pool[i % len(pool)]} {i}'])
+        stamp = (start + datetime.timedelta(minutes=step * i)).isoformat() + ('Z' if utc else '')
+        writer.writerow(([stamp] if dated else []) + [sources[i % len(sources)], f'{pool[i % len(pool)]} {i}'])
     return out.getvalue().encode()
 
 
@@ -159,7 +162,9 @@ class MeasuresExport(AppCase):
     def scenario(self, name):
         """The id of a demo analysis, built on first use: 'three' (three checks, with alerts), 'incognito' (the same with Incognito on, and the three checks made
         on one day), 'calm' (a first check: no alerts, badges), 'fading' (an alert whose next step holds a question mark), 'few' (10 messages: no badges),
-        'unlike' (two checks made with different sensitivity) and 'improved' (two checks that are alike, the second calmer: good news only)."""
+        'unlike' (two checks made with different sensitivity), 'improved' (two checks that are alike, the second calmer: good news only), 'undated' (no dates at all:
+        the lines follow the order the messages were added in), 'utc' (every timestamp carries a UTC offset) and 'thin' (36 messages: lines over time, but no
+        direction and no heated moment yet, so Escalation reads Too early)."""
         if name in self.built:
             return self.built[name]
         settings = {'incognito': 1} if name == 'incognito' else {}
@@ -184,6 +189,12 @@ class MeasuresExport(AppCase):
             self.check(aid, chat(hot=(24, 48)))
             self.new_check(aid)
             self.check(aid, chat(start=days_ago(60)), 'two.csv')
+        elif name == 'undated':
+            self.check(aid, chat(hot=(24, 48), dated=False))
+        elif name == 'utc':
+            self.check(aid, chat(hot=(24, 48), utc=True))
+        elif name == 'thin':
+            self.check(aid, chat(n=36, hot=(12, 20)))
         else:
             raise KeyError(name)
         self.built[name] = aid
@@ -269,17 +280,20 @@ class MeasuresExport(AppCase):
         rows = block(self.csv('three'), 'Measures over time')
         self.assertIn(['Basis', ms['basis_text']], rows)
         self.assertEqual([c['name'] for c in ms['cards']], ['Escalation', 'Conflict', 'Empathy', 'Passive-aggressive'])
-        for card, row in zip(ms['cards'], table_after(rows, MEASURE_HEAD)):
+        cards = table_after(rows, MEASURE_HEAD)
+        self.assertEqual(len(cards), 4)
+        for card, row in zip(ms['cards'], cards):
+            self.assertEqual(len(row), len(MEASURE_HEAD))
             self.assertEqual(row[:2], [card['name'], card['level']])
-            self.assertEqual(row[2:4], [str(card.get('count', '')), str(card.get('of', ''))])
+            self.assertEqual(row[2:4], ['' if card.get('count') is None else str(card['count']), str(card.get('of', ''))])
             self.assertEqual(row[4:6], [card['trend'], card['headline']])
-            self.assertEqual(row[7:], [card['meaning'], card.get('latest', '')])
+            self.assertEqual(row[7:], [card['meaning'], card.get('latest', ''), card['tone_word']])         # the last cell is the mark, in words
         parts = table_after(rows, PARTS_HEAD)
         self.assertEqual([r[0] for r in parts], [s['label'] for s in m['stretches']])
         self.assertEqual([r[1] for r in parts], [str(s['n']) for s in m['stretches']])
         self.assertEqual([r[6] for r in parts], ['Yes' if s['counted'] else 'No' for s in m['stretches']])
         self.assertIn('Yes', [r[6] for r in parts])                                                    # the demo has a heated moment
-        self.assertIn(['Health score', str(measures.whole(ms['health']['score'])), ms['health']['status']], rows)
+        self.assertIn(['Health score', str(measures.whole(ms['health']['score'])), ms['health']['status'], ms['health']['tone_word']], rows)       # its mark in words last
         self.assertIn(['Health score trend', ms['health']['trend']], rows)
         self.assertIn(['About the health score', ms['health']['caption']], rows)
 
@@ -291,7 +305,53 @@ class MeasuresExport(AppCase):
         self.assertIn('messages', head[2])
         self.assertIn('heated moments', head[2])
         self.assertEqual(head[8], 'Level in the latest part')
+        self.assertEqual(head[9], 'Mark')                                                              # the last column: the icon of the page, in words
         self.assertTrue({r[8] for r in table_after(rows, MEASURE_HEAD)} <= {'', 'Rare', 'Some', 'Often'})
+
+    def test_every_card_and_the_health_score_say_their_mark_in_words_in_the_csv(self):
+        """The CSV cannot show the icon of the page. The last cell of each card row (the column Mark) and the fourth cell of the Health score row say it in the
+        words of measures.py, so a reader can tell that Often is a good sign for Empathy and a look-at-this sign for Conflict."""
+        import measures_export
+        marks = set()
+        for name in ('three', 'calm', 'few', 'thin', 'incognito'):
+            ms = self.ms(name)
+            rows = block(self.csv(name), 'Measures over time')
+            cards = table_after(rows, MEASURE_HEAD)
+            self.assertEqual([r[-1] for r in cards], [c['tone_word'] for c in ms['cards']], name)
+            self.assertTrue({r[-1] for r in cards} <= set(measures.TONE_WORDS.values()), name)
+            self.assertEqual([r for r in rows if r[:1] == ['Health score'] and len(r) == 4],
+                             [['Health score', str(measures.whole(ms['health']['score'])), ms['health']['status'], ms['health']['tone_word']]], name)
+            marks |= {r[-1] for r in cards} | {ms['health']['tone_word']}
+        self.assertGreater(len(marks), 2)                                                              # the demos show several marks, so this is not an empty check
+        ctx = self.edited('three')['measures']
+        ctx['cards'][1]['tone_word'], ctx['health']['tone_word'] = 'Planted card mark', 'Planted tile mark'
+        rows = measures_export.csv_rows(ctx)
+        self.assertEqual(table_after(rows, MEASURE_HEAD)[1][-1], 'Planted card mark')
+        self.assertIn(['Health score', measures.whole(ctx['health']['score']), ctx['health']['status'], 'Planted tile mark'], rows)
+        for item in ctx['cards'] + [ctx['health']]:                                                    # a card without the words falls back to the words of its tone
+            item.pop('tone_word')
+        rows = measures_export.csv_rows(ctx)
+        self.assertEqual([r[-1] for r in table_after(rows, MEASURE_HEAD)], [measures.TONE_WORDS[c['tone']] for c in ctx['cards']])
+        self.assertIn(['Health score', measures.whole(ctx['health']['score']), ctx['health']['status'], measures.TONE_WORDS[ctx['health']['tone']]], rows)
+
+    def test_a_card_that_could_not_be_judged_has_an_empty_count_in_the_csv(self):
+        """Escalation reads Too early below 48 messages on the timeline, and then its count is None (not 0): a 0 in a spreadsheet would say 'no heated moments'.
+        The cell is empty. A judged Escalation counts its heated moments, and the other three cards count messages."""
+        import measures_export
+        for name in ('few', 'thin'):                                                                    # no lines at all (10 messages), and lines but no verdicts (36)
+            ms = self.ms(name)
+            self.assertEqual(ms['cards'][0]['level'], 'Too early', name)
+            self.assertIsNone(ms['cards'][0]['count'], name)
+            cards = table_after(block(self.csv(name), 'Measures over time'), MEASURE_HEAD)
+            self.assertEqual(cards[0][:4], ['Escalation', 'Too early', '', ''], name)
+            self.assertEqual([r[2] for r in cards[1:]], [str(c['count']) for c in ms['cards'][1:]], name)    # messages are still counted
+            rows = measures_export.csv_rows(ms)                                                        # and the rows of the module hold no 0 and no None there
+            first = table_after(rows, MEASURE_HEAD)[0]
+            self.assertEqual(first[2], '', name)
+            self.assertNotIn(None, [c for row in rows for c in row], name)
+        judged = table_after(block(self.csv('three'), 'Measures over time'), MEASURE_HEAD)[0]
+        self.assertEqual(judged[2], str(self.ms('three')['cards'][0]['count']))
+        self.assertNotEqual(judged[2], '')                                                              # judged: a number, even when it is 0
 
     def test_the_since_block_gives_last_this_and_the_verdict_and_the_check_by_check_table(self):
         """The counts the page writes as 'x of n' are two numbers each, so a spreadsheet can sort and add them; the health score is a number out of 100."""
@@ -329,11 +389,37 @@ class MeasuresExport(AppCase):
         self.assertIn(SINCE_HEAD[:5], rows)
         self.assertEqual(rows[1], ['How to read this', ms['caveats']['since']])
         self.assertFalse(any('Change' in row or 'Better' in row or 'Worse' in row for row in rows))
-        text = ' '.join(our_pages(self.pdf('unlike')[1]))
+        data, texts = self.pdf('unlike')
+        text = ' '.join(our_pages(texts))
         self.assertIn(squeeze('No comparison. ' + ms['since']['why']), squeeze(text))
         self.assertIn(squeeze(ms['caveats']['since']), squeeze(text))
         self.assertNotIn('Better', text)
         self.assertNotIn('Change', text)
+
+    def test_the_reason_two_checks_are_not_alike_is_printed_once_with_the_comparison(self):
+        """It lives in ms['since']['why'] only (measures.py has no note for it any more), and every surface writes it once, in the Since your last check block:
+        the CSV in one 'No comparison' row and no other cell, the PDF in one sentence. The same holds for the other reasons (a different model, too few messages)."""
+        ms = self.ms('unlike')
+        why = ms['since']['why']
+        self.assertTrue(why)
+        self.assertEqual(ms['comparison']['why'], why)
+        self.assertNotIn('not_alike', [n['key'] for n in ms['notes']])
+        self.assertFalse([n for n in ms['notes'] if why in n['text']])
+        rows = self.csv('unlike')
+        self.assertEqual([(row, cell) for row in rows for cell in row if why in cell], [(['No comparison', why], why)])
+        self.assertIn(['No comparison', why], block(rows, 'Since your last check'))
+        data, texts = self.pdf('unlike')
+        self.assertEqual(squeeze(pdf_text(data)).count(squeeze(why)), 1)
+        mine = our_pages(texts)
+        since = next(t for t in mine if 'Sinceyourlastcheck' in squeeze(t))
+        for t in mine:
+            if t is not since:
+                self.assertNotIn(squeeze(why), squeeze(t))                                              # not with the alerts, not with the badges
+        self.assertLess(squeeze(since).index('Sinceyourlastcheck'), squeeze(since).index(squeeze(why)))
+        for other in ('three', 'improved'):                                                            # checks that were made alike say nothing of the kind
+            self.assertEqual(self.ms(other)['since']['why'], '')
+            self.assertNotIn('No comparison', ' '.join(c for row in self.csv(other) for c in row))
+            self.assertNotIn('Nocomparison', squeeze(' '.join(our_pages(self.pdf(other)[1]))))
 
     def test_the_badges_block_says_earned_or_not_yet_with_the_figure_or_what_is_missing(self):
         ms = self.ms('three')
@@ -396,8 +482,8 @@ class MeasuresExport(AppCase):
         for row in parts:
             self.assertTrue(all(isinstance(row[i], int) for i in (1, 2, 3, 4, 5, 7)), row)
             self.assertIn(row[6], ('Yes', 'No'))
-        score = next(r for r in rows if r[:1] == ['Health score'] and len(r) == 3)
-        self.assertEqual(score, ['Health score', measures.whole(ms['health']['score']), ms['health']['status']])
+        score = next(r for r in rows if r[:1] == ['Health score'] and len(r) == 4)
+        self.assertEqual(score, ['Health score', measures.whole(ms['health']['score']), ms['health']['status'], ms['health']['tone_word']])
         since = table_after(rows, SINCE_HEAD)
         self.assertEqual(len(since), 5)
         for row in since:
@@ -410,6 +496,23 @@ class MeasuresExport(AppCase):
         for row in trail:
             self.assertTrue(all(isinstance(x, int) for x in row[2:]), row)
             self.assertRegex(row[1], ISO_DAY)
+
+    def test_a_count_the_store_had_to_drop_stays_the_words_not_known_in_the_since_table(self):
+        """When a saved count was damaged the store leaves it out, and the table says 'Not known' for it (and calls no change). The CSV keeps those words in the
+        cell of the count, with nothing out of it and no verdict, and the other rows stay numbers. The PDF prints the same words."""
+        import measures_export
+        ctx = self.edited('three')
+        row = next(r for r in ctx['measures']['since']['rows'] if r['label'] == 'Conflict')
+        row.update(before='Not known', verdict='')
+        shown = table_after(measures_export.csv_rows(ctx['measures']), SINCE_HEAD)
+        conflict = next(r for r in shown if r[0] == 'Conflict')
+        now = measures_export._count_of(row['now'])
+        self.assertEqual(conflict, ['Conflict', 'Not known', '', *now, ''])                             # the words, nothing out of them, this check's two numbers, no verdict
+        for other in shown:
+            if other is not conflict:
+                self.assertTrue(all(isinstance(other[i], int) for i in (1, 2, 3, 4)), other)
+        text = squeeze(' '.join(our_pages(page_texts(self.laid_out(ctx)[0]))))
+        self.assertIn(squeeze(f'Conflict Not known {row["now"]}'), text)
 
     def test_no_cell_of_the_csv_can_run_as_a_formula(self):
         """report.csv_rows runs every cell through csv_safe, so a cell that starts with = + - or @ gets an apostrophe. The rows of this feature are no exception."""
@@ -464,6 +567,7 @@ class MeasuresExport(AppCase):
         for key in ('alerts', 'measures', 'badges', 'since'):
             self.assertIn(squeeze(ms['caveats'][key]), text, key)
         self.assertIn(squeeze(ms['basis_text']), text)
+        self.assertIn(squeeze(ms['chart_key']), text)                                                   # the sentence under the charts, as measures.py wrote it
         for card in ms['cards']:
             self.assertIn(squeeze(f'{card["name"]}: {card["level"]}'), text)
             self.assertIn(squeeze(card['headline']), text)
@@ -503,6 +607,36 @@ class MeasuresExport(AppCase):
         self.assertTrue(squeeze(mine[0].split('Alerts and badges', 1)[1]).startswith(squeeze(ms['caveats']['alerts'])))
         page = next(t for t in mine if 'Measures over time' in t)
         self.assertTrue(squeeze(page.split('Measures over time', 1)[1]).startswith(squeeze(ms['caveats']['measures'])))
+
+    def test_the_key_to_the_charts_is_the_sentence_of_measures_and_none_of_our_own(self):
+        """ms['chart_key'] is the sentence for the four small charts on the page and in the PDF: this module has no wording of its own for it. It is printed once,
+        with the charts, and only when charts are drawn. Without dates it says that the numbers under the charts are rated message numbers; with UTC times it says
+        that the times are UTC (the CSV names its parts in UTC too, and the PDF had no way to say so)."""
+        keys = {}
+        for name in ('three', 'undated', 'utc', 'calm', 'incognito', 'thin'):
+            ms = self.ms(name)
+            keys[name] = ms['chart_key']
+            self.assertTrue(ms['chart_key'].startswith('Lines show messages per 100. Shaded bands show where Rare, Some and Often begin.'), name)
+            self.assertEqual(squeeze(' '.join(our_pages(self.pdf(name)[1]))).count(squeeze(ms['chart_key'])), 1, name)
+        self.assertEqual(self.ms('undated')['m']['basis'], 'order')
+        self.assertTrue(self.ms('utc')['m']['utc'])                                                    # the scenarios do hold what they are named for
+        self.assertIn('rated message numbers', keys['undated'])
+        self.assertIn('Times are UTC.', keys['utc'])
+        for other in ('three', 'calm', 'incognito', 'thin'):
+            self.assertNotIn('Times are UTC.', keys[other], other)
+            self.assertNotIn('rated message numbers', keys[other], other)
+        ctx = self.edited('three')                                                                     # the words are never our own: change them and the PDF follows
+        ctx['measures']['chart_key'] = 'Zeta key sentence <i>from</i> measures & <font size="40">more</font>.'                  # (and escaped like every other string)
+        text = squeeze(' '.join(our_pages(page_texts(self.laid_out(ctx)[0]))))
+        self.assertEqual(text.count(squeeze('Zeta key sentence <i>from</i> measures & <font size="40">more</font>.')), 1)
+        self.assertNotIn('Linesshowmessagesper100', text)
+        self.assertNotIn('Bandsmark', text)                                                            # nor the older line of this module
+        ctx = self.edited('three')
+        del ctx['measures']['chart_key']                                                               # no key from measures.py: none is made up
+        self.assertNotIn('Linesshowmessagesper100', squeeze(' '.join(our_pages(page_texts(self.laid_out(ctx)[0])))))
+        few = self.ms('few')                                                                           # no charts, no key to them
+        self.assertFalse(few['m']['has_series'])
+        self.assertNotIn(squeeze(few['chart_key']), squeeze(' '.join(our_pages(self.pdf('few')[1]))))
 
     def test_every_page_after_the_cover_says_the_wording_was_rated_by_a_model(self):
         data, texts = self.pdf('three')
@@ -564,7 +698,8 @@ class MeasuresExport(AppCase):
             self.assertLessEqual(d.width, 492.01)
 
     def test_tables_and_charts_fit_the_page_and_the_four_small_charts_sit_two_by_two(self):
-        """Every table of this feature is 492 points wide at most (the text between the margins), and each of the four small charts is no wider than half of that."""
+        """Every table of this feature is 492 points wide at most (the text between the margins), and each of the four small charts fills its half of that and no
+        more. The small charts are drawn smaller than their natural size (CHART_SHRINK), so that a first check fits one page: lower, not narrower."""
         import measures_export
         import report_export
         ctx = self.context('three')
@@ -578,7 +713,7 @@ class MeasuresExport(AppCase):
 
             def drawing_of(scene):
                 d = drawing(scene)
-                seen.append(('drawing', d.width, scene.title))
+                seen.append(('drawing', d, scene.title))                                              # the drawing itself: it may still be scaled, so its size is read after the build
                 return d
             return real(ms, story, p, page, table_of, drawing_of, small)
         with mock.patch.object(measures_export, 'pdf_pages', spy):
@@ -592,14 +727,19 @@ class MeasuresExport(AppCase):
             self.assertEqual(sum(widths), 492)
         self.assertEqual(2 * measures_export.CARD_W + measures_export.GUTTER, 492)
         self.assertGreaterEqual(measures_export.ALERT_WIDTHS[4], 64)                                   # the Where column has room for a day and a month
-        charts = [s for s in seen if s[0] == 'drawing' and s[2] != 'scale']                              # (one empty scene is drawn to learn the scale)
+        charts = [(s[1].width, s[1].height, s[2]) for s in seen if s[0] == 'drawing' and s[2] != 'scale']        # (one empty scene is drawn to learn the scale)
         small = [c for c in charts if c[2].endswith('over time')]
         self.assertEqual(len(small), 4)
-        for _kind, width, _title in small:
+        for width, height, _title in small:
+            self.assertAlmostEqual(width, measures_export.CARD_W, delta=0.5)                           # as wide as its half ...
             self.assertLessEqual(width, measures_export.CARD_W + 0.01)
-        for _kind, width, _title in charts:
+            self.assertLessEqual(height, 100)                                                          # ... and lower than the 115 points of a drawing at natural size
+        for width, _height, _title in charts:
             self.assertLessEqual(width, 492.01)
-        self.assertEqual(len([c for c in charts if c[2] == 'Health score']), 1)                          # the meter
+        meter = [c for c in charts if c[2] == 'Health score']
+        self.assertEqual(len(meter), 1)
+        self.assertLessEqual(meter[0][0], 492 - measures_export.TILE_NUMBER_W)                         # the meter fits the right half of the tile
+        self.assertGreater(meter[0][0], 360)                                                           # and uses it
         self.assertEqual(len([c for c in charts if c[2] == 'Health score, check by check']), 1)
 
     def test_no_heading_or_caveat_is_left_alone_on_a_page(self):
@@ -618,8 +758,8 @@ class MeasuresExport(AppCase):
                     self.assertTrue('MeasureLastcheckThischeck' in flat or squeeze(ms['texts']['first_check']) in flat, where)
                 if 'Healthscore,checkbycheck' in flat:
                     self.assertIn('Check1Check2Check3', flat, where)
-                if f'{measures.whole(ms["health"]["score"])}outof100{squeeze(ms["health"]["name"])}:' in flat:        # the health score tile
-                    self.assertTrue('Passive-aggressive:' in flat or 'Sinceyourlastcheck' in flat, where)
+                if f'{measures.whole(ms["health"]["score"])}outof100' in flat and squeeze(f'{ms["health"]["name"]}: {ms["health"]["status"]}') in flat:      # the tile
+                    self.assertIn('Passive-aggressive:', flat, where)                                  # the last row of cards is on its page: the tile never starts one
                 if 'Alertsandbadges' not in flat:
                     self.assertNotIn(squeeze(ms['caveats']['alerts']), flat, where)             # the first caveat is on the page with its heading, never apart from it
 
@@ -678,10 +818,12 @@ class MeasuresExport(AppCase):
                 self.assertIsInstance(story[at - 1], CondPageBreak, f'{name}: {title}')
                 self.assertGreater(story[at - 1].height, 40, f'{name}: {title}')                         # more than the heading alone
             badges_at = next(i for i, f in enumerate(story) if isinstance(f, Paragraph) and text_of(f) == 'Badges')
-            self.assertGreaterEqual(story[badges_at - 1].height, 200, name)                            # the badges start on a page that has 200 points or more
-            table = next(f for f in story[badges_at:] if isinstance(f, Table))
+            table_at = next(i for i, f in enumerate(story) if i > badges_at and isinstance(f, Table))
+            table = story[table_at]
             self.assertEqual(list(table._colWidths), measures_export.BADGE_WIDTHS)
             self.assertEqual(table.repeatRows, 1)                                                      # a table that runs over a page repeats its header
+            self.assertAlmostEqual(story[badges_at - 1].height, measures_export.room_for(story[badges_at:table_at + 1]), places=3)      # the room of the whole block ...
+            self.assertGreater(story[badges_at - 1].height, table.wrap(492, 10_000)[1] + 40, name)    # ... all of its table and its lead, not the first rows
 
     def test_a_list_of_alerts_that_is_too_tall_for_the_room_under_the_caveat_starts_on_that_page(self):
         """The Alerts heading and the table used to jump together to the next page, which left the first page with a title and a caveat only."""
@@ -700,14 +842,15 @@ class MeasuresExport(AppCase):
         for i in range(6):
             self.assertEqual(text.count(f'Alertnumber{i}'), 1)
 
-    def test_the_badges_start_on_the_page_that_has_200_points_and_run_on_between_two_rows(self):
-        """With 200 points or more under the alerts the badges start there (all of them when there is room for the whole group) and run on to the next page between
-        two rows. With less than 200 points they start on the next page. Every one of the seven is printed once, under a header, whatever the split."""
+    def test_the_badges_are_one_block_that_starts_where_it_fits_whole_and_never_splits(self):
+        """The badges (heading, caveat, notes and the table of seven rows) start on the page where all of them fit, else on the next page. A table of seven rows
+        has no good place to break (at least 5 rows before the break and more than 3 after it would need 9), and a split used to leave its last three rows alone on
+        a page a fifth full. So the table is never in two parts, and every one of the seven badges is printed once, under its header, on the page of its heading."""
         import measures_export
         from reportlab.platypus import Paragraph, Table
         base = self.edited('three')
-        starts_here = starts_next = splits = 0
-        for count in (1, 2, 3, 5):
+        starts_here = starts_next = 0
+        for count in (1, 2, 3, 4, 5, 6):
             for notes in (0, 2, 5):
                 ctx = copy.deepcopy(base['measures'])
                 ctx['alerts'] = [dict(ctx['alerts'][0], key=f'a{i}', title=f'Alert number {i}') for i in range(count)]
@@ -719,20 +862,17 @@ class MeasuresExport(AppCase):
                 need = story[at - 1].height                                                              # what the conditional break before the heading asks for
                 page, room = alert_parts[-1]
                 where = f'{count} alerts, {notes} notes, {room:.0f} points left under them, {need:.0f} asked for'
-                self.assertGreaterEqual(need, measures_export.BADGES_FROM, where)
-                self.assertEqual(heading, page if room >= need else page + 1, where)                    # on that page with the room, else on the next
+                self.assertEqual(heading, page if room >= need else page + 1, where)                    # on that page with the room for all of it, else on the next
                 if room >= need:
                     starts_here += 1
-                    self.assertGreaterEqual(room, measures_export.BADGES_FROM, where)
                 else:
                     starts_next += 1
-                parts = [f for _p, _room, f in seen if isinstance(f, Table) and list(f._colWidths) == measures_export.BADGE_WIDTHS]
-                self.assertTrue(parts, where)
-                splits += len(parts) > 1
-                self.assertEqual(sum(len(part._cellvalues) - 1 for part in parts), 7, where)             # every one of the seven badges once, each part under its header
-        self.assertGreater(starts_here, 0)                                                              # the demo covers the clear cases of both kinds,
+                parts = [(page, f) for page, _room, f in seen if isinstance(f, Table) and list(f._colWidths) == measures_export.BADGE_WIDTHS]
+                self.assertEqual(len(parts), 1, where)                                                   # one table, never in two parts
+                self.assertEqual(len(parts[0][1]._cellvalues) - 1, 7, where)                             # every one of the seven badges once, under its header
+                self.assertEqual(parts[0][0], heading, where)                                            # on the page of its heading, with its caveat
+        self.assertGreater(starts_here, 0)                                                              # the demo covers both kinds of case
         self.assertGreater(starts_next, 0)
-        self.assertGreater(splits, 0)                                                                   # and a table that did run over
 
     def test_a_table_that_runs_over_a_page_never_leaves_a_header_over_a_single_row(self):
         """The header of a table comes again on the next page. It must not come again over one last row: the last rows of a table (up to three) stay together. Swept
@@ -770,12 +910,19 @@ class MeasuresExport(AppCase):
                     self.assertGreaterEqual(n - 1, 3, f'filler {filler}: parts of {parts}')               # three rows at least under a repeated header
         self.assertGreater(len(ends), 1)                                                                # the sweep did put the end of the table in several places
 
-    def test_the_health_score_tile_is_never_alone_on_a_page(self):
-        """Under the four cards when it fits. Else on the next page, behind the comparison or with the sentence of a first check, which keep it company."""
+    def test_the_health_score_tile_never_starts_a_page_and_a_first_check_fits_one_page(self):
+        """The tile is set with the last row of cards, in one block: when it does not fit under the first row, the second row of cards and the tile go to the next
+        page together, so that no page starts with the tile (a page a fifth full, with the tile and one sentence, was the usual look of a first check). On a first
+        check 'Since your last check' and its sentence follow in the same block. With no notes (or one) the whole section of a first check, its caveat, the four
+        cards with their charts, the tile and the sentence, fits one page. After the first check the comparison follows the tile, on its page when it fits."""
         import measures_export
         from reportlab.platypus import Paragraph, Table
         extra = [{'key': f'x{i}', 'about': 'measures', 'text': f'Quiet line number {i} about the basis of the figures, long enough to take a line or two. ' * 2} for i in range(6)]
-        for name in ('three', 'calm', 'few', 'improved', 'unlike'):
+        tile_widths = [measures_export.TILE_NUMBER_W, measures_export.PAGE_W - measures_export.TILE_NUMBER_W]
+        card_widths = [measures_export.CARD_W, measures_export.GUTTER, measures_export.CARD_W]
+        one_page = split = 0
+        for name in ('three', 'calm', 'few', 'improved', 'unlike', 'undated', 'thin'):
+            first_check = self.ms(name)['since'] is None
             for with_notes in (False, True):
                 ctx = self.edited(name)
                 if with_notes:
@@ -784,16 +931,31 @@ class MeasuresExport(AppCase):
 
                 def page_of(test):
                     return next((page for page, _room, f in seen if any(test(x) for x in inside(f))), None)
-                tile = page_of(lambda x: isinstance(x, Table) and list(x._colWidths) == [measures_export.TILE_NUMBER_W, measures_export.PAGE_W - measures_export.TILE_NUMBER_W])
-                cards = [page for page, _room, f in seen for x in inside(f) if isinstance(x, Table) and list(x._colWidths) == [measures_export.CARD_W, measures_export.GUTTER, measures_export.CARD_W]]
+                tile = page_of(lambda x: isinstance(x, Table) and list(x._colWidths) == tile_widths)
+                heading = page_of(lambda x: isinstance(x, Paragraph) and text_of(x) == 'Measures over time')
+                rows = [page for page, _room, f in seen for x in inside(f) if isinstance(x, Table) and list(x._colWidths) == card_widths]
                 since = page_of(lambda x: isinstance(x, Paragraph) and text_of(x) == 'Since your last check')
                 where = f'{name}, {"with" if with_notes else "without"} six more notes'
                 self.assertIsNotNone(tile, where)
                 self.assertIsNotNone(since, where)
-                if name in ('calm', 'few'):
-                    self.assertEqual(tile, since, where)                                               # a first check: the sentence stays with the tile
+                self.assertEqual(tile, rows[-1], where)                                                # the last row of cards is on the page of the tile, above it
+                firsts = {}
+                for page, _room, f in seen:                                                             # the first thing that is laid out on each page
+                    if type(f).__name__ in ('Paragraph', 'Table', 'KeepTogether'):
+                        firsts.setdefault(page, f)
+                for page, f in firsts.items():
+                    first_table = next((x for x in inside(f) if isinstance(x, Table)), None)
+                    self.assertFalse(first_table is not None and list(first_table._colWidths) == tile_widths, f'{where}: page {page} starts with the tile')
+                if first_check:
+                    self.assertEqual(tile, since, where)                                               # a first check: the sentence follows the tile on its page
+                    if not with_notes and name in ('calm', 'few', 'undated', 'thin'):
+                        self.assertEqual(heading, tile, where)                                         # with no notes (or the one of the basis), it is all on one page
+                        one_page += 1
+                    split += heading != tile
                 else:
-                    self.assertIn(tile, (since, cards[-1]), where)                                     # under the last two cards, or with the comparison
+                    self.assertIn(since, (tile, tile + 1), where)                                      # the comparison follows on its page, else it starts the next
+        self.assertEqual(one_page, 4)
+        self.assertGreater(split, 0)                                                                    # with six more notes the section did run over, and the tile went with its cards
 
     def test_many_notes_are_each_printed_once(self):
         """Eight notes, half about the alerts and half about the measures: the pages that carry them still hold together, and no note is lost or repeated."""
@@ -876,7 +1038,8 @@ class MeasuresExport(AppCase):
         self.assertIn(squeeze(f'{ms["cards"][0]["name"]}: {ms["cards"][0]["level"]} ({ms["cards"][0]["tone_word"]})'), text)      # 'Too early', in the neutral tone
         self.assertIn(squeeze(ms['badge_note']), text)
         self.assertFalse(any(row[:1] == ['Part of the chat'] for row in self.csv('few')))
-        self.assertNotIn('Bandsmark', text)                                                            # no charts, so no key to them
+        self.assertNotIn(squeeze(ms['chart_key']), text)                                               # no charts, so no key to them
+        self.assertNotIn('Bandsmark', text)
 
     def test_a_long_list_of_long_alerts_still_fits_and_nothing_is_lost(self):
         """Eight alerts with the longest wording the rules write, and then some: the table runs over to further pages, no row is cut, the header comes again on
@@ -929,6 +1092,69 @@ class MeasuresExport(AppCase):
             holders = [t for t in texts if squeeze(text) in squeeze(t)]
             self.assertEqual(len(holders), 1, heading)
         self.assertIn('Measures, alerts and badges', flat)
+
+    def test_the_method_is_one_block_and_its_last_entry_never_lands_alone_on_a_page(self):
+        """The Evidence page held the evidence, the Model line and the five entries of the method with 29 points to spare, so that with two or more sources the
+        fifth entry ('Measures, alerts and badges', eight lines) landed alone on a last page a fifth full. The method is set a little tighter now, so that up to four
+        sources fit with 40 points to spare, and it is one block: it stays under the evidence when all of it fits, else it starts the next page whole (and the
+        evidence page, with its table, is then about half full)."""
+        import analysis
+        base = self.edited('three')
+        base['a'] = dict(base['a'], model_used='qwen2.5:7b')
+        held = {}
+        for sources in (1, 2, 3, 4, 5, 8, 12):
+            ctx = dict(base, evidence=[{'source_label': f'#channel-{i}', 'source_type': 'UPLOAD', 'n': 10 + i} for i in range(sources)])
+            data, _story, seen = self.laid_out(ctx)
+            texts = page_texts(data)
+            where = f'{sources} sources'
+            pages = {next(i for i, t in enumerate(texts) if squeeze(text) in squeeze(t)) for _heading, text in analysis.HOW_IT_WORKS}
+            self.assertEqual(len(pages), 1, where)                                                      # all five entries are on one page ...
+            method = pages.pop()
+            self.assertEqual(method, len(texts) - 1, where)                                             # ... the last one ...
+            evidence = next(i for i, t in enumerate(texts) if 'Evidence loaded' in t)
+            held[sources] = method == evidence
+            self.assertGreater(len(texts[method].replace(FOOTER, '').split()), 150, where)              # ... and it holds the whole method, not an entry or two
+            if sources <= 4:
+                self.assertEqual(method, evidence, where)                                               # one page for the evidence and the method
+                self.assertGreaterEqual(seen[-1][1], 40, where)                                         # with 40 points or more to spare
+            elif method != evidence:
+                self.assertEqual(method, evidence + 1, where)                                           # else the whole method starts the next page, under nothing
+        self.assertTrue(all(held[n] for n in (1, 2, 3, 4)))
+        self.assertFalse(held[12])                                                                      # a long list of evidence sends the method to the next page, whole
+
+    def test_the_cover_artwork_takes_the_room_that_is_left_and_never_lands_alone_on_page_two(self):
+        """The artwork was a plain image under the cover text: when a long name left it less room than its 220 points, it moved to page 2 and stood there alone, a
+        page with a picture and nothing else. It takes the room that is left now: its natural size when that is enough, a smaller one down to 150 points, and none
+        at all below that. The contact line under it (FELIXA_REPORT_CONTACT) keeps its room too and stays on the cover."""
+        import os
+        import report_export
+        base = self.edited('calm')
+        sizes = {}
+        for words in (0, 2, 6, 8, 10, 14, 20):
+            for contact in ('', 'Questions: care@example.org'):
+                ctx = dict(base)
+                ctx['a'] = dict(base['a'], person_name=' '.join(['Night Owls Guild'] + ['Owls'] * words))
+                with mock.patch.dict(os.environ, {'FELIXA_REPORT_CONTACT': contact}):
+                    data, story, seen = self.laid_out(ctx)
+                texts = page_texts(data)
+                where = f'{words} more words in the name, contact {contact!r}'
+                art = next(f for f in story if isinstance(f, report_export.CoverArt))
+                self.assertEqual(next(page for page, _room, f in seen if f is art), 1, where)           # on the cover, or nowhere
+                self.assertIn('Alerts and badges', texts[1], where)                                    # page 2 is the page of the alerts: never a picture alone
+                self.assertEqual(texts[0].count('Alerts and badges'), 0, where)
+                if art.size is not None:
+                    self.assertLessEqual(art.size[0], report_export.ART_W, where)
+                    self.assertGreaterEqual(art.size[1], report_export.ART_MIN, where)                  # never a thumbnail: it is left out below 150 points
+                    self.assertAlmostEqual(art.size[1] / art.size[0], art.ratio, places=6)              # shrunk, not squashed
+                self.assertEqual(('care@example.org' in texts[0]), bool(contact), where)               # the contact line is on the cover, whatever the picture takes
+                room_left = [room for page, room, f in seen if page == 1 and room is not None]
+                self.assertGreaterEqual(min(room_left), 0, where)                                      # and nothing runs off the page
+                sizes[(words, contact)] = art.size
+        self.assertEqual(sizes[(0, '')][0], report_export.ART_W)                                       # a short name: the artwork at its natural size
+        shrunk = [s for s in sizes.values() if s is not None and s[0] < report_export.ART_W]
+        dropped = [k for k, s in sizes.items() if s is None]
+        self.assertTrue(shrunk, sizes)                                                                  # a longer one: a smaller picture
+        self.assertTrue(dropped, sizes)                                                                 # a very long one: none (it used to move to page 2 alone)
 
     def test_a_table_that_ends_at_the_foot_of_a_page_does_not_make_an_empty_page(self):
         """A spacer after a table, which did not fit in the last few points of a page, went to a page of its own and the next section started a page later. The

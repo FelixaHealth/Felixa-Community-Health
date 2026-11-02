@@ -4,7 +4,8 @@
 <div class="vc-kpis vc-summary-kpis">
 {% if vibe_ok %}<div class="vc-kpi"><strong>{{ '%g'|format(vibe.score) }}<small> / 10</small></strong><span>{{ 'Impact score' if vibe.multi_source else 'Friendliness score' }}</span></div>
 {% else %}<div class="vc-kpi"><strong>Not run</strong><span>Vibe Check score</span></div>{% endif %}
-<div class="vc-kpi"><strong>{{ look }}</strong><span>thing{{ '' if look == 1 else 's' }} to look at first</span></div>
+{% if look == 0 and not vibe_ok %}<div class="vc-kpi"><strong>Not checked</strong><span>things to look at first</span></div>
+{% else %}<div class="vc-kpi"><strong>{{ look }}</strong><span>thing{{ '' if look == 1 else 's' }} to look at first</span></div>{% endif %}
 <div class="vc-kpi"><strong>{{ ms.badges_earned }}</strong><span>badge{{ '' if ms.badges_earned == 1 else 's' }} earned</span></div>
 </div>
 <nav class="vc-links" aria-label="Parts of this page"><a class="chip-btn" href="#alerts">Alerts</a><a class="chip-btn" href="#over-time">Measures over time</a><a class="chip-btn" href="#badges">Badges</a>{% if metrics %}<a class="chip-btn" href="#behaviour">Signal profile</a>{% endif %}{% if guidance %}<a class="chip-btn" href="#guidance">Guidance</a>{% endif %}{% if vibe_html %}<a class="chip-btn" href="#vibe-check">Vibe Check</a>{% endif %}{% if vibe_ok %}<a class="chip-btn" href="#vc-flagged">Flagged messages</a><a class="chip-btn" href="#vc-toxicity">Content categories</a>{% endif %}</nav>

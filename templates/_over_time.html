@@ -1,12 +1,13 @@
-{# Measures over time. Needs `measures` (measures.build) and `measures_html` (measures_view.html). The wording comes from measures.py; the headings and the key to the charts are written here. The notes about the measures are printed here and the notes about the alerts under Alerts, so no note appears twice. #}
+{# Measures over time. Needs `measures` (measures.build) and `measures_html` (measures_view.html). The wording comes from measures.py, the key to the charts too (`ms.chart_key`); only the headings are written here. The notes about the measures are printed here and the notes about the alerts under Alerts, so no note appears twice. The reason two checks are not alike is no note: it is printed once, with the comparison. #}
 {% set ms = measures %}{% set m = ms.m %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set charts = mh.charts or {} %}{% set verdict_tone = mh.verdict_tone or {} %}{% set h = ms.health %}
 {% set over_notes = ms.notes|selectattr('about', 'equalto', 'measures')|list %}
 <section class="panel vc" id="over-time" aria-labelledby="over-time-h"><div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>
 <p class="vc-note">{{ ms.basis_text }}</p>
 <p class="vc-caveat">{{ ms.caveats.measures }}</p>
 {% if over_notes %}<ul class="vc-quiet">{% for note in over_notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
-{% if m.has_series %}<p class="vc-note vc-chart-key">Lines show messages per 100. Bands mark Rare, Some and Often. A darker band is a heated moment.{% if m.basis == 'order' %} The numbers under each chart are rated message numbers, in the order you added them.{% endif %}</p>
-{% else %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
+{% set said = namespace(no_lines=false) %}{% for note in over_notes %}{% if 'no lines over time' in note.text|lower %}{% set said.no_lines = true %}{% endif %}{% endfor %}
+{% if m.has_series %}<p class="vc-note vc-chart-key">{{ ms.chart_key }}</p>
+{% elif not said.no_lines %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
 <div class="vc-cols vc-measures">{% for c in ms.cards %}
 <div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
 <p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">Latest part: {{ c.latest }}</span>{% endif %}</p>
@@ -24,7 +25,7 @@
 <p class="vc-caveat">{{ h.caption }}</p>
 {% if h.trend %}<p class="vc-trendline">{{ h.trend }}</p>{% endif %}
 </div>
-<h3>Since your last check</h3>
+<div class="vc-keep"><h3>Since your last check</h3>
 {% if not ms.since %}<p class="vc-trendline">{{ ms.texts.first_check }}</p>
 {% else %}{% set alike = ms.since.comparable %}
 <p class="vc-caveat">{{ ms.caveats.since }}</p>
@@ -33,7 +34,7 @@
 <div class="table-wrap"><table class="vc-since" role="table"><caption class="sr-only">Your last check and this check</caption>
 <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Measure</th><th scope="col" role="columnheader">Last check</th><th scope="col" role="columnheader">This check</th>{% if alike %}<th scope="col" role="columnheader">Change</th>{% endif %}</tr></thead>
 <tbody role="rowgroup">{% for r in ms.since.rows %}<tr role="row"><th scope="row" role="rowheader">{{ r.label }}</th><td role="cell" data-label="Last check">{{ r.before }}</td><td role="cell" data-label="This check">{{ r.now }}</td>{% if alike %}<td role="cell" data-label="Change">{% if r.verdict %}{{ icons[verdict_tone[r.verdict]]|safe }}{{ r.verdict }}{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
-{% endif %}
+{% endif %}</div>
 {% if mh.trail_chart %}<div class="vc-keep"><h3>Check by check</h3>
 <p class="vc-note">The health score at each check, oldest first.</p>
 {{ mh.trail_chart|safe }}</div>

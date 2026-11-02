@@ -1,5 +1,10 @@
 """The saved side of Measures over time: what the store keeps after a check (store.MEASURE_FIELDS and friends) and how it keeps it.
 
+It holds the allow-list (a record without a date, a count or a health score, or with a health score off the 0 to 100 scale, is dropped as damaged; a count above its own
+total is left out; the fingerprint of the model name, `model_key`, is kept even when the name itself cannot be), one record per check, the order of the history, what
+survives Delete evidence and New check, what `measures.build` makes of a history with damaged records in it (a dropped count reads "Not known" in the table of Since your
+last check, and two model names that the store cannot keep are still told apart), and that no message, name or file name ever reaches a record.
+
 These tests use a real database in a folder of their own (FELIXA_DATA_DIR, as tests/test_app.py does) and, for the canary test at the end, a real check run
 through the app with the fake model of tests/fake_ollama.py. The ratings are synthetic. Run with:
 
@@ -7,6 +12,7 @@ through the app with the fake model of tests/fake_ollama.py. The ratings are syn
 """
 import contextlib
 import datetime
+import hashlib
 import json
 import math
 import os
@@ -28,11 +34,17 @@ import measures  # noqa: E402
 import store  # noqa: E402
 
 TONES = ('Polite', 'Funny', 'Empathetic', 'Encouraging', 'Ignorant', 'Egocentric', 'Neurotic', 'Sarcastic', 'Agitated', 'Aggressive', 'Rude', 'Disrespectful', 'Judgmental')
-ALLOWED = {'created_at', 'basis', 'sensitivity', 'model', 'period_start', 'period_end', 'sig', 'gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n', 'dig_n',
-           'heated_n', 'episodes', 'health', 'health_sd', 'peak'}
+ALLOWED = {'created_at', 'basis', 'sensitivity', 'model', 'model_key', 'period_start', 'period_end', 'sig', 'gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n',
+           'dig_n', 'heated_n', 'episodes', 'health', 'health_sd', 'peak'}
 INT_FIELDS = ('gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n', 'dig_n', 'heated_n', 'episodes')
 FLOAT_FIELDS = ('health', 'health_sd', 'peak')
 T0 = datetime.datetime(2026, 3, 5, 18, 0)
+
+
+def fingerprint(model):
+    """The fingerprint a record keeps of its model name: twelve hex digits that name the model without being the name (the first 12 of the SHA-256 of it, as
+    measures.py makes them). Saved records are compared by it, so it must be the same from one run, one process and one release to the next."""
+    return hashlib.sha256(model.encode('utf-8')).hexdigest()[:12] if model else ''
 
 
 def snap(**changes):
@@ -41,6 +53,8 @@ def snap(**changes):
            'period_start': '2026-03-01', 'period_end': '2026-03-31T12:00', 'health': 51.852, 'health_sd': 13.2, 'hostile_n': 4, 'care_n': 5, 'dig_n': 6, 'heated_n': 9,
            'episodes': 1, 'peak': 22.5, 'sig': '96:40000:24000:0:0'}
     out.update(changes)
+    if 'model_key' not in changes:                                                    # every record carries the fingerprint of its model name
+        out['model_key'] = fingerprint(out.get('model') if isinstance(out.get('model'), str) else '')
     return out
 
 
@@ -140,9 +154,24 @@ class CleanSnapshotTests(unittest.TestCase):
         for bad in ('50', '', 'not a number', True, False, None, [50.0], {'a': 1}, math.nan, math.inf, -math.inf, 1e9 + 1, -1e9 - 1, 1e300, b'50'):
             with self.subTest(health=bad):
                 self.assertIsNone(clean(health=bad))
-        for good, want in [(0, 0.0), (0.0, 0.0), (100, 100.0), (51.85185185, 51.852), (-1e9, -1e9), (1e9, 1e9)]:
+        for good, want in [(0, 0.0), (0.0, 0.0), (100, 100.0), (100.0, 100.0), (50, 50.0), (51.85185185, 51.852), (99.9996, 100.0), (0.5, 0.5)]:
             with self.subTest(health=good):
                 self.assertEqual(clean(health=good)['health'], want)
+
+    def test_a_health_score_off_the_scale_of_0_to_100_makes_the_record_nothing(self):
+        """MEASURES.md: a record with a health score off the 0 to 100 scale is dropped as damaged (the score is clamped to 0..100 when it is made, so a number outside is
+        damage, and it used to pass because only a billion was too big)."""
+        for bad in (100.01, 100.1, 101, 150, 1000, 1e9, 1e300, -0.01, -0.1, -1, -50, -1000, -1e9, 100.001, -0.001):
+            with self.subTest(health=bad):
+                self.assertIsNone(clean(health=bad), 'the whole record goes, not only the score')
+        for good in (0, 0.0, 1e-3, 99.999, 100, 100.0):                                  # the scale itself, ends included
+            with self.subTest(health=good):
+                self.assertEqual(clean(health=good)['health'], float(good))
+        for key in ('health_sd', 'peak'):                                                # the other two floats have no such scale: they only have to be sane numbers
+            self.assertEqual(clean(**{key: 150.0})[key], 150.0)
+            self.assertEqual(clean(**{key: -3.0})[key], -3.0)
+        self.assertIsNone(store.clean_measure_snapshot({'created_at': '2026-06-01T12:00:00', 'n': 5, 'health': 100.5}))
+        self.assertEqual(store.clean_measure_snapshot({'created_at': '2026-06-01T12:00:00', 'n': 5, 'health': 100.0})['health'], 100.0)
 
     def test_a_count_above_the_number_of_messages_is_left_out_and_the_rest_is_kept(self):
         """MEASURES.md: a count of hostile, care, dig or heated messages that is higher than the number of messages is left out of its record. The comparison
@@ -216,9 +245,12 @@ class CleanSnapshotTests(unittest.TestCase):
         for key in counts:
             self.assertEqual(clean(n=2 ** 53 - 1, **{key: 2 ** 53 - 1})[key], 2 ** 53 - 1, 'a count may be as large as a record of that many messages')
         for key in FLOAT_FIELDS:
-            self.assertEqual(clean(**{key: 1e9})[key], 1e9)
-            self.assertEqual(clean(**{key: -1e9})[key], -1e9)
+            if key != 'health':                                       # a health score is on the scale of 0 to 100: test_a_health_score_off_the_scale_of_0_to_100_makes_the_record_nothing
+                self.assertEqual(clean(**{key: 1e9})[key], 1e9)
+                self.assertEqual(clean(**{key: -1e9})[key], -1e9)
             self.assertEqual(clean(**{key: 0})[key], 0.0)
+        self.assertEqual((clean(health=100)['health'], clean(health=0)['health']), (100.0, 0.0))
+        self.assertIsNone(clean(health=1e9), 'a health score of a billion used to be the edge of the range; the scale is 0 to 100')
 
     def test_numbers_are_coerced_to_the_type_of_their_field(self):
         got = clean(hostile_n=4.0, health=52, peak=22, sampled=1.0)
@@ -242,6 +274,33 @@ class CleanSnapshotTests(unittest.TestCase):
                     'a#b', 'a' * 119 + '<', 'a%20b', 'a\x00b'):
             with self.subTest(model=bad):
                 self.assertNotIn('model', clean(model=bad))
+
+    def test_the_model_fingerprint_is_twelve_lowercase_hex_digits_or_nothing(self):
+        """MEASURES.md: the record holds a fingerprint of the model name (so two names the store cannot keep are never taken for one model). It is on the allow-list as
+        12 lowercase hex digits, or an empty one for a check that named no model."""
+        self.assertIn('model_key', store.MEASURE_FIELDS)
+        for good in ('', '0123456789ab', 'abcdef012345', 'ffffffffffff', '000000000000', fingerprint('qwen2.5:7b'), fingerprint('a' * 500), fingerprint('ñ')):
+            with self.subTest(model_key=good):
+                self.assertEqual(clean(model_key=good)['model_key'], good)
+        for bad in ('0123456789AB', 'ABCDEF012345', '0123456789a', '0123456789abc', 'g' * 12, '0123456789a ', ' 0123456789a', '0123456789a\n', '0123456789ab\n', 'qwen2.5:7b',
+                    'xyz', 5, 5.5, 0, True, False, None, ['0123456789ab'], b'0123456789ab', {'k': 1}, 'ñ' * 12, '0123456789ab' * 2):
+            with self.subTest(model_key=bad):
+                got = clean(model_key=bad)
+                self.assertNotIn('model_key', got)
+                self.assertEqual(got, {k: v for k, v in snap().items() if k != 'model_key'}, 'the rest of the record is kept')
+
+    def test_the_fingerprint_is_kept_when_the_model_name_cannot_be_and_tells_two_such_names_apart(self):
+        """A name over 120 characters, or with a character the store refuses, is dropped as a name. Its fingerprint stays, and differs from the one of another such name."""
+        unkept = ['a' * 130, 'b' * 130, 'a' * 121, 'my model <v1>', 'my model <v2>', 'ñandú-7b', 'model\nname', 'emoji \U0001f600']
+        got = {name: clean(model=name, model_key=fingerprint(name)) for name in unkept}
+        for name, record in got.items():
+            with self.subTest(model=name[:14]):
+                self.assertNotIn('model', record, 'the store cannot keep this name')
+                self.assertRegex(record['model_key'], r'^[0-9a-f]{12}$')
+        self.assertEqual(len({record['model_key'] for record in got.values()}), len(unkept), 'but it keeps a different fingerprint for each')
+        kept = clean(model='qwen2.5:7b')
+        self.assertEqual((kept['model'], kept['model_key']), ('qwen2.5:7b', fingerprint('qwen2.5:7b')), 'a name that can be kept is kept next to its fingerprint')
+        self.assertEqual(clean(model='', model_key='')['model'], '')
 
     def test_basis_and_sensitivity_come_from_a_short_list(self):
         for good in ('time', 'order'):
@@ -296,6 +355,7 @@ class CleanSnapshotTests(unittest.TestCase):
             self.assertIn('created_at', out)
             self.assertIn('n', out)
             self.assertIn('health', out)
+            self.assertTrue(0 <= out['health'] <= 100, out)                             # a health score off its own scale is damage and makes the record nothing
             for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):
                 self.assertTrue(key not in out or out[key] <= out['n'], (key, out))      # a count never passes the number of messages
             for key, value in out.items():
@@ -362,16 +422,24 @@ class SaveAndHistoryTests(StoreCase):
         aid = store.create_analysis()
         no_health = {k: v for k, v in snap().items() if k != 'health'}
         for bad in ({}, {'n': 5}, {'created_at': '2026-06-01T12:00:00'}, {'created_at': 'x', 'n': 1}, {'created_at': '2026-06-01T12:00:00', 'n': 5}, no_health,
-                    snap(health='not a number'), snap(health=math.nan), snap(health=None), None, 'x', [snap()], 5):
+                    snap(health='not a number'), snap(health=math.nan), snap(health=None), snap(health=101), snap(health=100.01), snap(health=-1), snap(health=-0.01),
+                    snap(health=1e9), snap(health=-1e9), None, 'x', [snap()], 5):
             with self.subTest(raw=bad):
                 self.assertFalse(store.save_measure_snapshot(aid, bad))
         self.assertEqual(self.raw_rows(aid), [])
+        for gen, edge in enumerate((0, 0.0, 100, 100.0), start=1):                       # the ends of the scale are records
+            self.assertTrue(store.save_measure_snapshot(aid, snap(gen=gen, health=edge)), edge)
+        self.assertEqual([r['health'] for r in store.measure_history(aid)], [0.0, 0.0, 100.0, 100.0])
 
     def test_a_record_that_is_refused_leaves_the_record_of_its_check_as_it_was(self):
         aid = store.create_analysis()
         store.save_measure_snapshot(aid, snap(gen=5, hostile_n=1))
         self.assertFalse(store.save_measure_snapshot(aid, snap(gen=5, hostile_n=2, health=None)))
         self.assertEqual([(r['gen'], r['hostile_n']) for r in store.measure_history(aid)], [(5, 1)])
+        self.assertEqual(len(self.raw_rows(aid)), 1)
+        for off_the_scale in (101, 100.5, -1, -0.5, 1e9):
+            self.assertFalse(store.save_measure_snapshot(aid, snap(gen=5, hostile_n=3, health=off_the_scale)), off_the_scale)
+        self.assertEqual([(r['gen'], r['hostile_n'], r['health']) for r in store.measure_history(aid)], [(5, 1, 51.852)], 'a score off the scale does not replace the record')
         self.assertEqual(len(self.raw_rows(aid)), 1)
 
     def test_a_count_above_the_number_of_messages_is_dropped_when_it_is_saved_and_when_it_is_read(self):
@@ -413,7 +481,8 @@ class SaveAndHistoryTests(StoreCase):
                               (10, json.dumps(snap(gen=10, created_at='yesterday'))),
                               (12, '{"created_at": "2026-06-01T12:00:00", "n": 3}'),                                             # a date and a count, no health score
                               (13, json.dumps(snap(gen=13, health='not a number'))), (14, json.dumps(snap(gen=14, health=1e300))),
-                              (15, json.dumps({k: v for k, v in snap(gen=15).items() if k != 'health'}))]:
+                              (15, json.dumps({k: v for k, v in snap(gen=15).items() if k != 'health'})),
+                              (16, json.dumps(snap(gen=16, health=100.5))), (17, json.dumps(snap(gen=17, health=-0.5))), (18, json.dumps(snap(gen=18, health=1e9)))]:      # off the 0 to 100 scale
                 c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, 'x', text, gen))
         store.save_measure_snapshot(aid, snap(gen=11, hostile_n=11))
         self.assertEqual([(r['gen'], r['hostile_n']) for r in store.measure_history(aid)], [(1, 1), (11, 11)])
@@ -439,6 +508,20 @@ class SaveAndHistoryTests(StoreCase):
             c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, evil['created_at'], json.dumps(evil), 1))
         self.assertEqual(store.measure_history(aid), [])
         self.assertEqual(len(self.raw_rows(aid)), 1, 'the row stays in the table: it is only left out of what the app reads')
+
+    def test_a_row_with_a_health_score_off_the_scale_of_0_to_100_is_not_returned_at_all(self):
+        """MEASURES.md: the store drops a record whose health score is off the 0 to 100 scale, when it writes and when it reads. The comparison and the chart would draw
+        a score of 400 as if it were one."""
+        aid = store.create_analysis()
+        with store.db() as c:                                                           # rows written by something else, or by an older build, that passed the old range of a billion
+            for gen, health in enumerate((100.001, 101, 400, -0.001, -1, -400, 1e9, -1e9), start=1):
+                row = snap(gen=gen, health=health)
+                c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), gen))
+            for gen, health in ((20, 0), (21, 100), (22, 55.5)):
+                row = snap(gen=gen, health=health)
+                c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), gen))
+        self.assertEqual([(r['gen'], r['health']) for r in store.measure_history(aid)], [(20, 0.0), (21, 100.0), (22, 55.5)])
+        self.assertEqual(len(self.raw_rows(aid)), 11, 'the rows stay in the table: they are only left out of what the app reads')
 
     def test_a_saved_record_survives_a_second_start_of_the_database(self):
         aid = store.create_analysis()
@@ -729,6 +812,89 @@ class SaveSnapshotTests(StoreCase):
         self.assertEqual(ctx['record']['model'], name)
         self.assertTrue(ctx['since']['comparable'], ctx['since']['why'])
 
+    def test_the_saved_record_holds_the_fingerprint_of_the_model_name(self):
+        aid = store.create_analysis()
+        self.check(aid)
+        record = store.measure_history(aid)[0]
+        self.assertEqual((record['model'], record['model_key']), ('qwen2.5:7b', fingerprint('qwen2.5:7b')))
+        self.assertEqual(json.loads(self.raw_rows(aid)[0]['snapshot_json'])['model_key'], fingerprint('qwen2.5:7b'), 'it is in the row, not only in what is read')
+        self.assertNotIn('qwen', record['model_key'])
+        other = store.create_analysis()                                                 # a check that named no model has an empty fingerprint
+        self.add_chat(other, 60)
+        measures.save_snapshot(other, dict(self.RATED, model=''))
+        self.assertEqual((store.measure_history(other)[0].get('model'), store.measure_history(other)[0].get('model_key')), ('', ''))
+
+    def test_two_model_names_the_store_cannot_keep_are_not_taken_for_one_model(self):
+        """MEASURES.md: the record holds a fingerprint of the model name, so two names the store cannot keep are never taken for one model. Without it both names were
+        dropped from both records, and two different models read as the same one for ever."""
+        vibe = {'status': 'ok', 'analyzed_n': 60, 'toxicity_types': {}, 'flagged': []}
+        cov = {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0}
+        for first, second, alike in [('a' * 130, 'b' * 130, False), ('a' * 130, 'a' * 130, True), ('a' * 121, 'a' * 122, False), ('my model <v1>', 'my model <v2>', False),
+                                     ('my model <v1>', 'my model <v1>', True), ('a' * 130, 'qwen2.5:7b', False), ('qwen2.5:7b', 'qwen2.5:7b', True), ('qwen2.5:7b', 'qwen2.5:14b', False)]:
+            with self.subTest(first=first[:14], second=second[:14]):
+                aid = store.create_analysis()
+                store.update_analysis(aid, model_used=first)
+                self.add_chat(aid, 60, tones=lambda i: {'Rude': 2} if i % 6 == 0 else {})
+                measures.save_snapshot(aid, dict(self.RATED))
+                store.new_check(aid)
+                store.update_analysis(aid, model_used=second)
+                self.add_chat(aid, 60, tones=lambda i: {'Rude': 2} if i % 6 == 0 else {})
+                measures.save_snapshot(aid, dict(self.RATED))
+                history = store.measure_history(aid)
+                self.assertEqual(['model' in r for r in history], [bool(store.MEASURE_FIELDS['model'].fullmatch(name)) for name in (first, second)], 'kept only when it can be')
+                self.assertEqual([r['model_key'] for r in history], [fingerprint(first), fingerprint(second)])
+                ctx = measures.build(aid, store.get_analysis(aid), vibe, cov)
+                self.assertEqual(ctx['comparison']['comparable'], alike, ctx['comparison']['why'])
+                self.assertEqual(ctx['since']['comparable'], alike)
+                if alike:
+                    self.assertEqual(ctx['since']['why'], '')
+                else:
+                    self.assertRegex(ctx['since']['why'], r'(?i)different model')
+                    self.assertEqual([r['verdict'] for r in ctx['since']['rows']], [''] * 5, 'no change is called')
+
+    def test_a_count_the_store_dropped_from_the_last_check_reads_not_known_and_no_change_is_called_for_it(self):
+        """MEASURES.md: the rows of Since your last check are written as 'x of n messages' (or 'Not known' when the store had to drop that count)."""
+        self.add_chat(store.create_analysis(), 5, rate=False)                          # moves the message ids on, so the generation below stays positive
+        aid = store.create_analysis()
+        self.check(aid)
+        live = store.evidence_generation(aid)
+        self.assertGreater(live, 1)
+        damaged = snap(gen=live - 1, n=60, total=60, hostile_n=10 ** 9, care_n=70, dig_n=0, heated_n=5, health=50.0)       # Conflict and Empathy above its 60 messages: dropped
+        with store.db() as c:
+            c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, damaged['created_at'], json.dumps(damaged), damaged['gen']))
+        previous = [r for r in store.measure_history(aid) if r['gen'] == live - 1][0]
+        self.assertEqual(sorted(key for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n') if key not in previous), ['care_n', 'hostile_n'])
+        ctx = measures.build(aid, store.get_analysis(aid), {'status': 'ok', 'analyzed_n': 60, 'toxicity_types': {}, 'flagged': []},
+                             {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0})
+        self.assertTrue(ctx['comparison']['comparable'], ctx['comparison']['why'])
+        self.assertEqual(sorted(ctx['comparison']['changes']), ['health', 'heated', 'passive'], 'nothing is compared for a count that is not known')
+        rows = {r['label']: r for r in ctx['since']['rows']}
+        self.assertEqual(len(rows), 5)
+        for label in ('Conflict', 'Empathy'):
+            self.assertEqual((rows[label]['before'], rows[label]['verdict']), ('Not known', ''), label)
+        for cell, x in [(rows['Conflict']['now'], 10), (rows['Empathy']['now'], 0), (rows['Passive-aggressive']['before'], 0), (rows['Heated messages']['before'], 5)]:
+            self.assertRegex(cell, rf'^{x} of 60( messages)?$', 'a count that was kept, and this check, read "x of n"')
+        self.assertNotIn('Not known', (rows['Health score']['before'], rows['Health score']['now'], rows['Passive-aggressive']['now'], rows['Heated messages']['now']))
+
+    def test_a_record_with_a_health_score_off_the_scale_is_left_out_of_the_trail_and_never_breaks_the_build(self):
+        """MEASURES.md: the store drops a record whose health score is off the 0 to 100 scale. The trail and the comparison start from the next record that is whole."""
+        self.add_chat(store.create_analysis(), 5, rate=False)
+        aid = store.create_analysis()
+        self.check(aid)
+        live = store.evidence_generation(aid)
+        self.assertGreater(live, 2)
+        with store.db() as c:
+            for gen, health in ((live - 2, 400.0), (live - 1, -12.5)):
+                row = snap(gen=gen, n=60, total=60, health=health)
+                c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), gen))
+        self.assertEqual([r['gen'] for r in store.measure_history(aid)], [live], 'only this check\'s own record is whole')
+        ctx = measures.build(aid, store.get_analysis(aid), {'status': 'ok', 'analyzed_n': 60, 'toxicity_types': {}, 'flagged': []},
+                             {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0})
+        self.assertEqual([r['gen'] for r in ctx['trail']], [live])
+        self.assertIsNone(ctx['comparison'])
+        self.assertIsNone(ctx['since'])
+        self.assertTrue(all(0 <= x <= 100 for x in ctx['health']['series']))
+
     def test_nothing_is_saved_without_ratings_and_it_does_not_raise(self):
         aid = store.create_analysis()
         self.assertIsNone(measures.save_snapshot(aid, self.RATED))
@@ -782,6 +948,8 @@ if AppCase is not None:
                 history = self.store.measure_history(aid)
                 self.assertEqual(len(history), 1)
                 self.assertGreater(history[0]['n'], 0)
+                self.assertRegex(history[0]['model_key'], r'^[0-9a-f]{12}$')
+                self.assertEqual(history[0]['model_key'], fingerprint(history[0]['model']), 'a real check keeps the fingerprint of its model name')
                 with self.store.db() as c:
                     rows = [r['snapshot_json'] for r in c.execute('SELECT snapshot_json FROM measure_history WHERE analysis_id=?', (aid,))]
                 self.assertEqual(len(rows), 1)

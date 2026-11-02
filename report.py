@@ -11,6 +11,7 @@ import measures_view
 import store
 from vibe_check import assets_html, data_table, figure, render_html
 from vibe_check.common import fmt_int, long_date
+from vibe_check.render import SAFETY_NOTE, SAFETY_TYPES
 
 
 def build(aid):
@@ -214,7 +215,10 @@ def csv_rows(ctx) -> list:
         rows += [[s['name'], s['score'], s['analyzed_n']] for s in vibe['sources']]
         rows += [[], ['Toxicity type', 'Instances']] + [[k, v] for k, v in sorted(vibe['toxicity_types'].items(), key=lambda kv: (-kv[1], kv[0])) if v]
         if vibe['flagged']:
-            rows += [[], ['Severity', 'Type', 'Source', 'Flagged message']]
+            rows.append([])
+            if any(f.get('type') in SAFETY_TYPES for f in vibe['flagged']):
+                rows.append(['Note', SAFETY_NOTE])                    # the page and the PDF say this under Flagged messages: the CSV says it right before the messages
+            rows.append(['Severity', 'Type', 'Source', 'Flagged message'])
             rows += [[f['severity'], f['type'], f['source'], f['message']] for f in vibe['flagged']]
         rows += _progress_rows(vibe.get('progress'))
     elif vibe:

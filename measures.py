@@ -870,9 +870,19 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
     all_clear = ok_vibe and not counts['high'] and not counts['medium'] and not is_silent(m)
     return {'m': m, 'cards': cards(m), 'health': health_tile(m), 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
             'badges_earned': sum(1 for b in earned if b['earned']), 'trail': trail, 'since': since_table(comparison, live), 'comparison': comparison, 'record': live,
-            'basis_text': basis_text(m, cov, vibe), 'all_clear': all_clear,
+            'basis_text': basis_text(m, cov, vibe), 'chart_key': chart_key(m), 'all_clear': all_clear,
             'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES, 'since': CAVEAT_SINCE},
             'texts': {'first_check': FIRST_CHECK, 'no_badges': NO_BADGES}}
+
+
+def chart_key(m) -> str:
+    """The sentence under the four small charts, for the page and the PDF: what the lines and the bands mean."""
+    parts = ['Lines show messages per 100.', 'Shaded bands show where Rare, Some and Often begin.', 'A darker band is a heated moment.']
+    if m['basis'] == 'order':
+        parts.append('The numbers under each chart are rated message numbers, in the order you added them.')
+    elif m.get('utc'):
+        parts.append('Times are UTC.')
+    return ' '.join(parts)
 
 
 def basis_text(m, cov, vibe=None) -> str:

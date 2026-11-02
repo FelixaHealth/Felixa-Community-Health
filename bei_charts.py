@@ -78,7 +78,10 @@ def attribute_table_rows(metrics) -> list:
 
 # ---- measures over time ----------------------------------------------------------------------------
 BAND_ROLES = {'hostile': ('good', 'warn', 'crit'), 'dig': ('good', 'warn', 'warn')}      # the colour of Rare, Some and Often (a band is a faint wash, never the only signal)
-BAND_WORDS = ('Rare', 'Some', 'Often')           # written inside a band that is tall enough, so the bands can be told apart in print and in grey
+BAND_WORDS = ('Rare', 'Some', 'Often')           # written inside a band where there is a clear spot for them, so the bands can be told apart in print and in grey
+NAME_ASCENT, NAME_DESCENT, NAME_INK = 0.95, 0.25, 0.77      # in text sizes: the box a line of text may take above and below its baseline in a browser, and the height of its tallest letter
+NAME_HEADROOM = 1.07                             # text_w measures Helvetica; the PDF's font and a Linux browser's run up to 6% wider
+NAME_CLEAR = 1.5                                 # units of empty space between a band's name and the line, a marker or a shaded heated moment
 BAND_WASH = 0.10                                 # a level band is a faint wash ...
 MOMENT_WASH = 0.40                               # ... and a heated moment is clearly darker than any of them, in colour and in grey
 SAID = {'hostile': ('messages that were openly hostile', 'were openly hostile'), 'care': ('messages that showed care', 'showed care'),
@@ -90,9 +93,9 @@ def _whole(x) -> int:
 
 
 def _sizes(width) -> tuple:
-    """(tick and axis labels, the value at the end of the line, band names) in chart units. The phone layout is drawn 360 units wide and shown about 290 pixels
-    wide, so its text is drawn larger to stay near 12 pixels."""
-    return (14, 16, 12) if width < 600 else (13, 14, 12)
+    """(tick and axis labels, which the names of the bands share, the value at the end of the line) in chart units. The phone layout is drawn 360 units wide and
+    shown about 290 pixels wide, so its text is drawn larger to stay near 12 pixels."""
+    return (14, 16) if width < 600 else (13, 14)
 
 
 def _axis_labels(sc, items, size, y, gap=10) -> None:
@@ -110,12 +113,73 @@ def _axis_labels(sc, items, size, y, gap=10) -> None:
         right = left + w
 
 
+def _marker_radii(count) -> tuple:
+    """(outer ring, inner dot) of the markers of a line with `count` parts: smaller ones when there are many, so that they do not run together into a bead string."""
+    return (4.5, 3) if count <= 12 else (3, 2)
+
+
 def _markers(sc, pts) -> None:
-    """A ringed dot for every part; smaller ones when there are many, so that they do not run together into a bead string."""
-    outer, inner = (4.5, 3) if len(pts) <= 12 else (3, 2)
+    """A ringed dot for every part."""
+    outer, inner = _marker_radii(len(pts))
     for x, y in pts:
         sc.circle(x, y, outer, 'surface')
         sc.circle(x, y, inner, 'series1')
+
+
+def _segment_in_box(x1, y1, x2, y2, left, top, right, bottom) -> bool:
+    """True when the straight segment from (x1, y1) to (x2, y2) touches the box (Liang and Barsky)."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = x2 - x1, y2 - y1
+    for p, q in ((-dx, x1 - left), (dx, right - x1), (-dy, y1 - top), (dy, bottom - y1)):
+        if p == 0:
+            if q < 0:
+                return False
+            continue
+        t = q / p
+        if p < 0:
+            if t > t1:
+                return False
+            t0 = max(t0, t)
+        else:
+            if t < t0:
+                return False
+            t1 = min(t1, t)
+    return True
+
+
+def _name_spot(word, size, band, plot, pts, columns):
+    """Where a band's name can go, as (left edge, baseline), or None when there is no clear spot. The name goes inside its band `band` = (top, bottom), anywhere
+    in the plot `plot` = (left, right) that is at least 10 units from its edges, and its box is kept clear of the line, of every marker and of the shaded heated
+    moments `columns` = [(left, right)]. The first spot found wins: from the left edge of the plot, and from the top of the band. A name that has no such spot
+    is left out: the shading is still there, and the key to the charts says what the bands mean."""
+    top, bottom = band
+    left, right = plot
+    wide = text_w(word, size) * NAME_HEADROOM
+    above, below = NAME_ASCENT * size, NAME_DESCENT * size
+    first, last = top + 1 + NAME_INK * size, bottom - 1             # the baselines that keep the letters themselves inside the band
+    if last < first or right - left < wide + 20:
+        return None
+    radius = _marker_radii(len(pts))[0]
+    reach = 1 + NAME_CLEAR                                           # half the width of the line, and the empty space around the name
+    rows = min(12, int(last - first) + 1)
+    lows = [first + (last - first) * k / max(1, rows - 1) for k in range(rows)]
+    room = right - 10 - wide - (left + 10)
+    cols = min(32, int(room / 4) + 1)
+    scan = [left + 10 + room * k / max(1, cols - 1) for k in range(cols)]
+    places = scan[:1] + scan[-1:] + scan[1:-1] if cols > 1 else scan          # the left end, the right end, then the places in between from the left
+    for x in places:
+        for y in lows:
+            b_left, b_top, b_right, b_bottom = x, y - above, x + wide, y + below
+            if any(c0 - 2 < b_right and c1 + 2 > b_left for c0, c1 in columns):
+                continue
+            if any(_segment_in_box(ax, ay, bx, by, b_left - reach, b_top - reach, b_right + reach, b_bottom + reach)
+                   for (ax, ay), (bx, by) in zip(pts, pts[1:]) if max(ax, bx) >= b_left - reach and min(ax, bx) <= b_right + reach):
+                continue
+            if any(px + radius > b_left - NAME_CLEAR and px - radius < b_right + NAME_CLEAR and py + radius > b_top - NAME_CLEAR and py - radius < b_bottom + NAME_CLEAR
+                   for px, py in pts):
+                continue
+            return x, y
+    return None
 
 
 def _runs(flags) -> list:
@@ -142,15 +206,15 @@ def _moments_said(runs) -> str:
 
 def measure_chart(card, stretches, bands=None, *, width=W):
     """A small line chart of one measure: the rate per 100 messages in each part of the chat. `card` is a card from measures.cards, `stretches` the parts
-    from measures.analyse, `bands` the (low, high) cut-offs behind Rare, Some and Often (or None). The heated moments are shaded, darker than the bands, and a band
-    that is tall enough carries its name. One 2px line, value at the end, a hover target for every part (the targets tile the plot, so the right part always
-    answers), and a table twin kept by the page."""
+    from measures.analyse, `bands` the (low, high) cut-offs behind Rare, Some and Often (or None). The heated moments are shaded, darker than the bands. A band
+    carries its name, at the size of the tick labels, only where there is a clear spot for it: never on the line, a marker or a shaded heated moment. One 2px line,
+    value at the end, a hover target for every part (the targets tile the plot, so the right part always answers), and a table twin kept by the page."""
     values = [float(v) for v in card['series']]
     n = len(values)
     if n < 2:
         return None
     narrow = width < 600
-    tick_size, end_size, band_size = _sizes(width)
+    tick_size, end_size = _sizes(width)
     height = 168 if narrow else 150
     ml, mr, mt, mb = 40, 46, 16, 32
     pw, ph = width - ml - mr, height - mt - mb
@@ -179,26 +243,29 @@ def measure_chart(card, stretches, bands=None, *, width=W):
         sc.rect(ml, Y(top), pw, Y(bands[1]) - Y(top), 'good', opacity=BAND_WASH)
         named.append((Y(top), Y(bands[1]) - Y(top), BAND_WORDS[2]))
     step = pw / (n - 1)
+    columns = []                                            # the shaded heated moments, as (left, right)
     for i, st in enumerate(stretches):
         if st.get('counted'):
             x0, x1 = max(ml, X(i) - step / 2), min(ml + pw, X(i) + step / 2)
+            columns.append((x0, x1))
             sc.rect(x0, mt, x1 - x0, ph, 'warn', opacity=MOMENT_WASH)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
         sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
     _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
-    for y0, h, word in named:                               # a name hangs from the top edge of its band, away from a line that runs along the bottom of it
-        if h >= band_size + 2:
-            sc.text(ml + 10, y0 + band_size, word, size=band_size, fill='ink2')
     pts = [(X(i), Y(v)) for i, v in enumerate(values)]
+    for y0, h, word in named:                               # a name is written where the line, the markers and the shaded moments are all clear of it, else not at all
+        spot = _name_spot(word, tick_size, (y0, y0 + h), (ml, ml + pw), pts, columns)
+        if spot:
+            sc.text(spot[0], spot[1], word, size=tick_size, fill='ink2')
     sc.poly(pts, stroke='series1', width=2)
     _markers(sc, pts)
     sc.text(pts[-1][0] + 10, pts[-1][1] + end_size * 0.35, _whole(values[-1]), size=end_size, fill='ink', weight=600)
     for i, st in enumerate(stretches):
         lo, hi = max(ml, X(i) - step / 2), min(width - mr, X(i) + step / 2)
         rows = [[said, f'{st["counts"][kind]:,} of {st["n"]:,}', 'series1'], ['per 100 messages', f'{_whole(values[i])}', 'series1']]
-        if st.get('counted'):
-            rows.append(['part of a heated moment', f'up {_whole(st["climb"])} per 100 messages', 'warn'])
+        if st.get('counted'):               # the climb is the climb of heated messages, so its number belongs to the Escalation chart; the others only say the part is shaded
+            rows.append(['part of a heated moment', f'up {_whole(st["climb"])} per 100 messages', 'warn'] if kind == 'heated' else ['', 'part of a heated moment', 'warn'])
         sc.hit(lo, mt, hi - lo, ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
@@ -223,7 +290,7 @@ def trail_chart(trail, key, *, title, series, width=W):
     values = [float(r.get(key) or 0) for r in trail]
     n = len(values)
     narrow = width < 600
-    tick_size, end_size, _ = _sizes(width)
+    tick_size, end_size = _sizes(width)
     height = 200 if narrow else 180
     ml, mr, mt, mb = 40, 46, 16, 36
     pw, ph = width - ml - mr, height - mt - mb
@@ -246,28 +313,55 @@ def trail_chart(trail, key, *, title, series, width=W):
     return sc
 
 
+LABEL_GAP = 11.5           # units of empty space between two labels of the health meter: 6 points on the PDF page, which draws the 720 units of the wide layout 380 points wide (0.53 points a unit)
+LABEL_HEADROOM = 1.07      # text_w measures Helvetica; the PDF's font and a Linux browser's run up to 6% wider
+
+
+def _label_w(text, size) -> float:
+    return text_w(text, size) * LABEL_HEADROOM
+
+
+def _drop_crowded(labels) -> list:
+    """The labels of one line, from the left, without those that would sit closer than LABEL_GAP to the next. Of two that are too close the one with the lower
+    `rank` goes (the later one when the ranks are equal), until none is crowded."""
+    kept = sorted(labels, key=lambda item: item['left'])
+    while True:
+        for a, b in zip(kept, kept[1:]):
+            if b['left'] - a['right'] < LABEL_GAP:
+                kept.remove(a if a['rank'] < b['rank'] else b)
+                break
+        else:
+            return kept
+
+
 def health_meter(score, tone, *, width=W):
     """The health score on its 0 to 100 track. Thin ticks mark where the status changes (40, 60 and 80), the numbers sit under them, and the four status words
-    sit under their segments: on the same line when they all fit between the numbers, else on a line of their own."""
+    sit centred under their segments. On the phone layout (360), where the words do not all keep their distance from the numbers, they go on a line of their own.
+    The wide layout (720, which the PDF draws scaled down to the width of its tile) and the 500 one have room for one line of labels only, so there a label that would
+    sit closer than LABEL_GAP to the next is left out, the end number "100" before a word: the score is printed as "out of 100" beside the meter."""
     from measures import HEALTH_STATUS
     role = {'good': 'series1', 'info': 'neu', 'bad': 'crit', 'warn': 'warn'}.get(tone, 'series1')
-    num, word = (16, 13) if width < 420 else (14, 12) if width < 600 else (16, 14)      # the phone layout (360), the PDF (500, drawn at 0.7 points a unit) and the wide layout (720)
+    num, word = (16, 13) if width < 420 else (14, 12) if width < 600 else (16, 14)      # the phone layout (360), the PDF (500, drawn at 0.76 points a unit) and the wide layout (720)
     steps = sorted(HEALTH_STATUS)                                              # [(0, 'Needs attention'), (40, 'Fair'), (60, 'Good'), (80, 'Excellent')]
     edges = [floor for floor, _ in steps] + [100]
     th, y = 12, 6
     base1 = y + th + 7 + num * 0.85                                            # baseline of the numbers
     x_of = lambda v: width * v / 100                                           # noqa: E731
 
-    def number_span(v):                                                        # the room a number takes: the first starts at the left edge, the last ends at the right one
-        w = text_w(str(v), num)
-        return (0.0, w) if v == edges[0] else (width - w, width) if v == edges[-1] else (x_of(v) - w / 2, x_of(v) + w / 2)
-    numbers = [number_span(v) for v in edges]
-    widths = [text_w(text, word) for _, text in steps]
-    room = [(numbers[i][1] + 5, numbers[i + 1][0] - 5) for i in range(len(steps))]            # the space between the two numbers that frame a segment
-    one_row = all(room[i][1] - room[i][0] >= widths[i] for i in range(len(steps)))
+    def number(v):                                                             # the first starts at the left edge, the last ends at the right one; the end numbers go first when labels crowd
+        w = _label_w(str(v), num)
+        left, anchor = (0.0, 'start') if v == edges[0] else (width - w, 'end') if v == edges[-1] else (x_of(v) - w / 2, 'middle')
+        return {'text': str(v), 'x': x_of(v), 'left': left, 'right': left + w, 'anchor': anchor, 'size': num, 'rank': 1 if v in (edges[0], edges[-1]) else 3}
+    numbers = [number(v) for v in edges]
+
+    def name(text, a, b):                                                      # a word is centred between its two ticks
+        w, c = _label_w(text, word), x_of((a + b) / 2)
+        return {'text': text, 'x': c, 'left': c - w / 2, 'right': c + w / 2, 'anchor': 'middle', 'size': word, 'rank': 2}
+    names = [name(text, floor, edges[i + 1]) for i, (floor, text) in enumerate(steps)]
+    together = numbers + names
+    one_row = len(_drop_crowded(together)) == len(together) or width >= 420            # only the phone layout may put the words on a line of their own
+    row1, row2 = (_drop_crowded(together), []) if one_row else (numbers, _drop_crowded(names))
     base2 = base1 if one_row else base1 + word + 5
-    centre = [min(max(x_of((a + b) / 2), room[i][0] + widths[i] / 2), room[i][1] - widths[i] / 2) if one_row else x_of((a + b) / 2)       # a word may lean a little to fit between its numbers
-              for i, ((a, _), b) in enumerate(zip(steps, edges[1:]))]
     shown = _whole(score)
     status = next(text for floor, text in reversed(steps) if shown >= floor)
     sc = Scene(width, base2 + 6, 'Health score', f'{shown} out of 100, which is {status}. ' + ', '.join(
@@ -277,8 +371,8 @@ def health_meter(score, tone, *, width=W):
         sc.rect(0, y, min(width, max(th, width * score / 100)), th, role, r=(6, 6, 6, 6))
     for v in edges[1:-1]:
         sc.line(x_of(v), y - 3, x_of(v), y + th + 5, 'ink2', 1)
-    for v in edges:
-        sc.text(x_of(v), base1, v, size=num, fill='ink2', anchor='start' if v == edges[0] else 'end' if v == edges[-1] else 'middle')
-    for i, (_, text) in enumerate(steps):
-        sc.text(centre[i], base2, text, size=word, fill='ink2', anchor='middle')
+    for item in row1:
+        sc.text(item['x'], base1, item['text'], size=item['size'], fill='ink2', anchor=item['anchor'])
+    for item in row2:
+        sc.text(item['x'], base2, item['text'], size=item['size'], fill='ink2', anchor=item['anchor'])
     return sc

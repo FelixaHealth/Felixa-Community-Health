@@ -12,7 +12,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Flowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import CondPageBreak, Flowable, Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 import analysis
 import bei_charts
@@ -26,6 +26,7 @@ FONTS = ('FelixaSans', 'FelixaSansBold')
 FOOTER_NOTE = 'Model-rated wording. Not a verdict on people.'      # printed in the footer of every page after the cover
 TEXT_W = measures_export.PAGE_W                                     # 492 points: the text between the margins (504), less 6 points of frame padding on each side
 KEEP_MAX = 280                                                      # the last rows of a table stay together only when they take no more than this many points
+ART_W, ART_GAP, ART_MIN = 330, 10, 150                              # the cover artwork: its width, the air above it, and the least height (points) at which it is still shown
 
 
 def _register_fonts():
@@ -58,6 +59,32 @@ def _cover_artwork(path: Path):
     return io.BytesIO(_COVER_CACHE[key])
 
 
+class CoverArt(Flowable):
+    """The cover artwork, set under the cover text. It takes the room the cover has left: it is shrunk to fit it, and it is left out when that room is under ART_MIN
+    points, so that it can never be pushed alone onto a page of its own (a page 2 with a picture and nothing else, when the cover text is long). `reserve` is
+    room (points) kept free under it for what follows on the cover."""
+
+    def __init__(self, art, reserve=0):
+        super().__init__()
+        self.reader = ImageReader(art)
+        iw, ih = self.reader.getSize()
+        self.ratio, self.reserve, self.hAlign, self.size = ih / iw, reserve, 'LEFT', None
+
+    def wrap(self, availWidth, availHeight):
+        full = ART_W * self.ratio
+        room = availHeight - ART_GAP - self.reserve - 1
+        if room < ART_MIN:
+            self.size = None                                    # not enough room left on this page: no artwork
+            return 0, 0
+        scale = min(1.0, room / full)
+        self.size = (ART_W * scale, full * scale)
+        return self.size[0], self.size[1] + ART_GAP
+
+    def draw(self):
+        if self.size:
+            self.canv.drawImage(self.reader, 0, 0, self.size[0], self.size[1])
+
+
 def pdf(ctx, base: Path) -> bytes:
     _register_fonts()
     a, vibe = ctx['a'], ctx['vibe']
@@ -71,16 +98,23 @@ def pdf(ctx, base: Path) -> bytes:
     # the same heading without keepWithNext: reportlab would glue a keepWithNext heading and the table after it into one block that jumps to the next page whole
     # when it does not fit. A heading that opens a table that may run over a page sits behind a CondPageBreak instead (measures_export), and the table splits.
     styles.add(ParagraphStyle('BeiSubFree', parent=styles['BeiSub'], keepWithNext=False))
+    # the headings inside Measures over time (Since your last check, Health score check by check): a little smaller than the heading of a part of the report, with
+    # some air above them, which a page leaves out by itself when the heading starts the page
+    styles.add(ParagraphStyle('BeiSubBelow', fontName=FONTS[1], fontSize=12, leading=16, spaceBefore=8, spaceAfter=4, textColor=ink, keepWithNext=True))
+    styles.add(ParagraphStyle('BeiContact', parent=styles['BeiBody'], spaceBefore=10))        # the contact line of the cover: the air above it is its own, not a Spacer
     styles.add(ParagraphStyle('BeiSmall', fontName=FONTS[0], fontSize=8.5, leading=12, spaceAfter=8, textColor=soft, wordWrap='CJK'))
-    styles.add(ParagraphStyle('BeiCaveat', fontName=FONTS[0], fontSize=9, leading=12.5, spaceAfter=8, textColor=ink))        # the caveats, and the line of what a section is built from
-    # Measures over time sits in table cells and narrow columns, so its type is set tighter than the body text. These styles wrap at spaces: the CJK wrap of
-    # BeiSmall cuts a word in two when the line before it is short, which a 40 point column makes happen all the time.
+    styles.add(ParagraphStyle('BeiCaveat', fontName=FONTS[0], fontSize=8.5, leading=11.5, spaceAfter=6, textColor=ink))      # the caveats, and the line of what a section is built from
+    # Measures over time sits in table cells and narrow columns, so its type is set tighter than the body text: a first check (four cards with their charts, the
+    # health score tile and its sentence) has to fit one page. These styles wrap at spaces: the CJK wrap of BeiSmall cuts a word in two when the line before it is
+    # short, which a 40 point column makes happen all the time.
     styles.add(ParagraphStyle('BeiCell', fontName=FONTS[0], fontSize=8.5, leading=12, spaceAfter=8, textColor=soft))
-    styles.add(ParagraphStyle('BeiCardHead', fontName=FONTS[1], fontSize=11, leading=14, spaceAfter=3, textColor=ink))
-    styles.add(ParagraphStyle('BeiCardText', fontName=FONTS[0], fontSize=9, leading=12.5, spaceAfter=3, textColor=ink))
-    styles.add(ParagraphStyle('BeiCardNote', fontName=FONTS[0], fontSize=8.5, leading=11.5, spaceAfter=3, textColor=soft))
+    styles.add(ParagraphStyle('BeiCardHead', fontName=FONTS[1], fontSize=11, leading=13.5, spaceAfter=2, textColor=ink))
+    styles.add(ParagraphStyle('BeiCardText', fontName=FONTS[0], fontSize=9, leading=11.5, spaceAfter=2, textColor=ink))
+    styles.add(ParagraphStyle('BeiCardNote', fontName=FONTS[0], fontSize=8.5, leading=10.5, spaceAfter=2, textColor=soft))
+    styles.add(ParagraphStyle('BeiKey', parent=styles['BeiCardNote'], spaceAfter=5))        # the sentence for the lines and bands of the charts: a little air before the first card
     styles.add(ParagraphStyle('BeiBig', fontName=FONTS[1], fontSize=32, leading=36, spaceAfter=2, textColor=ink))
-    styles.add(ParagraphStyle('BeiMethodHead', fontName=FONTS[1], fontSize=10.5, leading=15, spaceAfter=2, textColor=ink))       # an entry of the method text: close to its text
+    styles.add(ParagraphStyle('BeiMethodHead', fontName=FONTS[1], fontSize=10, leading=14, spaceAfter=1, textColor=ink))        # an entry of the method text: close to its text
+    styles.add(ParagraphStyle('BeiMethod', fontName=FONTS[0], fontSize=9.5, leading=13.5, spaceAfter=7, textColor=ink))        # and its text, a little tighter than the body: the whole method keeps to one page
     story = []
 
     def p(text, style='BeiBody', tail=''):
@@ -96,19 +130,20 @@ def pdf(ctx, base: Path) -> bytes:
         story.append(PageBreak())
         story.append(p(text, 'BeiHead'))
 
-    def table(rows, widths):
+    def table(rows, widths, tight=False):
         """A table. A cell is text (set in the small style) or a flowable already made with p(). A table that runs over a page splits between its rows and repeats
         its header row. Its last rows (up to three) stay together, so that a repeated header is never left over a single row. They are kept together only when
-        they take no more than KEEP_MAX points: a group taller than a page could not be placed at all."""
+        they take no more than KEEP_MAX points: a group taller than a page could not be placed at all. A `tight` table has less air in its rows (the list of
+        evidence, which shares its page with the whole method text)."""
         data = [[x if isinstance(x, Flowable) else p(x, 'BeiSmall') for x in row] for row in rows]
         style = [('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F2F2F2')), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                  ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#F27435')),
                  ('LINEBELOW', (0, 1), (-1, -1), .4, colors.HexColor('#D8D8D8')),
                  ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                 ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]
+                 ('TOPPADDING', (0, 0), (-1, -1), 3 if tight else 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 3 if tight else 5)]
 
         def make(extra=()):
-            grid = Table(data, colWidths=widths, repeatRows=1, hAlign='LEFT', spaceAfter=12)       # space after, not a Spacer: a Spacer that does not fit makes an empty page
+            grid = Table(data, colWidths=widths, repeatRows=1, hAlign='LEFT', spaceAfter=8 if tight else 12)       # space after, not a Spacer: a Spacer that does not fit makes an empty page
             grid.setStyle(TableStyle(style + list(extra)))
             return grid
         t, n = make(), len(rows)
@@ -142,16 +177,13 @@ def pdf(ctx, base: Path) -> bytes:
         story.append(p('Goals: ' + ', '.join(ctx['goals'] + ([a['goal_text']] if a['goal_text'] else []))))
     story.append(p('Evidence-based working report. Ratings come from a language model and need review before anyone acts on them.'))
     story += [p(f'**{title}: not available.** {reason}') for title, reason in ctx['gaps']]      # a part with no results is said so, not left out silently
-    art = _cover_artwork(base / 'static' / 'report_cover.png')
-    if art:
-        iw, ih = ImageReader(art).getSize()
-        art.seek(0)
-        im = Image(art, width=330, height=330 * ih / iw)
-        im.hAlign = 'LEFT'
-        story += [Spacer(1, 10), im]
     contact = os.getenv('FELIXA_REPORT_CONTACT', '').strip()
-    if contact:
-        story += [Spacer(1, 10), p(contact)]
+    contact_line = p(contact, 'BeiContact') if contact else None
+    art = _cover_artwork(base / 'static' / 'report_cover.png')
+    if art:           # the artwork takes the room the cover has left (less the contact line), or none at all: it is never pushed alone onto page 2
+        story.append(CoverArt(art, reserve=contact_line.wrap(TEXT_W, 10_000)[1] + 10 + 10 if contact_line else 0))
+    if contact_line:
+        story.append(contact_line)
 
     # alerts, badges and the measures over time
     if ctx.get('measures'):
@@ -198,12 +230,13 @@ def pdf(ctx, base: Path) -> bytes:
     page('Evidence and how this report works')
     if ctx['evidence']:
         story.append(p('Evidence loaded', 'BeiSub'))
-        table([['Source', 'Type', 'Units']] + [[e['source_label'], e['source_type'], fmt_int(e['n'])] for e in ctx['evidence']], [296, 98, 98])
+        table([['Source', 'Type', 'Units']] + [[e['source_label'], e['source_type'], fmt_int(e['n'])] for e in ctx['evidence']], [296, 98, 98], tight=True)
     if a['model_used']:
         story.append(p(f'Model: {a["model_used"]}.', 'BeiSmall'))      # under the evidence it rated: after the method text it was left alone on a last page
-    story.append(p('How this report works', 'BeiSub'))
-    for heading, text in analysis.HOW_IT_WORKS:
-        story.append(KeepTogether([p(heading, 'BeiMethodHead'), p(text)]))          # an entry is read whole: its heading and text never part
+    # The method is one block: it stays on the page of the evidence when all of it fits (up to about five sources), else it moves to the next page whole, so that
+    # the last entry never lands alone on a page of its own. An entry is read whole: its heading and text never part.
+    method = [p('How this report works', 'BeiSub')] + [KeepTogether([p(heading, 'BeiMethodHead'), p(text, 'BeiMethod')]) for heading, text in analysis.HOW_IT_WORKS]
+    story += [CondPageBreak(measures_export.room_for(method))] + method
 
     def furniture(canvas, doc):
         canvas.setStrokeColor(colors.HexColor('#F27435'))

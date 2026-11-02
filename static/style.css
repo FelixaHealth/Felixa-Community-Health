@@ -282,6 +282,7 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .vc .vc-over-table td:first-child{min-width:11em}
 .vc .vc-over-table td:not(:first-child){white-space:nowrap}
 .vc .table-wrap:focus-visible{outline:3px solid #b3440c;outline-offset:2px}
+@media screen{[data-theme="dark"] .vc .table-wrap:focus-visible{outline-color:#ffa563}}      /* one class more than the rule above, which comes later than the dark rule for every other table */
 .vc .vc-card.vc-health{margin-top:20px;padding-bottom:18px}
 .vc .vc-health-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px;margin:10px 0 4px}
 .vc .vc-health .vc-badge{margin-top:0}
