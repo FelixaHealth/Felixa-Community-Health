@@ -1,102 +1,112 @@
 # Measures over time, alerts and badges
 
-Felixa Community Health already rates every message on 13 tones (0 to 3) and runs Vibe Check. This adds four things on top, all computed from those same ratings, so they cost no extra model calls and work on every check that has ratings:
+Felixa Community Health already rates every message on 13 tones (0 to 3) and runs Vibe Check. This adds, on top of those same ratings and with no extra model calls:
 
-1. **Measures over time**: Escalation, Conflict, Empathy and Passive-aggressive, each followed through the conversation, plus a 0 to 100 **health score**.
-2. **Alerts**: plain-language heads-ups, ranked High, Medium, Low, with a kind next step for each. Good news is listed too.
-3. **Badges**: eight things a community can earn, each with the exact rule, shown earned or still to earn.
-4. **Check by check**: the same numbers saved after every check, so the next check shows what moved.
+1. **Four measures that follow the conversation**: Escalation, Conflict, Empathy and Passive-aggressive, plus a 0 to 100 **health score**.
+2. **Alerts**: short, plain heads-ups with a kind next step for each. Good news is listed too.
+3. **Badges**: seven things a community can earn, each with its rule.
+4. **Since your last check**: the same numbers saved after every check, so the next check shows what moved, when the two checks are alike enough to compare.
 
-Everything here describes wording in the messages. It says nothing about any person. A language model made the ratings and trained human raters have not checked them yet, and every cut-off below is our own starting choice, not a validated norm. The report says so.
+Everything here describes wording in the messages. It says nothing about any person or team. A language model made the ratings, trained people have not checked them yet, and every cut-off below is our own starting choice, not a validated norm. The page, the PDF and the CSV all say so.
+
+All the rules and all the wording live in `measures.py`. This file explains them.
 
 ## What each measure means
 
-| Measure | In plain words | Good direction |
+| Measure | What the page says | Good direction |
 |---|---|---|
-| **Escalation** | How fast tension is climbing. It is zero while tension is flat or falling, and jumps when a calm stretch turns tense. | down |
-| **Conflict** | How much of the talk is open hostility: aggressive, rude, disrespectful or judgmental wording. | down |
+| **Escalation** | How quickly the mood heats up. | down |
+| **Conflict** | How much of the talk is openly hostile. | down |
 | **Empathy** | How much of the talk shows care and understanding. | up |
-| **Passive-aggressive** | Digs and sarcasm that stay polite on the surface, without open hostility. | down |
-| **Health score** | One number from all 13 tones. Positive tones lift it, tense and toxic tones pull it down, harsher tones count for more. | up |
+| **Passive-aggressive** | Sarcasm without open hostility. Friendly banter can count too. | down |
+| **Health score** | One number that adds up all 13 tones. 50 means neutral and higher is warmer. | up |
 
-## How a message is scored
+## How a message is counted
 
-Each message has 13 ratings from 0 (absent) to 3 (strong). Write `x(Tone) = rating / 3`, so every x runs from 0 to 1.
+A tone is **clearly shown** when the model rated it 2 or 3. A 1 is a weak, tentative reading and never counts. Each message gets these yes or no flags:
 
-| Per-message value | Formula |
+| Flag | A message gets it when |
 |---|---|
-| overt hostility | `max(x(Aggressive), x(Rude), x(Disrespectful), x(Judgmental))` |
-| conflict | overt hostility |
-| passive-aggressive | `x(Sarcastic) * (1 - overt hostility)`. Sarcasm only counts to the degree that it is not open hostility, so the same message never counts twice as conflict and as a dig. |
-| empathy | `x(Empathetic)` |
-| tension | `max(overt hostility, x(Agitated), x(Sarcastic))` |
-| positive weight | `3x(Polite) + 3x(Empathetic) + 2x(Encouraging) + 1x(Funny)` |
-| negative weight | `1x(Ignorant) + 1x(Egocentric) + 1x(Neurotic) + 2x(Sarcastic) + 2x(Agitated) + 3x(Aggressive) + 3x(Judgmental) + 3x(Disrespectful) + 3x(Rude)` |
-| hostile message | a message whose overt hostility is at least 2/3 (some hostile tone rated 2 or 3) |
+| hostile (Conflict) | any of Aggressive, Rude, Disrespectful or Judgmental is rated 2 or 3 |
+| care (Empathy) | Empathetic is rated 2 or 3 |
+| dig (Passive-aggressive) | Sarcastic is rated 2 or 3, the message is not hostile, and Funny is below 2 (a joke is banter) |
+| heated (the basis of Escalation) | hostile, or Agitated rated 2 or 3, or a dig |
+| polite, encouraging, funny | that tone is rated 2 or 3 |
 
-The health weights are the ones in the Felixa backend (`ATTRIBUTE_WEIGHTS`), applied to strength (0 to 1) where the backend used present or absent.
+The page counts messages: "8 of 70 messages were openly hostile". A rate is the count per 100 messages. A message is never counted both as hostile and as a dig.
 
-## Following the conversation: stretches
+**Health score.** For each message, `positive = 3x(Polite) + 3x(Empathetic) + 2x(Encouraging) + 1x(Funny)` and `negative = 1x(Ignorant) + 1x(Egocentric) + 1x(Neurotic) + 2x(Sarcastic) + 2x(Agitated) + 3x(Aggressive) + 3x(Judgmental) + 3x(Disrespectful) + 3x(Rude)`, where `x = rating / 3` (0 to 1). Those are the weights of the Felixa backend. The group score is `clamp(50 + 50 x (mean positive - mean negative) / 4.5, 0, 100)`. The backend divides by 9 because it counts a tone as present or absent; a tone has about half its full strength when it is present, so dividing by 4.5 keeps the backend's scale and lets all four bands be reached. Bands: 80 and over Excellent, 60 Good, 40 Fair, under 40 Needs attention. A chat with no tone at all scores exactly 50. It is a separate read from the Vibe Check score out of 10, which stays the headline; the two can differ.
 
-* **Order.** If at least 60% of the rated messages have a readable date, they are put in time order (ties keep upload order) and messages without a date are left off the timeline. Otherwise they stay in the order they were added, and the page says so.
-* **Stretches.** The ordered messages are cut into equal-sized stretches of at least 8 messages, at most 24 stretches. A timeline needs at least 24 rated messages (three stretches). With fewer, the page gives the overall figures only.
-* **Stretch value.** For each measure the stretch value is the mean of the per-message values times 100, so it runs 0 to 100. The health score of a stretch is `clamp(50 + 50 * (mean positive weight - mean negative weight) / 9, 0, 100)`, which is the backend formula (9 is the sum of the positive weights).
-* **Escalation.** With `T[i]` the tension of stretch `i` (mean tension times 100): `E[0] = 0`, `E[1] = max(0, T[1] - T[0])`, and for `i >= 2`, `E[i] = max(0, T[i] - min(T[i-1], T[i-2]))`. So it measures the climb above the recent low and fades once tension stops rising.
-* **Episode.** A run of consecutive stretches whose escalation is at least 15. Its baseline is the recent low it climbed from, its peak is the biggest escalation in it, and the tension reached is the highest tension in it.
-* **Direction.** The mean of the first third of the stretches against the mean of the last third (at least one stretch each). Rising or falling when the change is at least `max(3, 20% of the first-third mean)` points (health: 5 points), otherwise steady. Escalation has no direction: it has a peak and a count of episodes.
-* **Level words.** Conflict: Low under 8, Moderate 8 to 20, High over 20. Passive-aggressive: Low under 5, Moderate 5 to 12, High over 12. Empathy: Low under 3, Moderate 3 to 10, High over 10. Escalation peak: None under 10, Mild 10 to 25, Marked 25 to 40, Sharp from 40. Health: Excellent from 80, Good from 60, Fair from 40, Needs attention under 40.
-* **The figure for "this check"** is the mean over every rated message (so it agrees with the signal profile), not over the stretches. "Latest stretch" is the last-third mean.
+## Following the conversation
 
-## Check by check
+* **Order.** If at least 3 in 5 of the rated messages carry a usable date (a date between 1990-01-01 and tomorrow, and at least three different moments among them), they are put in time order (ties keep upload order) and the others are left off the timeline. Otherwise the messages stay in the order they were added, and the page says so.
+* **Stretches.** The timeline messages are cut into equal stretches of at least 8 messages, at most 24 (their sizes differ by at most one). A timeline needs **24** messages. Below that the page shows the overall figures only.
+* **Verdict floor: 48.** A direction (rising or falling), a heated moment and anything built on them need **48** timeline messages, so that each end third holds at least 16. Between 24 and 47 the lines show what happened and the page says it is too early to call a direction.
+* **Labels.** An axis label is a date, or a time of day when the data has times, the stretches fall within three days and Incognito is off. A stretch is named "Part 3 of 9" with its dates or times only in the tooltip and the table. An alert never contains a clock time: it says where in the check ("around the middle") and, when the data is dated, the days. Times are called UTC only when every timestamp carried an offset. Messages ordered by upload are labelled "rated messages 25 to 36".
 
-After each successful rating run the app saves one small record of numbers (no text, no names, no file names): the date, how many messages were rated, the health score, the mean Empathy, Conflict and Passive-aggressive, the escalation peak, the number of episodes. Records stay when messages are deleted or a new check starts, like the Vibe Check history. The report compares the current check with the one before it.
+## Trends and heated moments (the chance tests)
+
+* **Direction.** The first third of the stretches against the last third (at least one stretch each), pooling their messages. A rate is called **rising** or **falling** when it moved by at least `max(3 points, 20% of where it started)` and by at least **2.0 standard errors**; otherwise "No clear change". Alerts, Good news and badges need **2.5 standard errors**. The standard error is `100 x sqrt(v1/n1 + v2/n2)` with `v = p(1-p)` and `p = (count + 1) / (n + 2)`. The health score uses the same test on the per-message difference (positive minus negative) with a 5-point floor.
+* **Heated moment.** For each stretch after the first, take the rate of heated messages in the stretch and the pooled rate over up to **3** stretches before it. The **climb** is the gap, never below 0. A stretch counts when the climb is at least **15 points**, at least **3.5 standard errors** (`100 x sqrt(p(1-p) x (1/stretch size + 1/baseline size))` with `p` the community's own overall rate of heated messages, smoothed), and the stretch holds at least **3** heated messages. Consecutive counted stretches form one heated moment. Escalation has no direction: it has a count of heated moments and the biggest climb. Escalation words by biggest climb: None under 15, Small 15 to 24, Clear 25 to 39, Steep 40 and over. If the very first stretch is already tense (30 or more in 100 heated), the page says a climb before it cannot be seen.
+* **Level alerts** (Conflict, sarcasm) read the latest third when it holds at least 24 messages (a timeline of 72 or more), else the whole check. They need at least **3** messages that clearly show the tone and the rate to clear the cut-off by more than **one standard error** (`100p - 100 sqrt(p(1-p)/n) >= cut`).
+
+## Level words
+
+Per 100 messages, on the whole number printed: **Conflict** Rare under 5, Some 5 to 11, Often 12 and over. **Passive-aggressive** the same. **Empathy** Rare under 3, Some 3 to 9, Often 10 and over. At **Low sensitivity** (adult and gaming chat, where banter is normal) the Conflict and Passive-aggressive cut-offs, and the Medium heated-moment cut-offs, are raised (by 1.5 and 1.2) and the page says so. Level words describe how often; the icon says whether that is good or not.
+
+## Since your last check
+
+After each rating run the app saves one small record of numbers and the names of the settings used: the date, how many messages were rated, whether they were a sample, the model name, the sensitivity, the review period, the basis (time or order), the health score and its spread, the counts of hostile, care, dig and heated messages, the number of heated moments and the biggest climb. Nothing else can be saved: the store checks every record against an allow-list when it writes and when it reads (`store.MEASURE_FIELDS`), and no message, name or file name is in it.
+
+* **One record per check.** A check is the set of messages behind it, named by the lowest message id (`store.evidence_generation`), which only grows. Running the same evidence again replaces its record; New check starts a new one. Records stay when messages are deleted or a new check starts.
+* **Like for like.** The current check is compared with the newest earlier record only when the model name and the sensitivity match, both checks rated at least 48 messages, and the larger is at most 3 times the smaller. Otherwise the page says why and calls no change. A change counts when it is at least `max(5 points, 2 standard errors)` (health: `max(8, 2 standard errors)`) and "strong" at 2.5 standard errors. The table says Better, Worse or About the same.
+* A line chart appears from the third check; before that the table says enough.
 
 ## Alerts
 
-Each alert has a level, a title, what was seen (with the numbers), when, and a next step written in the same positive-psychology voice as Vibe Check. No alert ever suggests a ban, a warning, a mute or any punishment, and the tests enforce that with Vibe Check's own word filter.
+Two priorities and good news. Each alert has a title, what was seen (with counts), a next step, a base line ("Based on 24 messages in the latest part of the chat"), and where it fell. There is one verdict per measure: a Good news line is dropped when an alert about the same measure stands. Quiet **notes** (not alerts) explain the basis: too few messages, no dates, a sample, incomplete ratings, a model change, or that Vibe Check has not run (so the list is not an all clear).
 
-| Alert | Level | Fires when |
+| Alert | Priority | Fires when |
 |---|---|---|
-| Threats or hate speech were flagged | High | Vibe Check counted at least one message as threats or hate speech |
-| Tension climbed quickly | High / Medium | An episode with escalation peak at least 40 and tension reached at least 45 (High); peak at least 25 and tension at least 30 (Medium) |
-| Conflict is high / noticeable / rising | High / Medium / Medium | Latest stretch at least 20 (High); at least 12 (Medium); or direction rising with the latest at least 8 (Medium) |
-| Passive-aggressive tone is common / growing | High / Medium / Medium | Latest stretch at least 25 (High); at least 12 (Medium); or rising with the latest at least 5 (Medium) |
-| Empathy is fading | Medium | Direction falling with the first third at least 5, or down at least 5 points on the previous check (which was at least 5) |
-| Health score needs attention | High | Health score under 40 |
-| Health score fell | Medium | Down at least 5 points on the previous check |
-| Spam is crowding the chat | Low | Spam at least 5% of the messages Vibe Check read (at least 20 read) |
-| Strong language is frequent | Low | Profanity at least 10% of the messages Vibe Check read (at least 20 read) |
-| Not enough messages for a timeline | Low | Fewer than 24 rated messages |
-| Many messages have no date | Low | At least 40% of the rated messages have no readable date |
-| Empathy is growing / Conflict is easing / Health score rose | Good news | Empathy or health up, or conflict down, by the same direction rules or by at least 5 points on the previous check |
+| Vibe Check flagged serious messages | High if threats, hate speech or a message scoring 7 or more; else Medium | Vibe Check counted any threats, hate speech, harassment or bullying (the larger of its tally and its flagged messages) |
+| The mood heated up fast | High: climb 40 and level reached 45. Medium: climb 25 and level 30 | A heated moment with at least 3 heated messages (verdict floor met) |
+| Many / Some messages were openly hostile | High at 20 per 100, Medium at 12 | At least 24 rated messages, 3 hostile messages in the window, and the rate clears the cut-off by a standard error |
+| Hostile wording is picking up | Medium | Conflict strongly rising, with at least 5 per 100 lately |
+| Sarcastic wording is common / growing | Medium | Same rules at 12 per 100, or strongly rising to at least 5 |
+| Fewer messages show care | Medium | Care strongly falling with at least 5 care messages early on; or down at least 5 points on the previous check (like for like) |
+| The overall mood slipped since your last check | Medium | Health score down strongly on the previous check (like for like) |
+| Care is growing / Hostility is easing / The overall mood improved | Good news | The mirror of the above |
 
-If the latest-stretch figure is not available (no timeline), the overall mean is used instead.
+Wording rules, enforced by the tests: short plain sentences; no jargon (no FAS, stretch, episode, baseline, peak, toxic or "communication unit" on a page); next steps address the group's habits and the situation, never "the members who" or "the people involved", and never suggest a ban, warning, mute or any punishment; alerts never quote or name a message or a person; the tests run every string through Vibe Check's own word filter (`vibe_check.engine._PUNITIVE`) and a second, stricter list. The threats and hate-speech alert says a model can be wrong, points to the quoted messages, and says that if a message describes a real risk to someone the reader should follow their community's safety process or contact local emergency services.
 
 ## Badges
 
-A badge needs at least 20 rated messages (Clean chat needs 30 read by Vibe Check). Earned badges are shown with a tick and the figure behind them; the rest are listed with how to earn them.
+Seven badges, none for fewer than **30** rated messages. Positive-tone badges also need the rate to clear the cut-off by one standard error. The three absence badges need every message read (no sample, nothing added since rating): otherwise the page says "Can't tell yet: only part of the chat was read."
 
 | Badge | Earned when |
 |---|---|
-| Welcoming | Polite wording in at least 25% of the messages, and Conflict under 8 |
-| Supportive | Empathy at least 8 |
-| Encouraging | Encouraging FAS at least 8 |
-| Light-hearted | Funny wording in at least 15% of the messages |
-| Calm waters | A timeline exists, Conflict under 8, no stretch with Conflict at 15 or more, and no escalation episode |
-| Quick to cool | An episode with peak at least 25, and tension back within 10 points of its baseline within three stretches after it |
-| Clean chat | Vibe Check read at least 30 messages and flagged no threats, hate speech, harassment or bullying |
-| On the rise | Health score up at least 5 points on the previous check, or rising across this check |
+| Courteous | Clearly polite wording in at least 20 messages in 100, and fewer than 3 in 100 openly hostile |
+| Supportive | Care or understanding in at least 12 messages in 100 |
+| Encouraging | Encouraging wording in at least 12 messages in 100 |
+| Light-hearted | Funny wording in at least 12 messages in 100 |
+| Calm waters | A timeline of 48 or more, no heated moments, and fewer than 3 in 100 messages openly hostile |
+| Cools fast | A heated moment (climb 25 or more) after which the heated rate is back within 10 points of its starting level inside three stretches |
+| No serious flags | Vibe Check read at least 30 messages (90% of them or more), fewer than 1 serious flag per 200, and none scoring 7 or more |
+
+If 19 in 20 messages have all 13 ratings at 0, no badge is given and the page says almost no tone was found. The page shows earned badges as tiles with the figure behind them; the other rules sit in a closed "How the other badges work" fold. There are no locks, scores, streaks or "x of 7". Badges never name a person, never rank teams, and never cancel an alert.
 
 ## Where it appears
 
-* The workplace page and the report page: Alerts, Badges, then Over time (a card and a chart for each measure, a health card, and a table twin of every chart; a check-by-check chart and table from the second check on), before the signal profile.
-* The PDF: an Alerts and badges page and an Over time page after the cover.
-* The CSV: the same blocks as rows.
+Page order, on the workplace page and the report page: **Summary strip** (the Vibe Check score, the number of things to look at, the badges earned, and links) → **Alerts** → **Measures over time** (four cards with level word, count, trend and chart; the health tile; Since your last check) → **Badges** → the signal profile → guidance → Vibe Check. On the workplace page the results sit above the plan, engine and messages panels once there are results. The PDF has an Alerts and badges page and a Measures over time page after the cover. The CSV carries the same blocks as rows. Each chart has a table twin. The caveats are always shown, never folded. The home list shows only the Vibe score, so teams are not ranked side by side.
 
 ## Left out of the Felixa backend, and why
 
-Stripe payments, e-mailing the report, the OpenAI call, the YouTube and Reddit fetchers and the duplicate-payment guard belong to the paid web service, not to this app. The backend's flagged comments, content categories (profanity, hate speech, violence, spam), sentiment bars and recommendations already exist here through Vibe Check, which also follows the rule of never suggesting punishment, so the backend's "stricter moderation" and "warnings before bans" lines were not carried over.
+Stripe payments, e-mailing the report, the OpenAI call, the YouTube and Reddit fetchers and the duplicate-payment guard belong to the paid web service. The backend's flagged comments, content categories, sentiment bars and recommendations already exist here through Vibe Check, so the page links to them instead of repeating them. The backend's "stricter moderation" and "warnings before bans" lines were not carried over, because this app never suggests punishment. The health score is the backend's, rescaled as described, so it will not match its numbers exactly.
+
+## How it was checked
+
+A simulation of synthetic rating tables (calm, supportive, banter-heavy, steadily hostile, neutral chats; a 20-message outburst, a 5-message spat, a single hostile message, a slow burn, a burst at the start or the end) at 24, 76, 300 and 1,000 messages ran the real code. In communities that do not change, a Medium or High alert appeared in 0 to 5% of checks (the first draft: 17 to 54%), and a trend was called in about 5% or fewer. A 20-message outburst is caught in about half the checks at 76 messages and in nearly all at 300; a single hostile message never raises an alert. Those communities are our assumptions, not real chats, so the cut-offs remain starting choices.
 
 ## Code map
 
-`measures.py` holds every formula (pure functions; the one database read is `store.rated_units`). `store.py` keeps the check-by-check records. `pipeline.py` saves one after the ratings. `report.py` puts the results in the report context. `bei_charts.py` draws the charts (web and PDF share one drawing). `templates/_alerts.html`, `_badges.html` and `_over_time.html` show them; `report_export.py` adds the PDF pages and `report.csv_rows` the CSV rows.
+`measures.py` (all rules and wording; `analyse`, `cards`, `alerts`, `badges`, `compare`, `record`, `build`), `store.py` (`measure_history`, the allow-list, `rated_units`, `evidence_generation`), `pipeline.py` (saves a record right after the ratings), `report.py` (`ctx['measures']`), `bei_charts.py` (`measure_chart`, `trail_chart`, `health_meter`), `measures_view.py` (HTML for the page), `measures_export.py` (PDF pages and CSV rows), the templates `_summary.html`, `_alerts.html`, `_over_time.html`, `_badges.html`.

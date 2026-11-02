@@ -5,6 +5,9 @@ import re
 
 import analysis
 import bei_charts
+import measures
+import measures_export
+import measures_view
 import store
 from vibe_check import assets_html, data_table, figure, render_html
 from vibe_check.common import fmt_int, long_date
@@ -35,6 +38,9 @@ def build(aid):
         'generated': datetime.date.today().isoformat(),
         'has_results': has_results(metrics, vibe), 'gaps': gaps(metrics, guidance, vibe), 'how': analysis.HOW_IT_WORKS,
     }
+    cov = {'sampled': ctx['sampled'], 'total': rated_total, 'scope': scope_n, 'added_since': ctx['added_since']}
+    ctx['measures'] = measures.build(aid, a, vibe, cov) if metrics else None
+    ctx['measures_html'] = measures_view.html(ctx['measures'], a) if ctx['measures'] else {}
     ctx['chart_html'] = chart_html(metrics)
     ctx['vibe_html'] = render_html(vibe, assets=False, notice=notice) if vibe else ''
     ctx['assets'] = assets_html() if (metrics or vibe) else ''
@@ -188,6 +194,8 @@ def csv_rows(ctx) -> list:
         rows.append([])
     if ctx['guidance']:
         rows += _guidance_rows(ctx['guidance'])
+    if ctx.get('measures'):
+        rows += measures_export.csv_rows(ctx['measures'])
     for title, reason in ctx['gaps']:
         rows += [[title], ['Not available', reason], []]
     if vibe and vibe.get('status') == 'ok':

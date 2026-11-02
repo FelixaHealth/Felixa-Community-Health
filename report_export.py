@@ -15,6 +15,7 @@ from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, S
 
 import analysis
 import bei_charts
+import measures_export
 from vibe_check import pdf_flowables
 from vibe_check.charts import W as CHART_W
 from vibe_check.charts import pdf_safe, to_drawing
@@ -115,6 +116,10 @@ def pdf(ctx, base: Path) -> bytes:
     contact = os.getenv('FELIXA_REPORT_CONTACT', '').strip()
     if contact:
         story += [Spacer(1, 10), p(contact)]
+
+    # alerts, badges and the measures over time
+    if ctx.get('measures'):
+        measures_export.pdf_pages(ctx['measures'], story, p, page, table, lambda scene: to_drawing(scene, fonts=FONTS, scale=504 / CHART_W), small=lambda t: p(t, 'BeiSmall'))
 
     # summary and guidance
     g = ctx['guidance']

@@ -7,7 +7,9 @@ tables and columns are added, nothing is dropped. History that names its sources
 import contextlib
 import datetime
 import json
+import math
 import os
+import re
 import sqlite3
 import threading
 
@@ -117,7 +119,8 @@ CREATE TABLE IF NOT EXISTS measure_history(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   analysis_id INTEGER NOT NULL,
   created_at TEXT,
-  snapshot_json TEXT NOT NULL
+  snapshot_json TEXT NOT NULL,
+  gen INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_measurehist_analysis ON measure_history(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_units_analysis ON communication_units(analysis_id);
@@ -130,7 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_vibehist_analysis ON vibe_history(analysis_id);
 # Columns added after the original schema. Older databases gain them on start.
 ADDED_COLUMNS = {'analyses': [('vibe_sensitivity', "TEXT DEFAULT 'medium'"), ('rated_units_total', 'INTEGER'), ('channel', 'TEXT'), ('user_name', 'TEXT'),
                               ('user_role', 'TEXT'), ('check_volume', 'INTEGER'), ('incognito', 'INTEGER DEFAULT 0'), ('engine', 'TEXT'), ('period_tz', 'INTEGER'), ('cloud_ok', 'INTEGER DEFAULT 0')], 'jobs': [('cancel_requested', 'INTEGER DEFAULT 0')],
-                 'sources': [('content_hash', 'TEXT')]}
+                 'sources': [('content_hash', 'TEXT')], 'measure_history': [('gen', 'INTEGER')]}
 
 
 @contextlib.contextmanager
@@ -504,23 +507,78 @@ def vibe_history(aid) -> list:
 
 
 # ---- measure history -------------------------------------------------------------
-def save_measure_snapshot(aid, snapshot: dict) -> int:
-    """Keeps the numbers of one check (see measures.snapshot): scores and counts only, never a message, a name or a file name."""
+# One record per check: the numbers of that check and the names of its settings. A record is checked against this list when it is saved and
+# again when it is read, so a field that is not on it (a message, a name, a file name) can never be kept, whatever calls these functions.
+_NUMBER = (int, float)
+MEASURE_FIELDS = {
+    'created_at': re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?'), 'basis': ('time', 'order'), 'sensitivity': ('low', 'medium', 'high', ''),
+    'model': re.compile(r'[A-Za-z0-9._:/ ()+-]{0,64}'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
+    'period_end': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'), 'sig': re.compile(r'\d+(?::\d+){0,6}'),
+    'gen': int, 'n': int, 'total': int, 'sampled': int, 'stretches': int, 'hostile_n': int, 'care_n': int, 'dig_n': int, 'heated_n': int, 'episodes': int,
+    'health': float, 'health_sd': float, 'peak': float,
+}
+
+
+def clean_measure_snapshot(raw):
+    """The record with only the fields of MEASURE_FIELDS, each coerced to its type and dropped when it does not fit. None when it has no date or no count."""
+    if not isinstance(raw, dict):
+        return None
+    out = {}
+    for key, rule in MEASURE_FIELDS.items():
+        value = raw.get(key)
+        if value is None:
+            continue
+        try:
+            if rule is int:
+                if isinstance(value, bool) or not isinstance(value, _NUMBER) or not math.isfinite(value) or not 0 <= value < 2 ** 53:
+                    continue
+                out[key] = int(value)
+            elif rule is float:
+                if isinstance(value, bool) or not isinstance(value, _NUMBER) or not math.isfinite(value) or abs(value) > 1e9:
+                    continue
+                out[key] = round(float(value), 3)
+            elif isinstance(rule, tuple):
+                if value in rule:
+                    out[key] = value
+            elif isinstance(value, str) and rule.fullmatch(value):
+                out[key] = value
+        except (TypeError, ValueError, OverflowError):
+            continue
+    return out if 'created_at' in out and 'n' in out else None
+
+
+def evidence_generation(aid):
+    """A number that names the set of messages behind a check: the lowest id among the analysis's messages. Ids are never reused, so every New check gets
+    a larger one, while more files added to the same check leave it as it is. None when there are no messages."""
     with db() as c:
-        return c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json) VALUES(?,?,?)',
-                         (aid, snapshot.get('created_at'), json.dumps(snapshot))).lastrowid
+        return c.execute('SELECT MIN(id) m FROM communication_units WHERE analysis_id=?', (aid,)).fetchone()['m']
+
+
+def save_measure_snapshot(aid, snapshot) -> bool:
+    """Keeps the record of one check. A second record for the same set of messages replaces the first (a re-run is not a new check). False when the
+    record has nothing a record needs."""
+    clean = clean_measure_snapshot(snapshot)
+    if not clean:
+        return False
+    with db() as c:
+        gen = clean.get('gen')
+        if gen is not None and c.execute('UPDATE measure_history SET created_at=?, snapshot_json=? WHERE analysis_id=? AND gen=?',
+                                        (clean['created_at'], json.dumps(clean), aid, gen)).rowcount:
+            return True
+        c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, clean['created_at'], json.dumps(clean), gen))
+    return True
 
 
 def measure_history(aid) -> list:
-    """The saved numbers of every earlier check, oldest first. A row that cannot be read is skipped."""
+    """The saved records of every check, oldest first. A row that cannot be read is skipped."""
     with db() as c:
-        rows = c.execute('SELECT snapshot_json FROM measure_history WHERE analysis_id=? ORDER BY id', (aid,)).fetchall()
+        rows = c.execute('SELECT snapshot_json FROM measure_history WHERE analysis_id=? ORDER BY COALESCE(gen, 0), id', (aid,)).fetchall()
     out = []
     for row in rows:
         try:
-            snap = json.loads(row['snapshot_json'])
+            snap = clean_measure_snapshot(json.loads(row['snapshot_json']))
         except ValueError:
             continue
-        if isinstance(snap, dict):
+        if snap:
             out.append(snap)
     return out

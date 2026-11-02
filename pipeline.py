@@ -8,6 +8,7 @@ import logging
 import analysis
 import cloud
 import config
+import measures
 import store
 from model import local_model_call
 from vibe_check import ingest, run_vibe_check
@@ -71,6 +72,7 @@ def _behaviour(aid, call, progress, limit=None) -> tuple:
     try:
         rated = analysis.rate_units(aid, call, progress, limit=limit)
         analysis.calculate_metrics(aid)
+        measures.save_snapshot(aid, rated)                      # the numbers of this check, kept before the guidance step so a cancel there cannot lose them
     except analysis.AnalysisError as e:
         return None, [str(e)]
     except Exception:
