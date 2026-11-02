@@ -184,14 +184,19 @@ def _since_rows(ms) -> list:
     else:
         rows += [['No comparison', s['why']], ['Measure', 'Last check', 'Last check: out of', 'This check', 'This check: out of']]
         rows += [[r['label'], *_count_of(r['before']), *_count_of(r['now'])] for r in s['rows']]
+    members = ms.get('members')
+    if members:                                                # the size of the group beside the health score, and a caution when it changed a lot
+        rows += [[], ['Members', members['text']]] + ([['Note', members['note']]] if members.get('note') else [])
     trail = ms.get('trail') or []
     if len(trail) >= 3:                                        # the table behind the check-by-check chart, which also starts at the third check
-        rows += [[], ['Check', 'Date', 'Messages rated', 'Health score', f'{measures.NAMES["conflict"]} messages', f'{measures.NAMES["empathy"]} messages',
-                      f'{measures.NAMES["passive"]} messages', 'Heated messages', 'Heated moments']]
+        named = any(r.get('members') for r in trail)
+        rows += [[], ['Check', 'Date', 'Messages rated'] + (['Members'] if named else []) + ['Health score', f'{measures.NAMES["conflict"]} messages',
+                      f'{measures.NAMES["empathy"]} messages', f'{measures.NAMES["passive"]} messages', 'Heated messages', 'Heated moments']]
         for i, r in enumerate(trail, 1):                         # the day the check was made, never the time of day
-            rows.append([f'Check {i}' + (' (this check)' if i == len(trail) else ''), _iso_day(r.get('created_at')), _blank(r.get('n')),
-                         measures.whole(r['health']) if r.get('health') is not None else '', _blank(r.get('hostile_n')), _blank(r.get('care_n')), _blank(r.get('dig_n')),
-                         _blank(r.get('heated_n')), _blank(r.get('episodes'))])
+            rows.append([f'Check {i}' + (' (this check)' if i == len(trail) else ''), _iso_day(r.get('created_at')), _blank(r.get('n'))]
+                        + ([_blank(r.get('members'))] if named else [])
+                        + [measures.whole(r['health']) if r.get('health') is not None else '', _blank(r.get('hostile_n')), _blank(r.get('care_n')), _blank(r.get('dig_n')),
+                           _blank(r.get('heated_n')), _blank(r.get('episodes'))])
     return rows + [[]]
 
 
@@ -407,12 +412,14 @@ def _since(ms, story, p, table) -> list:
     the reason when the two checks were not made alike, and the table. The caller keeps them together on one page."""
     s = ms.get('since')
     out = [p('Since your last check', 'BeiSubBelow')]
+    members = ms.get('members')
+    tail = ([p(members['text'], 'BeiCardText')] + ([p(members['note'], 'BeiCaveat')] if members.get('note') else [])) if members else []
     if not s:
-        return out + [p(_first_check(ms), 'BeiCardText')]
+        return out + [p(_first_check(ms), 'BeiCardText')] + tail
     out.append(p(_since_caveat(ms), 'BeiCaveat'))
     if s['comparable']:
         rows = [['Measure', 'Last check', 'This check', 'Change']] + [[r['label'], str(r['before']), str(r['now']), r['verdict']] for r in s['rows']]
-        return out + _made(story, lambda: table(_cells(rows, p), SINCE_WIDTHS))
+        return out + _made(story, lambda: table(_cells(rows, p), SINCE_WIDTHS)) + tail
     out.append(p(f'**No comparison.** {s["why"]}'))                # two checks that were not made alike: the reason, and no call on any change
     rows = [['Measure', 'Last check', 'This check']] + [[r['label'], str(r['before']), str(r['now'])] for r in s['rows']]
-    return out + _made(story, lambda: table(_cells(rows, p), SINCE_WIDTHS_NO_CALL))
+    return out + _made(story, lambda: table(_cells(rows, p), SINCE_WIDTHS_NO_CALL)) + tail

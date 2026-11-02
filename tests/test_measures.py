@@ -193,6 +193,9 @@ def page_strings(ctx):
         for key in ('name', 'how', 'evidence', 'needs'):
             add(f'badge.{b["key"]}.{key}', b.get(key))
     add('badge_note', ctx['badge_note'])
+    if ctx.get('members'):
+        add('members.text', ctx['members']['text'])
+        add('members.note', ctx['members']['note'])
     if ctx['since']:
         add('since.why', ctx['since'].get('why'))
         for row in ctx['since']['rows']:
@@ -3052,7 +3055,7 @@ class TrailAndRecordTests(unittest.TestCase):
     def test_the_record_holds_the_numbers_and_the_names_of_the_settings_and_nothing_else(self):
         units = blend(hostile_chat(96, 10, 'Rude'), hostile_chat(96, 20, 'Empathetic'), hostile_chat(96, 8, 'Sarcastic'), lively(chat(96)))
         m = an(units, 'low')
-        a = {'model_used': 'qwen2.5:7b', 'period_start': '2026-03-01', 'period_end': '2026-03-31T12:00', 'person_name': 'ZQNAME', 'text': 'ZQTEXT'}
+        a = {'model_used': 'qwen2.5:7b', 'period_start': '2026-03-01', 'period_end': '2026-03-31T12:00', 'person_name': 'ZQNAME', 'text': 'ZQTEXT', 'members': 240}
         rec = measures.record(m, a, {'total': 500, 'note': 'An even sample of 500', 'model': 'ignored'}, 7, '2026-06-01T09:30:00')
         o = m['overall']
         self.assertEqual(rec['created_at'], '2026-06-01T09:30:00')
@@ -3133,7 +3136,7 @@ class BuildTests(unittest.TestCase):
     def test_the_context_has_every_block(self):
         ctx = build_with(lively(neutral(96)))
         self.assertEqual(sorted(ctx), sorted(['m', 'cards', 'health', 'alerts', 'alert_counts', 'notes', 'badges', 'badges_earned', 'badge_note', 'trail', 'since', 'comparison',
-                                              'record', 'basis_text', 'chart_key', 'caveats', 'texts', 'all_clear']))
+                                              'record', 'basis_text', 'chart_key', 'caveats', 'texts', 'all_clear', 'members']))
         self.assertIsInstance(ctx['chart_key'], str)
         self.assertEqual(len(ctx['cards']), 4)
         self.assertEqual(len(ctx['badges']), 7)
@@ -4494,5 +4497,54 @@ class ReviewFixTests(unittest.TestCase):
         self.assertIn('Hostility is lower than at your last check', titles(saved(2000, hostile_n=100), saved(2000, hostile_n=400, gen=0)))
         for title in ('Hostile wording is higher than at your last check', 'Hostility is lower than at your last check'):
             self.assertNotRegex(title, r'(?i)picking up|easing', 'the titles of the two kinds of alert are not the same words')
+
+
+class MembersViewTests(unittest.TestCase):
+    """The size of the group beside the checks: what each check was made with, how it changed, and a caution when the group changed a lot."""
+
+    @staticmethod
+    def trail(*counts):
+        return [saved(100, gen=i, members=c) if c else saved(100, gen=i) for i, c in enumerate(counts)]
+
+    def test_nothing_is_said_when_this_check_names_no_members(self):
+        self.assertIsNone(measures.members_view([]))
+        self.assertIsNone(measures.members_view(self.trail(200, None)))
+        self.assertIsNone(measures.members_view(self.trail(None)))
+
+    def test_a_first_count_says_so(self):
+        got = measures.members_view(self.trail(None, 250))
+        self.assertEqual(got, {'now': 250, 'before': None, 'text': 'Members at this check: 250. Later checks show how the group changes.', 'note': ''})
+
+    def test_the_change_since_the_last_count_is_said_in_plain_words(self):
+        for counts, text in [((200, 210), 'Members: 200 at your last check, 210 now (10 more).'), ((200, 190), 'Members: 200 at your last check, 190 now (10 fewer).'),
+                             ((200, 200), 'Members: 200 at your last check, 200 now (the same number).'), ((1200, 1500), 'Members: 1,200 at your last check, 1,500 now (300 more).'),
+                             ((200, None, 230), 'Members: 200 at an earlier check, 230 now (30 more).')]:
+            with self.subTest(counts=counts):
+                self.assertEqual(measures.members_view(self.trail(*counts))['text'], text)
+
+    def test_a_quarter_or_more_change_adds_a_caution_and_less_does_not(self):
+        caution = 'The group changed by a quarter or more, so part of any change may come from who is in it.'
+        for before, now, said in [(100, 125, True), (100, 124, False), (100, 80, True), (100, 81, False), (100, 100, False), (40, 400, True), (400, 40, True)]:
+            with self.subTest(before=before, now=now):
+                self.assertEqual(measures.members_view(self.trail(before, now))['note'], caution if said else '')
+
+    def test_the_sentences_follow_the_house_wording_rules(self):
+        for counts in ((None, 250), (200, 260), (200, 100), (200, 200), (200, None, 400)):
+            view = measures.members_view(self.trail(*counts))
+            for text in (view['text'], view['note']):
+                for sentence in sentences(text):
+                    self.assertLessEqual(len(sentence.split()), MAX_WORDS, sentence)
+                for rule in FORBIDDEN:
+                    self.assertIsNone(rule.search(text), (rule.pattern, text))
+
+    def test_build_carries_the_view_and_the_record_keeps_the_members_of_its_check(self):
+        units = lively(neutral(96))
+        ctx = build_with(units, a={'members': 250}, history=[saved(96, gen=1, members=200)], gen=2)
+        self.assertEqual(ctx['record']['members'], 250)
+        self.assertEqual(ctx['members']['text'], 'Members: 200 at your last check, 250 now (50 more).')
+        self.assertEqual([r.get('members') for r in ctx['trail']], [200, 250])
+        self.assertIsNone(build_with(units, history=[saved(96, gen=1, members=200)], gen=2)['members'], 'no count for this check: nothing is said')
+        self.assertNotIn('members', build_with(units)['record'])
+
 
 # @@APPEND@@

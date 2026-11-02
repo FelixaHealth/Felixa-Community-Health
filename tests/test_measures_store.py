@@ -35,8 +35,8 @@ import store  # noqa: E402
 
 TONES = ('Polite', 'Funny', 'Empathetic', 'Encouraging', 'Ignorant', 'Egocentric', 'Neurotic', 'Sarcastic', 'Agitated', 'Aggressive', 'Rude', 'Disrespectful', 'Judgmental')
 ALLOWED = {'created_at', 'basis', 'sensitivity', 'model', 'model_key', 'period_start', 'period_end', 'sig', 'gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n',
-           'dig_n', 'heated_n', 'episodes', 'health', 'health_sd', 'peak'}
-INT_FIELDS = ('gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n', 'dig_n', 'heated_n', 'episodes')
+           'dig_n', 'heated_n', 'episodes', 'health', 'health_sd', 'peak', 'members'}
+INT_FIELDS = ('gen', 'n', 'total', 'sampled', 'stretches', 'hostile_n', 'care_n', 'dig_n', 'heated_n', 'episodes', 'members')
 FLOAT_FIELDS = ('health', 'health_sd', 'peak')
 T0 = datetime.datetime(2026, 3, 5, 18, 0)
 
@@ -51,7 +51,7 @@ def snap(**changes):
     """A good record, as measures.record makes one."""
     out = {'created_at': '2026-06-01T12:00:00', 'gen': 3, 'n': 96, 'total': 96, 'sampled': 0, 'basis': 'time', 'stretches': 12, 'model': 'qwen2.5:7b', 'sensitivity': 'medium',
            'period_start': '2026-03-01', 'period_end': '2026-03-31T12:00', 'health': 51.852, 'health_sd': 13.2, 'hostile_n': 4, 'care_n': 5, 'dig_n': 6, 'heated_n': 9,
-           'episodes': 1, 'peak': 22.5, 'sig': '96:40000:24000:0:0'}
+           'episodes': 1, 'peak': 22.5, 'sig': '96:40000:24000:0:0', 'members': 240}
     out.update(changes)
     if 'model_key' not in changes:                                                    # every record carries the fingerprint of its model name
         out['model_key'] = fingerprint(out.get('model') if isinstance(out.get('model'), str) else '')

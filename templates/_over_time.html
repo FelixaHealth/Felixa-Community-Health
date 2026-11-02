@@ -34,7 +34,8 @@
 <div class="table-wrap"><table class="vc-since" role="table"><caption class="sr-only">Your last check and this check</caption>
 <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Measure</th><th scope="col" role="columnheader">Last check</th><th scope="col" role="columnheader">This check</th>{% if alike %}<th scope="col" role="columnheader">Change</th>{% endif %}</tr></thead>
 <tbody role="rowgroup">{% for r in ms.since.rows %}<tr role="row"><th scope="row" role="rowheader">{{ r.label }}</th><td role="cell" data-label="Last check">{{ r.before }}</td><td role="cell" data-label="This check">{{ r.now }}</td>{% if alike %}<td role="cell" data-label="Change">{% if r.verdict %}{{ icons[verdict_tone[r.verdict]]|safe }}{{ r.verdict }}{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody></table></div>
-{% endif %}</div>
+{% endif %}
+{% if ms.members %}<p class="vc-trendline vc-members">{{ ms.members.text }}</p>{% if ms.members.note %}<p class="vc-note">{{ ms.members.note }}</p>{% endif %}{% endif %}</div>
 {% if mh.trail_chart %}<div class="vc-keep"><h3>Check by check</h3>
 <p class="vc-note">The health score at each check, oldest first.</p>
 {{ mh.trail_chart|safe }}</div>

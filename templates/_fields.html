@@ -1,0 +1,8 @@
+{# Form pieces shared by the setup steps and the edit page. Import with context: the macro reads `msg`. #}
+{% macro choice(name, options, current, typed, label, hint) %}
+<label class="field">{{ label }}<select name="{{ name }}" data-other="{{ name }}_other" required{% if msg %} aria-invalid="true" aria-describedby="flash"{% endif %}><option value="" {% if not current %}selected{% endif %} disabled>{{ hint }}</option>{% for o in options %}<option value="{{ o }}" {% if o == current %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+<label class="field other-field" id="{{ name }}_other_wrap" {% if current != 'Other' %}hidden{% endif %}>Tell us <input name="{{ name }}_other" value="{{ typed }}" maxlength="120" placeholder="Type it here"></label>
+{% endmacro %}
+{% macro members_field(value) %}<label class="field">Number of members <small>(optional)</small><input name="members" inputmode="numeric" value="{{ value }}" maxlength="12" placeholder="For example: 250"></label>{% endmacro %}
+{% macro zone_field(value, zones) %}<label class="field">Time zone <small>(optional)</small><input name="time_zone" list="zone-list" value="{{ value }}" maxlength="60" placeholder="For example: Europe/London" autocomplete="off" data-tz-auto></label>
+<datalist id="zone-list">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>{% endmacro %}

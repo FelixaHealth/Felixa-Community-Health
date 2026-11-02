@@ -4687,5 +4687,163 @@ class Workplaces(AppCase):
         self.assertNotIn('Not validated', page)
 
 
+# ======================================================================================
+class WorkplaceManagement(AppCase):
+    """One-time setup, then edit, delete and the side tab: members and time zone, one edit page, deleting a workplace, and the member count that each check keeps."""
+
+    FORM = {'environment': 'Team', 'workplace_name': 'Robotics Club', 'members': '1,200', 'time_zone': 'Europe/London', 'area': 'Education', 'channel': 'Slack',
+            'user_name': 'Alex Kim', 'user_role': 'Manager', 'goals': ['Are people engaged?']}
+
+    def post(self, aid, path, **data):
+        return self.client.post(f'/analysis/{aid}/{path}', data=data)
+
+    def test_setup_step_2_takes_members_and_a_time_zone_and_refuses_bad_ones(self):
+        aid = int(self.client.get('/new').headers['location'].split('/')[2])
+        r = self.post(aid, 'step/2', workplace_name='Chess Club', members='1,200', time_zone='Europe/London')
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/step/3')
+        row = self.store.get_analysis(aid)
+        self.assertEqual((row['person_name'], row['members'], row['time_zone']), ('Chess Club', 1200, 'Europe/London'))
+        r = self.post(aid, 'step/2', workplace_name='Chess Club')                                   # both are optional
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/step/3')
+        row = self.store.get_analysis(aid)
+        self.assertEqual((row['members'], row['time_zone']), (None, None))
+        for bad in ({'members': 'many'}, {'members': '0'}, {'members': '-5'}, {'members': '1e3'}, {'time_zone': 'Mars/Base'}, {'time_zone': '<b>x</b>'}):
+            r = self.post(aid, 'step/2', workplace_name='Chess Club', **bad)
+            self.assertEqual(r.headers['location'], f'/analysis/{aid}/step/2', bad)
+        page = self.client.get(f'/analysis/{aid}/step/2').text
+        self.assertIn('name="members"', page)
+        self.assertIn('list="zone-list"', page)
+        self.assertIn('<option value="Europe/London">', page)
+
+    def test_the_edit_page_shows_every_answer_and_saves_them_all_at_once(self):
+        aid = self.new_analysis()
+        page = self.client.get(f'/analysis/{aid}/edit').text
+        for name in ('environment', 'workplace_name', 'members', 'time_zone', 'area', 'channel', 'user_name', 'user_role', 'goals'):
+            self.assertIn(f'name="{name}"', page, name)
+        self.assertIn('value="Night Owls Guild"', page)
+        self.assertEqual(self.client.get('/analysis/999999/edit').status_code, 404)
+        r = self.client.post(f'/analysis/{aid}/edit', data=self.FORM)
+        self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/workspace'))
+        self.assertEqual(flash(r), 'Workplace saved.')
+        row = self.store.get_analysis(aid)
+        self.assertEqual((row['subject_type'], row['person_name'], row['members'], row['time_zone'], row['person_role'], row['channel'], row['user_name'], row['user_role']),
+                         ('Team', 'Robotics Club', 1200, 'Europe/London', 'Education', 'Slack', 'Alex Kim', 'Manager'))
+        self.assertEqual(json.loads(row['goals_json']), ['Are people engaged?'])
+        self.assertEqual(row['status'], 'ready', 'editing never sends a workplace back to setup')
+        page = self.client.get(f'/analysis/{aid}/edit').text
+        self.assertIn('value="Robotics Club"', page)
+        self.assertIn('value="1200"', page)
+        self.assertIn('value="Europe/London"', page)
+        other = self.client.post(f'/analysis/{aid}/edit', data={**self.FORM, 'area': 'Other', 'area_other': 'A school club', 'members': '', 'time_zone': ''})
+        self.assertEqual(other.status_code, 303)
+        row = self.store.get_analysis(aid)
+        self.assertEqual((row['person_role'], row['members'], row['time_zone']), ('A school club', None, None), 'blank clears them')
+
+    def test_a_bad_edit_comes_back_with_what_was_typed_and_saves_nothing(self):
+        aid = self.new_analysis()
+        before = dict(self.store.get_analysis(aid))
+        r = self.client.post(f'/analysis/{aid}/edit', data={**self.FORM, 'members': 'lots', 'time_zone': 'Nowhere/Land', 'workplace_name': ''})
+        self.assertEqual(r.status_code, 200)
+        for said in ('Give the workplace a name.', 'whole number', 'Choose a time zone from the list'):
+            self.assertIn(said, r.text)
+        self.assertIn('value="lots"', r.text)                                                       # nothing typed has to be typed again
+        self.assertIn('value="Alex Kim"', r.text)
+        after = dict(self.store.get_analysis(aid))
+        for key in ('person_name', 'members', 'time_zone', 'subject_type', 'channel', 'user_name'):
+            self.assertEqual(after[key], before[key], key)
+
+    def test_a_workplace_not_set_up_yet_goes_to_the_steps_and_a_running_task_blocks_saving(self):
+        draft = int(self.client.get('/new').headers['location'].split('/')[2])
+        self.assertEqual(self.client.get(f'/analysis/{draft}/edit').headers['location'], f'/analysis/{draft}/step/1')
+        aid = self.new_analysis()
+        busy = self.store.create_job(aid, 'full')
+        self.addCleanup(self.store.job_update, busy, 'cancelled', 'done')
+        r = self.client.post(f'/analysis/{aid}/edit', data=self.FORM)
+        self.assertEqual((r.headers['location'], flash(r)), (f'/analysis/{aid}/workspace', 'Wait for the current task to finish before changing the check settings.'))
+        self.assertEqual(self.store.get_analysis(aid)['person_name'], 'Night Owls Guild')
+        r = self.post(aid, 'members', members='50')
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/workspace')
+        self.assertIsNone(self.store.get_analysis(aid)['members'])
+        r = self.post(aid, 'delete')
+        self.assertIn('Wait for the current task', flash(r))
+        self.assertIsNotNone(self.store.get_analysis(aid), 'a workplace with a running task is not deleted')
+
+    def test_deleting_a_workplace_removes_everything_of_it_and_only_it(self):
+        keep = self.with_chat(name='Keep Me')
+        gone = self.with_chat(name='Delete Me')
+        self.run_job(gone)
+        self.assertGreater(self.store.count_units(gone), 0)
+        self.assertTrue(self.store.measure_history(gone))
+        r = self.post(gone, 'delete')
+        self.assertEqual((r.status_code, r.headers['location']), (303, '/'))
+        self.assertIn('Deleted Delete Me', flash(r))
+        self.assertIsNone(self.store.get_analysis(gone))
+        with self.store.db() as c:
+            for table in ('sources', 'communication_units', 'behavior_metrics', 'findings', 'jobs', 'vibe_runs', 'vibe_history', 'measure_history'):
+                self.assertEqual(c.execute(f'SELECT COUNT(*) FROM {table} WHERE analysis_id=?', (gone,)).fetchone()[0], 0, table)
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM unit_ratings WHERE unit_id NOT IN (SELECT id FROM communication_units)').fetchone()[0], 0)
+        self.assertEqual(self.client.get(f'/analysis/{gone}/workspace').status_code, 404)
+        self.assertEqual(self.post(gone, 'delete').status_code, 404, 'twice is a not found, not a crash')
+        self.assertGreater(self.store.count_units(keep), 0, 'the other workplace is untouched')
+        home = self.client.get('/').text
+        self.assertNotIn('<strong>Delete Me</strong>', home)
+        self.assertIn('<strong>Keep Me</strong>', home)
+
+    def test_the_edit_page_explains_what_deleting_does_before_it_does_it(self):
+        aid = self.new_analysis()
+        page = self.client.get(f'/analysis/{aid}/edit').text
+        self.assertIn('Delete this workplace…', page)
+        self.assertIn('every result and the numbers of all its earlier checks', page)
+        self.assertIn('It cannot be undone.', page)
+        self.assertIn(f'action="/analysis/{aid}/delete"', page)
+
+    def test_the_side_tab_lists_the_workplaces_with_the_current_one_marked(self):
+        first = self.new_analysis(name='Side Tab One')
+        second = self.new_analysis(name='Side Tab Two')
+        draft = int(self.client.get('/new').headers['location'].split('/')[2])
+        self.client.post(f'/analysis/{draft}/step/2', data={'workplace_name': 'Never Finished'})
+        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/edit', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3'):
+            page = self.client.get(path).text
+            self.assertIn('aria-label="Workplaces"', page, path)
+            self.assertIn(f'<a href="/analysis/{first}/workspace" aria-current="page" class="on">Side Tab One</a>', page, path)
+            self.assertIn(f'<a href="/analysis/{second}/workspace">Side Tab Two</a>', page, path)
+            self.assertIn('New workplace', page, path)
+            self.assertNotIn('Never Finished', page, 'a workplace that was never set up is not listed')
+        for step in range(1, 7):                                                                    # setup happens once: its steps carry no list of workplaces
+            self.assertNotIn('aria-label="Workplaces"', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
+        self.assertIn('href="/analysis/%d/edit"' % first, self.client.get(f'/analysis/{first}/workspace').text, 'Edit workplace opens the edit page, not the steps again')
+        self.assertNotIn(f'href="/analysis/{first}/step/1"', self.client.get(f'/analysis/{first}/workspace').text)
+
+    def test_members_are_set_while_checking_and_each_check_keeps_its_own_number(self):
+        aid = self.with_chat()
+        self.assertEqual(self.post(aid, 'members', members='x').headers['location'], f'/analysis/{aid}/check/1')
+        self.assertIsNone(self.store.get_analysis(aid)['members'])
+        r = self.post(aid, 'members', members='200')
+        self.assertEqual((r.headers['location'], flash(r)), (f'/analysis/{aid}/check/1', 'Members saved.'))
+        self.assertIn('value="200"', self.client.get(f'/analysis/{aid}/check/1').text)
+        self.run_job(aid)
+        first = self.store.measure_history(aid)[-1]
+        self.assertEqual(first['members'], 200)
+        ms = self.app.report.build(aid)['measures']
+        self.assertEqual(ms['members']['text'], 'Members at this check: 200. Later checks show how the group changes.')
+        self.client.post(f'/analysis/{aid}/check/new')
+        self.upload(aid, ('two.txt', RETRO, 'text/plain'))
+        self.post(aid, 'members', members='260')
+        self.run_job(aid)
+        hist = self.store.measure_history(aid)
+        self.assertEqual([h.get('members') for h in hist], [200, 260], 'each check kept the number it was made with')
+        ms = self.app.report.build(aid)['measures']
+        self.assertEqual(ms['members']['text'], 'Members: 200 at your last check, 260 now (60 more).')
+        self.assertIn('quarter or more', ms['members']['note'])
+        page = self.client.get(f'/analysis/{aid}/report').text
+        self.assertIn('Members: 200 at your last check, 260 now (60 more).', page)
+        self.assertIn('part of any change may come from who is in it', page)
+        rows = self.export_rows(aid)
+        self.assertIn(['Members', 'Members: 200 at your last check, 260 now (60 more).'], rows)
+        self.assertIn(['Note', ms['members']['note']], rows)
+        self.post(aid, 'members', members='')
+        self.assertIsNone(self.store.get_analysis(aid)['members'])
+
+
 if __name__ == '__main__':
     unittest.main()

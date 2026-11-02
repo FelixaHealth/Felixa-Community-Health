@@ -60,3 +60,13 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   const ahead = -behind, h = Math.floor(Math.abs(ahead) / 60), m = Math.abs(ahead) % 60;
   if (label) label.textContent = ahead === 0 ? 'UTC' : `UTC${ahead > 0 ? '+' : '-'}${h}${m ? ':' + String(m).padStart(2, '0') : ''}`;
 })();
+
+// Setup: an empty time zone box starts with this computer's own zone, when it is on the list.
+(() => {
+  const box = document.querySelector('input[data-tz-auto]');
+  if (!box || box.value) return;
+  let zone = '';
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return; }
+  const list = document.getElementById('zone-list');
+  if (zone && list && [...list.options].some((o) => o.value === zone)) box.value = zone;
+})();

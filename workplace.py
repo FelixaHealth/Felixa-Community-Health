@@ -62,6 +62,36 @@ def split_choice(value, options):
     return (value, '') if value in options and value != OTHER else (OTHER, value)
 
 
+MEMBERS_MAX = 100_000_000
+
+
+def read_members(form, name='members'):
+    """The number of members, an optional whole number. Returns (number or None, error). Commas and spaces are fine: '1,200' is 1200."""
+    text = str(form.get(name, '')).replace(',', '').replace(' ', '').strip()
+    if not text:
+        return None, ''
+    if not text.isdigit() or not 1 <= int(text) <= MEMBERS_MAX:
+        return None, f'Type the number of members as a whole number from 1 to {MEMBERS_MAX:,}, or leave it blank.'
+    return int(text), ''
+
+
+def time_zones() -> list:
+    """The time zone names offered in the list ('Europe/London'), UTC first. Empty when this computer has no time zone data."""
+    try:
+        import zoneinfo
+        return ['UTC'] + sorted(z for z in zoneinfo.available_timezones() if '/' in z and not z.startswith(('Etc/', 'posix', 'right', 'SystemV')))
+    except Exception:
+        return []
+
+
+def read_time_zone(form, name='time_zone'):
+    """The time zone, optional. Returns (name or '', error). Only a name from the list is kept, so nothing else is ever saved or shown."""
+    text = ' '.join(str(form.get(name, '')).split())
+    if not text:
+        return '', ''
+    return (text, '') if text in time_zones() else ('', 'Choose a time zone from the list, for example Europe/London, or leave it blank.')
+
+
 def read_goals(form):
     """The goal checkboxes and the Other box. Returns (goals, other_text, error). Other, when ticked, needs text."""
     chosen = [g for g in form.getlist('goals') if g in GOAL_OPTIONS or g == OTHER]

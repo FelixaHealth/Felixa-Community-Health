@@ -81,11 +81,13 @@ def _trail(ms) -> tuple:
     chart = figure(lambda w: bei_charts.trail_chart(trail, 'health', title='Health score, check by check', series='Health score', width=w))
     if not chart:
         return '', ''
+    named = any(r.get('members') for r in trail)                     # a Members column only when some check named its members
     rows = []
     for i, r in enumerate(trail, 1):
-        rows.append([f'Check {i}' + (' (this check)' if i == len(trail) else ''), long_date(r.get('created_at')), f'{r.get("n") or 0:,}',
-                     measures.whole(r.get('health') or 0), _of(r, 'hostile'), _of(r, 'care'), _of(r, 'dig'), _of(r, 'heated')])
-    table = _table(['Check', 'Date', 'Messages rated', 'Health score', 'Conflict', 'Empathy', 'Passive-aggressive', 'Heated messages'], rows,
+        rows.append([f'Check {i}' + (' (this check)' if i == len(trail) else ''), long_date(r.get('created_at')), f'{r.get("n") or 0:,}']
+                    + ([f'{r["members"]:,}' if r.get('members') else 'Not set'] if named else [])
+                    + [measures.whole(r.get('health') or 0), _of(r, 'hostile'), _of(r, 'care'), _of(r, 'dig'), _of(r, 'heated')])
+    table = _table(['Check', 'Date', 'Messages rated'] + (['Members'] if named else []) + ['Health score', 'Conflict', 'Empathy', 'Passive-aggressive', 'Heated messages'], rows,
                    'View the checks as a table', 'Table of the checks')
     return chart, table
 

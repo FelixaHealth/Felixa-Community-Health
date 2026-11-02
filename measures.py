@@ -508,7 +508,7 @@ def record(m, a=None, rated=None, gen=None, created_at=None) -> dict:
     rec = {'created_at': created_at or utc_now(), 'gen': gen, 'n': m['n'], 'total': (rated or {}).get('total') or m['n'], 'sampled': int(bool((rated or {}).get('note'))),
            'basis': m['basis'], 'stretches': len(m['stretches']), 'model': model,
            'model_key': _fingerprint(model), 'sensitivity': m['sensitivity'], 'period_start': get('period_start') or '', 'period_end': get('period_end') or '',
-           'health': round(m['health'], 3), 'health_sd': round(math.sqrt(_d_var(o)) * 50 / HEALTH_DIVISOR, 3),
+           'members': get('members') or None, 'health': round(m['health'], 3), 'health_sd': round(math.sqrt(_d_var(o)) * 50 / HEALTH_DIVISOR, 3),
            'hostile_n': o['hostile'], 'care_n': o['care'], 'dig_n': o['dig'], 'heated_n': o['heated'],
            'episodes': len(m['episodes']) if m['verdicts'] else None, 'peak': round(max((e['peak'] for e in m['episodes']), default=0.0), 3) if m['verdicts'] else None, 'sig': m['sig']}
     return {k: v for k, v in rec.items() if v is not None}          # no empty fields: what is saved is exactly what is here
@@ -937,11 +937,33 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
     marked = any(c['tone'] in ('warn', 'bad') for c in card_list) or tile['tone'] == 'bad'
     # the all-clear line is a claim, so it needs every ground: enough messages, Vibe Check read nearly all of them and its newest run finished, no alert, no marked figure
     all_clear = bool(covered and m['n'] >= MIN_TIMELINE and not counts['high'] and not counts['medium'] and not is_silent(m) and not marked)
-    return {'m': m, 'cards': card_list, 'health': tile, 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
+    return {'members': members_view(trail), 'm': m, 'cards': card_list, 'health': tile, 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
             'badges_earned': sum(1 for b in earned if b['earned']), 'trail': trail, 'since': since_table(comparison, live), 'comparison': comparison, 'record': live,
             'basis_text': basis_text(m, cov, vibe), 'chart_key': chart_key(m), 'all_clear': all_clear,
             'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES, 'since': CAVEAT_SINCE},
             'texts': {'first_check': FIRST_CHECK, 'no_badges': NO_BADGES}}
+
+
+MEMBERS_CHANGE = 1.25         # a group that grew or shrank by a quarter or more since the last count (up 25%, or down to 4 in 5)
+
+
+def members_view(trail) -> dict | None:
+    """The size of the group beside the checks: how many members this check was made with, how many the check before it named, and a caution when the group
+    changed a lot. None when this check names no members. `trail` ends with the current check."""
+    if not trail or not trail[-1].get('members'):
+        return None
+    now = trail[-1]['members']
+    earlier = [r for r in trail[:-1] if r.get('members')]
+    if not earlier:
+        return {'now': now, 'before': None, 'text': f'Members at this check: {now:,}. Later checks show how the group changes.', 'note': ''}
+    before = earlier[-1]['members']
+    last = earlier[-1] is trail[-2]
+    gap = now - before
+    change = 'the same number' if gap == 0 else f'{abs(gap):,} {"more" if gap > 0 else "fewer"}'
+    big = max(now, before) >= MEMBERS_CHANGE * min(now, before)
+    return {'now': now, 'before': before, 'change': gap,
+            'text': f'Members: {before:,} at {"your last check" if last else "an earlier check"}, {now:,} now ({change}).',
+            'note': 'The group changed by a quarter or more, so part of any change may come from who is in it.' if big else ''}
 
 
 def chart_key(m) -> str:

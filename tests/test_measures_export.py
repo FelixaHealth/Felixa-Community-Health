@@ -308,6 +308,27 @@ class MeasuresExport(AppCase):
         self.assertEqual(head[9], 'Mark')                                                              # the last column: the icon of the page, in words
         self.assertTrue({r[8] for r in table_after(rows, MEASURE_HEAD)} <= {'', 'Rare', 'Some', 'Often'})
 
+    def test_the_group_size_is_printed_in_the_csv_and_the_pdf_when_checks_name_it(self):
+        ctx = self.edited('three')
+        ms = ctx['measures']
+        ms['trail'] = [dict(r, members=m) for r, m in zip(ms['trail'], (200, 220, 300))]
+        ms['members'] = measures.members_view(ms['trail'])
+        self.assertIn('quarter or more', ms['members']['note'])
+        import measures_export
+        rows = measures_export.csv_rows(ms)
+        self.assertIn(['Members', 'Members: 220 at your last check, 300 now (80 more).'], rows)
+        self.assertIn(['Note', ms['members']['note']], rows)
+        head = next(r for r in rows if r[:2] == ['Check', 'Date'])
+        self.assertEqual(head[:5], ['Check', 'Date', 'Messages rated', 'Members', 'Health score'])
+        self.assertEqual([r[3] for r in rows[rows.index(head) + 1:rows.index(head) + 4]], [200, 220, 300])
+        data, _story, _seen = self.laid_out(ctx)
+        text = squeeze(' '.join(our_pages(page_texts(data))))
+        self.assertEqual(text.count(squeeze('Members: 220 at your last check, 300 now (80 more).')), 1)
+        self.assertEqual(text.count(squeeze(ms['members']['note'])), 1)
+        plain = measures_export.csv_rows(self.ms('three'))                                          # no members named: no column, no row
+        self.assertNotIn(['Members'], [r[:1] for r in plain])
+        self.assertEqual(next(r for r in plain if r[:2] == ['Check', 'Date'])[:4], ['Check', 'Date', 'Messages rated', 'Health score'])
+
     def test_a_part_that_could_not_be_judged_says_neither_yes_nor_no_in_the_csv(self):
         """Under 48 messages no heated moment is judged, so 'Counted as a heated moment' is empty: a 'No' would say that every part was judged and none counted."""
         ms = self.ms('thin')

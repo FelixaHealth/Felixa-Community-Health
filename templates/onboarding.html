@@ -1,8 +1,5 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Step {{ step }} of {{ last }}{% endblock %}
-{% macro choice(name, options, current, typed, label, hint) %}
-<label class="field">{{ label }}<select name="{{ name }}" data-other="{{ name }}_other" required{% if msg %} aria-invalid="true" aria-describedby="flash"{% endif %}><option value="" {% if not current %}selected{% endif %} disabled>{{ hint }}</option>{% for o in options %}<option value="{{ o }}" {% if o == current %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
-<label class="field other-field" id="{{ name }}_other_wrap" {% if current != 'Other' %}hidden{% endif %}>Tell us <input name="{{ name }}_other" value="{{ typed }}" maxlength="120" placeholder="Type it here"></label>
-{% endmacro %}
+{% from "_fields.html" import choice, members_field, zone_field with context %}
 {% block content %}
 <div class="shell three">{% include "_rail.html" %}
 <section class="question-card">
@@ -14,8 +11,9 @@
 <fieldset class="group"><legend class="sr-only">What kind of place is this?</legend><div class="option-grid">{% for name, about in environments %}<label class="option"><input type="radio" name="environment" value="{{ name }}" data-other="environment_other" required {% if env == name %}checked{% endif %}><span><b>{{ name }}</b><small>{{ about }}</small></span></label>{% endfor %}</div></fieldset>
 <label class="field other-field" id="environment_other_wrap" {% if env != 'Other' %}hidden{% endif %}>Tell us what kind of place it is <input name="environment_other" value="{{ env_other }}" maxlength="120" placeholder="For example: a school club"></label>
 {% elif step == 2 %}
-<h1>What is the workplace called?</h1><p class="lead">This is the name you will see on every report.</p>
+<h1>What is the workplace called?</h1><p class="lead">The name is what you will see on every report. The number of members and the time zone are optional, and you can change them any time.</p>
 <label class="field">Name of the workplace<input name="workplace_name" value="{{ a.person_name or '' }}" required maxlength="200" {% if msg %}aria-invalid="true" aria-describedby="flash"{% endif %} placeholder="For example: Night Owls Guild" autofocus></label>
+{{ members_field(members_text) }}{{ zone_field(a.time_zone or '', time_zones) }}
 {% elif step == 3 %}
 <h1>What area does it work in?</h1><p class="lead">This helps the report speak your language.</p>
 {{ choice('area', areas, area, area_other, 'Area', 'Choose an area') }}

@@ -140,7 +140,8 @@ CREATE INDEX IF NOT EXISTS idx_vibehist_analysis ON vibe_history(analysis_id);
 
 # Columns added after the original schema. Older databases gain them on start.
 ADDED_COLUMNS = {'analyses': [('vibe_sensitivity', "TEXT DEFAULT 'medium'"), ('rated_units_total', 'INTEGER'), ('channel', 'TEXT'), ('user_name', 'TEXT'),
-                              ('user_role', 'TEXT'), ('check_volume', 'INTEGER'), ('incognito', 'INTEGER DEFAULT 0'), ('engine', 'TEXT'), ('period_tz', 'INTEGER'), ('cloud_ok', 'INTEGER DEFAULT 0')], 'jobs': [('cancel_requested', 'INTEGER DEFAULT 0')],
+                              ('user_role', 'TEXT'), ('check_volume', 'INTEGER'), ('incognito', 'INTEGER DEFAULT 0'), ('engine', 'TEXT'), ('period_tz', 'INTEGER'), ('cloud_ok', 'INTEGER DEFAULT 0'),
+                              ('members', 'INTEGER'), ('time_zone', 'TEXT')], 'jobs': [('cancel_requested', 'INTEGER DEFAULT 0')],
                  'sources': [('content_hash', 'TEXT')], 'measure_history': [('gen', 'INTEGER')]}
 
 
@@ -230,6 +231,13 @@ def update_analysis(aid, **fields):
     keys = list(fields)
     with db() as c:
         c.execute('UPDATE analyses SET ' + ','.join(f'{k}=?' for k in keys) + ' WHERE id=?', [fields[k] for k in keys] + [aid])
+
+
+def workplace_names(limit=50) -> list:
+    """The workplaces that have been set up, for the side tab: id and name only, in the order they were created."""
+    with db() as c:
+        return [dict(r) for r in c.execute("SELECT id, person_name AS name FROM analyses WHERE status != 'draft' AND person_name IS NOT NULL AND person_name != '' "
+                                           "ORDER BY id LIMIT ?", (limit,)).fetchall()]
 
 
 def workplaces(limit=50) -> list:
@@ -412,6 +420,20 @@ def clear_evidence(aid):
     empty_log()
 
 
+def delete_analysis(aid) -> bool:
+    """Deletes a workplace for good: its messages, ratings, results, tasks, the numbers of every earlier check and the workplace itself, and overwrites them in
+    the database file. Returns False, deleting nothing, while a task is queued or running (its worker still needs its rows)."""
+    with UPLOAD_LOCK, db() as c:
+        if c.execute("SELECT 1 FROM jobs WHERE analysis_id=? AND status IN ('queued','running')", (aid,)).fetchone():
+            return False
+        c.execute('DELETE FROM unit_ratings WHERE unit_id IN (SELECT id FROM communication_units WHERE analysis_id=?)', (aid,))
+        for table in ('communication_units', 'behavior_metrics', 'findings', 'vibe_runs', 'vibe_history', 'measure_history', 'sources', 'jobs'):
+            c.execute(f'DELETE FROM {table} WHERE analysis_id=?', (aid,))
+        c.execute('DELETE FROM analyses WHERE id=?', (aid,))
+    empty_log()
+    return True
+
+
 def anonymise_units(aid) -> int:
     """Incognito mode: replaces names in the stored messages (see privacy.scrub), for good. Returns how many messages changed."""
     import privacy
@@ -525,7 +547,7 @@ MEASURE_FIELDS = {
     'created_at': re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?'), 'basis': ('time', 'order'), 'sensitivity': ('low', 'medium', 'high', ''),
     'model': re.compile(r'[A-Za-z0-9._:/ ()+@-]{0,120}'), 'model_key': re.compile(r'(?:[0-9a-f]{12})?'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
     'period_end': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'), 'sig': re.compile(r'\d+(?::\d+){0,6}'),
-    'gen': int, 'n': int, 'total': int, 'sampled': int, 'stretches': int, 'hostile_n': int, 'care_n': int, 'dig_n': int, 'heated_n': int, 'episodes': int,
+    'gen': int, 'n': int, 'total': int, 'members': int, 'sampled': int, 'stretches': int, 'hostile_n': int, 'care_n': int, 'dig_n': int, 'heated_n': int, 'episodes': int,
     'health': float, 'health_sd': float, 'peak': float,
 }
 

@@ -392,7 +392,8 @@ def redirect(url, msg=None):
 
 def render(request, name, **context):
     flash = request.cookies.get('flash')
-    response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None, **context})
+    response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
+                                                                              'side_workplaces': store.workplace_names(), **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -458,8 +459,9 @@ def setup_rows(a):
     """What the right-hand panel shows while a workplace is being set up: (icon, label, value) for each answer so far."""
     goals = [g for g in json.loads(a['goals_json'] or '[]') if g] + ([a['goal_text']] if a['goal_text'] else [])
     you = ', '.join(x for x in (a['user_name'], a['user_role']) if x)
-    return [('users', 'Environment', a['subject_type']), ('target', 'Workplace', a['person_name']), ('gauge', 'Area', a['person_role']),
-            ('chat', 'Chat', a['channel']), ('person', 'You', you), ('check', 'Goals', '; '.join(goals))]
+    members = f'{int(a["members"]):,}' if str(a['members'] or '').isdigit() else str(a['members'] or '')
+    return [('users', 'Environment', a['subject_type']), ('target', 'Workplace', a['person_name']), ('users', 'Members', members), ('clock', 'Time zone', a['time_zone']),
+            ('gauge', 'Area', a['person_role']), ('chat', 'Chat', a['channel']), ('person', 'You', you), ('check', 'Goals', '; '.join(goals))]
 
 
 def setup_context(a, step):
@@ -471,7 +473,8 @@ def setup_context(a, step):
     return {'a': a, 'step': step, 'steps': workplace.SETUP_STEPS, 'last': SETUP_LAST, 'environments': workplace.ENVIRONMENTS,
             'areas': workplace.AREAS, 'channels': workplace.CHANNELS, 'discord_url': workplace.DISCORD_BOT_URL, 'roles': workplace.USER_ROLES, 'goal_options': workplace.GOAL_OPTIONS,
             'env': env, 'env_other': env_other, 'area': area, 'area_other': area_other, 'channel': channel, 'channel_other': channel_other,
-            'role': role, 'role_other': role_other, 'goals': goals, 'goal_other': a['goal_text'] or '',
+            'role': role, 'role_other': role_other, 'goals': goals, 'goal_other': a['goal_text'] or '', 'time_zones': workplace.time_zones(),
+            'members_text': a['members'] or '',
             'summary_title': 'Your workplace', 'summary_rows': setup_rows(a),
             'rail': wizard_rail(a['id'], workplace.SETUP_STEPS, f'/analysis/{a["id"]}/step', step,
                                 foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{a["id"]}/workspace'} if a['status'] != 'draft' else None)}
@@ -519,8 +522,11 @@ async def step1(request: Request, aid: AnalysisId):
 async def step2(request: Request, aid: AnalysisId):
     if not store.get_analysis(aid):
         return not_found()
-    name = ' '.join(str((await request.form()).get('workplace_name', '')).split())[:200]
-    return setup_saved(aid, 2, '' if name else 'Give the workplace a name.', person_name=name)
+    form = await request.form()
+    name = ' '.join(str(form.get('workplace_name', '')).split())[:200]
+    members, e1 = workplace.read_members(form)
+    zone, e2 = workplace.read_time_zone(form)
+    return setup_saved(aid, 2, ('' if name else 'Give the workplace a name.') or e1 or e2, person_name=name, members=members, time_zone=zone or None)
 
 
 @app.post('/analysis/{aid}/step/3')
@@ -668,14 +674,88 @@ def upload_message(added, problems):
 def wizard_rail(aid, steps, base, current, foot=None):
     """The left-hand list of steps: each with a state (on, done or todo), and the item below the rule."""
     items = [{'num': n, 'label': label, 'href': f'{base}/{n}', 'state': 'on' if n == current else 'done' if n < current else 'todo'} for n, label in steps]
-    return {'steps': items, 'foot': foot}
+    return {'steps': items, 'foot': foot, 'setup': base.endswith('/step')}      # the steps of setting a workplace up (once) do not carry the list of workplaces
 
 
 def workplace_rail(aid, on):
     items = [{'icon': 'eye', 'label': 'Overview', 'href': f'/analysis/{aid}/workspace', 'state': 'on' if on == 'overview' else 'todo'},
              {'icon': 'plus', 'label': 'New check', 'href': f'/analysis/{aid}/workspace#new', 'state': 'todo'},
-             {'icon': 'target', 'label': 'Edit workplace', 'href': f'/analysis/{aid}/step/1', 'state': 'todo'}]
+             {'icon': 'target', 'label': 'Edit workplace', 'href': f'/analysis/{aid}/edit', 'state': 'on' if on == 'edit' else 'todo'}]
     return {'steps': items, 'foot': None}
+
+
+def read_setup(form):
+    """Every answer of the workplace form at once, for the edit page: (fields to save, the list of things that are wrong)."""
+    env, e_env = workplace.pick(form, 'environment', ENV_NAMES, 'what kind of place this is')
+    name = ' '.join(str(form.get('workplace_name', '')).split())[:200]
+    members, e_members = workplace.read_members(form)
+    zone, e_zone = workplace.read_time_zone(form)
+    area, e_area = workplace.pick(form, 'area', workplace.AREAS, 'the area it works in')
+    channel, e_channel = workplace.pick(form, 'channel', workplace.CHANNELS, 'where people talk')
+    user = ' '.join(str(form.get('user_name', '')).split())[:120]
+    role, e_role = workplace.pick(form, 'user_role', workplace.USER_ROLES, 'your role')
+    goals, other, e_goals = workplace.read_goals(form)
+    errors = [e for e in (e_env, '' if name else 'Give the workplace a name.', e_members, e_zone, e_area, e_channel, '' if user else 'Tell us your name.', e_role, e_goals) if e]
+    fields = {'subject_type': env, 'person_name': name, 'members': members, 'time_zone': zone or None, 'person_role': area, 'channel': channel, 'user_name': user,
+              'user_role': role, 'goals_json': json.dumps(goals), 'goal_text': other}
+    return fields, errors
+
+
+def edit_page(request, a, shown, **extra):
+    """The edit page for workplace row `a`, showing the answers in `shown` (the saved ones, or what was typed when something was wrong)."""
+    ctx = setup_context(shown, 0)
+    ctx.update(rail=workplace_rail(a['id'], 'edit'), busy=bool(store.active_job(a['id'])), a=a if shown is a else shown, **extra)
+    return render(request, 'edit.html', **ctx)
+
+
+@app.get('/analysis/{aid}/edit', response_class=HTMLResponse)
+def edit_get(request: Request, aid: AnalysisId):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    if a['status'] == 'draft':
+        return redirect(f'/analysis/{aid}/step/1')                       # not set up yet: the steps come first, once
+    return edit_page(request, a, a)
+
+
+@app.post('/analysis/{aid}/edit')
+async def edit_post(request: Request, aid: AnalysisId):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
+    form = await request.form()
+    fields, errors = read_setup(form)
+    if errors:                                                           # the page comes back with what was typed, so nothing has to be typed again
+        typed = {'members': str(form.get('members', ''))[:12], 'time_zone': str(form.get('time_zone', ''))[:60]}
+        return edit_page(request, a, {**dict(a), **fields, **typed}, errors=errors, msg=errors[0])
+    store.update_analysis(aid, **fields)
+    return redirect(f'/analysis/{aid}/workspace', 'Workplace saved.')
+
+
+@app.post('/analysis/{aid}/members')
+async def members_post(request: Request, aid: AnalysisId):
+    """The number of members as it is now, set when a check starts: each check keeps the number it was made with, so the trend can follow the group."""
+    if not store.get_analysis(aid):
+        return not_found()
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
+    members, error = workplace.read_members(await request.form())
+    if error:
+        return redirect(f'/analysis/{aid}/check/1', error)
+    store.update_analysis(aid, members=members)
+    return redirect(f'/analysis/{aid}/check/1', 'Members saved.' if members else 'Members cleared.')
+
+
+@app.post('/analysis/{aid}/delete')
+def delete_workplace(aid: AnalysisId):
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    if not store.delete_analysis(aid):
+        return redirect(f'/analysis/{aid}/edit', 'Wait for the current task to finish, or cancel it, before deleting this workplace.')
+    return redirect('/', f'Deleted {a["person_name"] or "the workplace"}, with its messages, results and the numbers of its earlier checks.')
 
 
 @app.get('/analysis/{aid}/workspace', response_class=HTMLResponse)
