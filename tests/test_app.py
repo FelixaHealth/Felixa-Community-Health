@@ -8,6 +8,7 @@ the maths and the safeguards. They say nothing about how well a real language mo
 import asyncio
 import contextlib
 import csv
+import datetime
 import gc
 import inspect
 import io
@@ -727,7 +728,7 @@ class Uploads(AppCase):
                         ('empty.txt', b'', 'text/plain'), ('broken.pdf', b'not really a pdf', 'application/pdf'), ('table.csv', b'date,metric,value,unit\n2026-01-01,Subs,5,n\n', 'text/csv'))
         msg = flash(r)
         self.assertEqual(self.store.count_units(aid), 2)
-        for needle in ('Imported 2', 'evil.exe', 'unsupported', 'empty.txt', 'broken.pdf', 'table.csv'):
+        for needle in ('Imported 2', 'evil.exe', 'it is a program', 'empty.txt', 'broken.pdf', 'table.csv'):
             self.assertIn(needle, msg)
 
     def test_a_file_that_cannot_be_read_is_explained_without_the_name_of_an_exception(self):
@@ -1117,17 +1118,16 @@ class Uploads(AppCase):
 
     def test_messages_name_files_in_any_script(self):
         aid = self.new_analysis()
-        r = self.upload(aid, ('会议记录.txt', b'Thanks for the help\nGood work today', 'text/plain'), ('报告.xyz', b'x', 'text/plain'), ('空.txt', b'', 'text/plain'))
+        r = self.upload(aid, ('会议记录.txt', b'Thanks for the help\nGood work today', 'text/plain'), ('报告.xyz', b'\x00\x01\x02 not text \xff\xfe', 'application/octet-stream'), ('空.txt', b'', 'text/plain'))
         self.assertTrue(r.headers['location'].isascii())                                     # a header carries no raw letters: the message is percent-encoded
-        extensions = ', '.join(self.app.config.UPLOAD_EXTENSIONS)
-        self.assertEqual(flash(r),
-                         f'Imported 2 communication units. Skipped: 报告.xyz: unsupported type (use {extensions}). 空.txt: the file is empty.')
+        self.assertEqual(flash(r), 'Imported 2 communication units. Skipped: 报告.xyz: This file cannot be read: it is not a text file. Add it as CSV, Excel, Word, PDF or text, or paste the text. '
+                                   '空.txt: the file is empty.')
 
     def test_a_message_that_names_a_file_escapes_the_name(self):
         aid = self.new_analysis()
-        r = self.upload(aid, ('<u-test>&.xyz', b'x', 'text/plain'))
+        r = self.upload(aid, ('<u-test>&.xyz', b'\x00\x01 binary', 'application/octet-stream'))
         page = self.client.get(r.headers['location']).text
-        self.assertIn('&lt;u-test&gt;&amp;.xyz: unsupported type', page)
+        self.assertIn('&lt;u-test&gt;&amp;.xyz: This file cannot be read', page)
         self.assertNotIn('<u-test>', page)
 
     def test_each_file_is_scored_under_its_own_name_and_the_name_is_escaped_everywhere(self):
@@ -1364,6 +1364,42 @@ class ReviewPeriod(AppCase):
         rows = self.export_rows(aid) if self.store.latest_vibe(aid) or self.app.analysis.metrics_for(aid) else []
         if rows:
             self.assertIn(['Review period', 'Mar 1, 2026 18:00 UTC to Mar 1, 2026 19:00 UTC'], rows)
+
+    def test_quick_choices_count_back_from_the_newest_message(self):
+        aid = self.with_chat()                                                                  # 70 chat messages dated 1 to 7 March 2026, and 6 lines with no date
+        newest = self.store.timestamp_span(aid)[1]
+        page = self.client.get(f'/analysis/{aid}/check/4').text
+        for label in ('Last 24 hours', 'Last 7 days', 'Last 30 days', 'Last 90 days', 'All dates'):
+            self.assertIn(label, page)
+        self.assertNotRegex(page, r'name="preset" value="24h" formnovalidate disabled')
+        stamp = '%Y-%m-%dT%H:%M'
+        for key, delta in (('24h', datetime.timedelta(hours=24)), ('7d', datetime.timedelta(days=7)), ('30d', datetime.timedelta(days=30)), ('90d', datetime.timedelta(days=90))):
+            r = self.client.post(f'/analysis/{aid}/check/4', data={'preset': key, 'tz_offset': '-60'})
+            self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/5', key)
+            self.assertEqual(self.saved(aid), ((newest - delta).strftime(stamp), newest.strftime(stamp)), key)
+            self.assertEqual(self.store.get_analysis(aid)['period_tz'], -60)
+        self.client.post(f'/analysis/{aid}/check/4', data={'preset': '24h'})
+        start, end = self.saved(aid)
+        dated = [u for u in self.store.units_for(aid) if self.app.parse_ts(u['timestamp'])]
+        inside = [u for u in dated if newest - datetime.timedelta(hours=24) <= self.app.parse_ts(u['timestamp']) <= newest]
+        kept = self.store.units_for(aid, in_period=True)
+        self.assertEqual(len(kept), len(inside) + 6)                                            # what falls in the day, and the six lines with no date
+        self.assertLess(len(kept), 76)
+        self.assertTrue(all(self.app.parse_ts(u['timestamp']) is None or newest - datetime.timedelta(hours=24) <= self.app.parse_ts(u['timestamp']) for u in kept))
+        self.client.post(f'/analysis/{aid}/check/4', data={'preset': '7d'})
+        self.assertEqual(len(self.store.units_for(aid, in_period=True)), 76)                    # a week covers everything
+        self.client.post(f'/analysis/{aid}/check/4', data={'all_dates': '1'})
+        self.assertEqual(self.saved(aid), ('', ''))
+
+    def test_a_quick_choice_needs_dated_messages_and_is_off_without_them(self):
+        aid = self.new_analysis()
+        self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello there everyone\nwelcome all friends', 'actor_role': 'SUBJECT', 'back': 'check'})
+        page = self.client.get(f'/analysis/{aid}/check/4').text
+        self.assertRegex(page, r'name="preset" value="7d" formnovalidate\s+disabled')
+        r = self.client.post(f'/analysis/{aid}/check/4', data={'preset': '7d'})                   # sent anyway
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/4')
+        self.assertIn('cannot be worked out', flash(r))
+        self.assertEqual(self.saved(aid), (None, None))                                           # nothing was saved
 
     def test_use_all_dates_clears_the_period(self):
         aid = self.new_analysis()
@@ -3449,6 +3485,37 @@ class Workplaces(AppCase):
         for place in ('Google Meet', 'Messages (SMS or iMessage)'):
             r = self.post(aid, 'step/4', channel=place)
             self.assertEqual((r.headers['location'], self.store.get_analysis(aid)['channel']), (f'/analysis/{aid}/step/5', place))
+
+    def test_any_kind_of_file_can_be_added_and_the_page_says_so(self):
+        from openpyxl import Workbook
+        aid = self.new_analysis()
+        page = self.client.get(f'/analysis/{aid}/check/1').text
+        file_tab = page[page.index('id="p-file"'):page.index('id="p-paste"')]
+        self.assertIn('<input type="file" name="files" multiple', file_tab)                              # the file box takes anything: no list of allowed types
+        self.assertIn('accept=', page[page.index('id="p-voice"'):page.index('id="p-link"')])             # the Voice box takes recordings only
+        for needle in ('Excel', 'Word (.docx, .doc)', 'PDF', 'email (.eml)', 'subtitles', 'each sheet of a workbook is its own source', 'Any kind of file with text in it'):
+            self.assertIn(needle, page)
+        book = Workbook()
+        sheet = book.active
+        sheet.title = 'Guild'
+        sheet.append(['Date', 'Author', 'Message'])
+        for i, text in enumerate(('Thanks for the help, really appreciate it', 'you are completely useless, uninstall', 'Great game everyone, well done', 'please keep it friendly folks')):
+            sheet.append([f'2026-03-01T18:0{i}:00Z', f'user{i}', text])
+        buffer = io.BytesIO()
+        book.save(buffer)
+        r = self.upload(aid, ('guild chat.xlsx', buffer.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                        ('notes.rtf', rb'{\rtf1\ansi Welcome everyone, glad you are all here today.\par Thanks for coming, see you next week.\par}', 'application/rtf'),
+                        ('thread.html', b'<html><body><p>This is a long enough line to be read as a message.</p></body></html>', 'text/html'),
+                        ('talk.srt', b'1\n00:00:01,000 --> 00:00:04,000\nWelcome to the show everybody tonight\n', 'application/x-subrip'),
+                        ('export.weird', b'a plain text export with a made-up extension', 'application/octet-stream'),
+                        ('photo.png', b'\x89PNG\r\n\x1a\n', 'image/png'))
+        said = flash(r)
+        self.assertIn('Imported 8 communication units', said)
+        self.assertIn('photo.png: This file cannot be read: it is a picture', said)
+        self.assertEqual(self.store.count_units(aid), 8)
+        sources = {e['source_label'] for e in self.store.evidence_by_source(aid)}
+        self.assertTrue({'guild chat.xlsx', 'notes.rtf', 'thread.html', 'talk.srt', 'export.weird'} <= sources, sources)
+        self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')               # and they are all checked like any other message
 
     def test_the_one_click_starts_for_your_claude_login_need_no_ollama_and_no_key(self):
         mac = (ROOT / 'run_claude_mac.command').read_text()

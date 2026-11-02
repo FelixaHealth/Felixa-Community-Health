@@ -300,6 +300,14 @@ def units_for(aid, in_period=False) -> list:
     return units
 
 
+def timestamp_span(aid):
+    """(oldest, newest) of the dated messages of an analysis as UTC datetimes, or None when none has a readable date."""
+    with db() as c:
+        stamps = [parse_ts(r['timestamp']) for r in c.execute('SELECT timestamp FROM communication_units WHERE analysis_id=?', (aid,))]
+    stamps = [x for x in stamps if x]
+    return (min(stamps), max(stamps)) if stamps else None
+
+
 def count_units(aid) -> int:
     with db() as c:
         return c.execute('SELECT COUNT(*) n FROM communication_units WHERE analysis_id=?', (aid,)).fetchone()['n']

@@ -421,7 +421,8 @@ def _pdf_text(pages, notes: list | None) -> str:
 
 
 def units_from_file(path, label: str | None = None, *, clean: bool = True, notes: list | None = None) -> list[dict]:
-    """Reads .csv .json .txt .md .log .pdf .docx. PDF and DOCX need pypdf / python-docx. The columns of a CSV may be separated by commas,
+    """Reads .csv .tsv .json .txt .md .log .pdf .docx, spreadsheets (.xlsx .xlsm .xls .ods), .doc .rtf .odt, slides (.pptx .odp), web pages (.html .xml), email (.eml)
+    and subtitles (.srt .vtt), and any other file that is text (see office.py). PDF and DOCX need pypdf / python-docx. The columns of a CSV may be separated by commas,
     semicolons, tabs or pipes, and a text file may be UTF-8, UTF-16 or UTF-32 (with a byte order mark) or Windows-1252 (see _read_text).
     Reads at most MAX_TEXT_CHARS characters of text, MAX_READ_UNITS units (a CSV counts its rows), and MAX_PDF_PAGES pages and MAX_PDF_SECONDS
     seconds of a PDF, and refuses a Word file that unzips to more than a document should. A list passed as `notes` gets a phrase for each CSV
@@ -431,7 +432,7 @@ def units_from_file(path, label: str | None = None, *, clean: bool = True, notes
     path = Path(path)
     source = label or path.name
     ext = path.suffix.lower()
-    if ext == '.csv':
+    if ext in ('.csv', '.tsv'):
         reader = _csv_reader(_read_text(path, notes))
         rows = list(itertools.islice(reader, MAX_READ_UNITS))
         if notes is not None:
@@ -460,7 +461,20 @@ def units_from_file(path, label: str | None = None, *, clean: bool = True, notes
         doc = Document(str(path))
         blocks = itertools.chain((p.text for p in doc.paragraphs), (c.text for t in doc.tables for r in t.rows for c in r.cells))
         return units_from_text('\n\n'.join(itertools.islice(blocks, MAX_DOCX_BLOCKS)), source, mode='document', clean=clean)
-    raise UnsupportedFileError(f'Unsupported file type {ext or "(none)"}. Use CSV, JSON, TXT, MD, PDF or DOCX.')
+    from . import office
+    if ext in office.TABLE_TYPES:                                               # Excel and OpenDocument spreadsheets: a row is a message, a sheet may be a source
+        sheets = office.table_rows(path, ext, notes)
+        units = []
+        for name, rows in sheets:
+            units.extend(units_from_rows(rows, f'{source} · {name}' if len(sheets) > 1 else source, clean=clean))
+        return units[:MAX_READ_UNITS]
+    if ext in office.TEXT_TYPES:                                                # old Word, RTF, slides, web pages, email, subtitles
+        text, mode = office.text_of(path, ext, notes)
+        return units_from_text(text, source, mode=mode, clean=clean)
+    text = None if ext in office.REFUSALS else office.plain_text_or_none(path, notes)     # a kind nobody listed: read it if it is text
+    if text is None:
+        raise UnsupportedFileError(f'This file cannot be read: {office.explain(ext)}.')
+    return units_from_text(text, source, clean=clean)
 
 
 # ---- selection -------------------------------------------------------------------

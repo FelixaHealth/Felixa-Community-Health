@@ -591,7 +591,20 @@ UNREADABLE = {                                  # what a file of each kind is li
     '.json': 'could not be read; it may be damaged or not really a JSON file',
     '.csv': 'could not be read; it may be damaged or not really a CSV file',
     '': 'could not be read; it may be damaged',
+    '.xlsx': 'could not be read; it may be damaged, password-protected or not really an Excel file',
+    '.xlsm': 'could not be read; it may be damaged, password-protected or not really an Excel file',
+    '.xls': 'could not be read; it may be damaged, password-protected or not really an Excel file',
+    '.ods': 'could not be read; it may be damaged or not really a spreadsheet',
+    '.odt': 'could not be read; it may be damaged or not really an OpenDocument file',
+    '.pptx': 'could not be read; it may be damaged, password-protected or not really a PowerPoint file',
+    '.doc': 'could not be read; it may be damaged, password-protected or not really a Word file',
+    '.rtf': 'could not be read; it may be damaged or not really an RTF file',
 }
+
+
+def safe_suffix(ext: str) -> str:
+    """The extension a temporary copy of an upload is given: it decides which reader runs, so it is only ever letters and digits."""
+    return ext if re.fullmatch(r'\.[a-z0-9]{1,10}', ext) else ''
 
 
 def ingest_files(aid, files) -> tuple:
@@ -606,9 +619,6 @@ def ingest_files(aid, files) -> tuple:
             continue
         name = file_label(raw_name)
         ext = Path(name).suffix.lower()
-        if ext not in config.UPLOAD_EXTENSIONS:
-            problems.append(f'{name}: unsupported type (use {", ".join(config.UPLOAD_EXTENSIONS)})')
-            continue
         data = f.file.read(config.MAX_UPLOAD_BYTES + 1)
         if not data:
             problems.append(f'{name}: the file is empty')
@@ -620,7 +630,7 @@ def ingest_files(aid, files) -> tuple:
         if store.has_upload(aid, digest):                                       # the usual repeat is caught here, before the file is read
             problems.append(f'{name}: {REPEATED_FILE}')
             continue
-        with tempfile.NamedTemporaryFile(dir=config.upload_dir(), prefix=config.UPLOAD_PREFIX, suffix=ext, delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(dir=config.upload_dir(), prefix=config.UPLOAD_PREFIX, suffix=safe_suffix(ext), delete=False) as tmp:
             tmp.write(data)
         notes = []
         try:
@@ -701,7 +711,7 @@ def check_rows(a, units_n):
             ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
             ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
             ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
-            ('cpu', 'Engine', cloud.label(a['engine'] or (config.model_name() if config.local_model_enabled() else 'claude:' + cloud.CLAUDE_MODELS[0][0] if cloud.available() or not cloud.login_available() else 'claudecode:' + cloud.LOGIN_MODELS[0][0])))]
+            ('cpu', 'Engine', cloud.label(a['engine']) if a['engine'] else '')]
 
 
 def check_context(a, step):
@@ -717,7 +727,7 @@ def check_context(a, step):
     ctx = {'a': a, 'step': step, 'steps': workplace.CHECK_STEPS, 'last': CHECK_LAST, 'units_n': units_n, 'in_scope': in_scope, 'evidence': evidence,
            'volumes': [v for v in workplace.VOLUMES if v < units_n], 'volume': volume, 'volume_min': workplace.VOLUME_MIN, 'volume_max': config.max_units(),
            'custom': a['check_volume'] if a['check_volume'] and a['check_volume'] not in workplace.VOLUMES else '', 'discord_url': workplace.DISCORD_BOT_URL, 'incognito': bool(a['incognito']),
-           'dates': (label(stamps[0]), label(stamps[-1])) if stamps else None, 'period_form': period_form(a), 'period_text': report.period_text(period),
+           'dates': (label(stamps[0]), label(stamps[-1])) if stamps else None, 'period_form': period_form(a), 'presets': [(k, l) for k, l, _d in PRESETS], 'period_text': report.period_text(period),
            'sens_options': [(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
            'sensitivity': a['vibe_sensitivity'] or 'medium', 'extensions': ', '.join(config.UPLOAD_EXTENSIONS),
            'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': a['channel'] == 'Discord',
@@ -732,12 +742,23 @@ def check_context(a, step):
         if not local:
             ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
         ctx['local_enabled'] = local
-        ctx['engine'] = a['engine'] or (config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0] if cloud.available() or not cloud.login_available() else 'claudecode:' + cloud.LOGIN_MODELS[0][0])
+        installed = any(m['name'] in (config.model_name(), config.model_name() + ':latest') for m in models)
+        if a['engine']:
+            ctx['engine'] = a['engine']
+        elif local and installed:                                                           # preselect whatever can actually run, the local model first
+            ctx['engine'] = config.model_name()
+        elif cloud.login_available():
+            ctx['engine'] = 'claudecode:' + cloud.LOGIN_MODELS[0][0]
+        elif cloud.available():
+            ctx['engine'] = 'claude:' + cloud.CLAUDE_MODELS[0][0]
+        else:
+            ctx['engine'] = config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0]
         ctx['model_server_up'] = bool(models) if local else True
         ctx['cloud_ready'] = cloud.available()
         ctx['login_offered'] = cloud.login_offered()
         ctx['login_ready'] = cloud.login_available()
         ctx['cloud_ok'] = bool(a['cloud_ok'])
+        ctx['summary_rows'] = ctx['summary_rows'][:-1] + [('cpu', 'Engine', cloud.label(ctx['engine']))]          # what is selected now is what will run
     return ctx
 
 
@@ -837,6 +858,10 @@ def period_form(a):
     return out
 
 
+PRESETS = (('24h', 'Last 24 hours', datetime.timedelta(hours=24)), ('7d', 'Last 7 days', datetime.timedelta(days=7)),
+           ('30d', 'Last 30 days', datetime.timedelta(days=30)), ('90d', 'Last 90 days', datetime.timedelta(days=90)))
+
+
 @app.post('/analysis/{aid}/check/4')
 async def check_period(request: Request, aid: AnalysisId):
     a = store.get_analysis(aid)
@@ -845,21 +870,29 @@ async def check_period(request: Request, aid: AnalysisId):
     form = await request.form()
     if form.get('all_dates'):
         return check_saved(aid, 4, period_start='', period_end='', period_tz=None)
-    try:
-        start_day, end_day = store.parse_day(form.get('period_start')), store.parse_day(form.get('period_end'))
-    except ValueError:
-        return check_saved(aid, 4, 'Enter the start and the end as dates, or choose all dates.')
-    try:
-        start_clock, end_clock = clock_of(form.get('period_start_time')), clock_of(form.get('period_end_time'))
-    except ValueError:
-        return check_saved(aid, 4, 'Enter each time as hours and minutes, for example 20:30, or leave it blank.')
-    if (start_clock and not start_day) or (end_clock and not end_day):
-        return check_saved(aid, 4, 'A time needs a date: choose the date it belongs to.')
     offset = str(form.get('tz_offset', '0')).strip()
     offset = int(offset) if re.fullmatch(r'-?\d{1,4}', offset) and abs(int(offset)) <= 840 else 0
-    start, end = utc_bound(start_day, start_clock, offset, False), utc_bound(end_day, end_clock, offset, True)
-    if start and end and store.period_of({'period_start': start, 'period_end': end}) == (None, None):
-        return check_saved(aid, 4, 'The end cannot be before the start.')
+    chosen = next((delta for key, _label, delta in PRESETS if key == form.get('preset')), None)
+    if chosen is not None:                                                                 # a quick choice counts back from the newest message, not from today
+        span = store.timestamp_span(aid)
+        if span is None:
+            return check_saved(aid, 4, 'None of your messages has a readable date, so a quick choice cannot be worked out. Choose all dates.')
+        stamp = '%Y-%m-%dT%H:%M'
+        start, end = (span[1] - chosen).strftime(stamp), span[1].strftime(stamp)
+    else:
+        try:
+            start_day, end_day = store.parse_day(form.get('period_start')), store.parse_day(form.get('period_end'))
+        except ValueError:
+            return check_saved(aid, 4, 'Enter the start and the end as dates, or choose all dates.')
+        try:
+            start_clock, end_clock = clock_of(form.get('period_start_time')), clock_of(form.get('period_end_time'))
+        except ValueError:
+            return check_saved(aid, 4, 'Enter each time as hours and minutes, for example 20:30, or leave it blank.')
+        if (start_clock and not start_day) or (end_clock and not end_day):
+            return check_saved(aid, 4, 'A time needs a date: choose the date it belongs to.')
+        start, end = utc_bound(start_day, start_clock, offset, False), utc_bound(end_day, end_clock, offset, True)
+        if start and end and store.period_of({'period_start': start, 'period_end': end}) == (None, None):
+            return check_saved(aid, 4, 'The end cannot be before the start.')
     changed = store.period_of(a) != store.period_of({'period_start': start, 'period_end': end})
     store.update_analysis(aid, period_start=start, period_end=end, period_tz=offset if start or end else None)
     if changed and report.has_results(analysis.metrics_for(aid), store.latest_vibe(aid)):

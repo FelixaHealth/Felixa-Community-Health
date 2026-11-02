@@ -285,7 +285,7 @@ class SanitizeAndIngest(unittest.TestCase):
             (d / 'a.csv').write_text('text,actor_role\nthanks for the help,subject\nthat was rude,audience\n')
             (d / 'b.json').write_text(json.dumps({'channel': {'name': '#dev'}, 'messages': [{'content': 'nice work', 'timestamp': '2026-03-02T01:02:03Z'}, {'content': 'ok'}]}))
             (d / 'c.txt').write_text('Alice: hello\nBob: hi\nAlice: ready?\n')
-            (d / 'd.xyz').write_text('nope')
+            (d / 'd.xyz').write_bytes(b'\x00\x01\x02 not text \xff\xfe')
             self.assertEqual([u['role'] for u in units_from_file(d / 'a.csv')], ['SUBJECT', 'AUDIENCE'])
             self.assertEqual({u['source'] for u in units_from_file(d / 'b.json')}, {'#dev'})
             self.assertEqual(len(units_from_file(d / 'c.txt')), 3)

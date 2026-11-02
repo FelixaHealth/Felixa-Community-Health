@@ -15,7 +15,7 @@ MAX_UPLOAD_BYTES = 15_000_000         # per file
 MAX_UPLOAD_FILES = 5                  # files of that size one upload may carry: its body is held to this many plus MAX_FORM_BYTES
 MAX_FORM_BYTES = 2_000_000            # body of any other request (sign-in, onboarding steps), and what rides along with files or a paste
 RATING_BATCH = 3                      # units per model call when rating the 13 signals (small models need small batches)
-UPLOAD_EXTENSIONS = ('.csv', '.json', '.txt', '.md', '.log', '.pdf', '.docx')
+UPLOAD_EXTENSIONS = ('.csv', '.xlsx', '.xls', '.docx', '.doc', '.pdf', '.txt', '.json', '.rtf', '.html', '.pptx', '.odt', '.ods', '.eml', '.srt', '.vtt', '.md', '.log')   # the kinds the page names; any text file is read too
 UPLOAD_PREFIX = 'upload-'             # start of the name of the temporary copy made while an uploaded file is read
 
 

@@ -6,13 +6,13 @@ would otherwise let a visitor use the app to read things only the server can rea
 actually made to (so a name that changes its answer between the check and the connection cannot slip through), on every redirect,
 and the page is cut at a size limit.
 """
-import html
 import http.client
 import ipaddress
 import socket
 import ssl
 import urllib.parse
-from html.parser import HTMLParser
+
+from vibe_check.office import html_lines  # noqa: E402
 
 MAX_BYTES = 2_000_000
 TIMEOUT = 12
@@ -97,41 +97,9 @@ def fetch_html(url, opener=None):
     raise LinkError('the link redirects too many times')
 
 
-class _Text(HTMLParser):
-    SKIP = {'script', 'style', 'noscript', 'svg', 'nav', 'header', 'footer', 'form', 'template', 'iframe', 'head'}
-    BLOCK = {'p', 'div', 'li', 'br', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'section', 'article', 'pre', 'td', 'dd', 'dt'}
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.depth, self.parts = 0, []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self.SKIP:
-            self.depth += 1
-        if tag in self.BLOCK:
-            self.parts.append('\n')
-
-    def handle_endtag(self, tag):
-        if tag in self.SKIP and self.depth:
-            self.depth -= 1
-        if tag in self.BLOCK:
-            self.parts.append('\n')
-
-    def handle_data(self, data):
-        if not self.depth:
-            self.parts.append(data)
-
-
 def page_text(markup, plain=False):
     """The readable lines of a page: paragraphs and list items, one per line, with menus, scripts and footers left out."""
-    if plain:
-        raw = markup
-    else:
-        parser = _Text()
-        parser.feed(markup)
-        raw = ''.join(parser.parts)
-    lines = [' '.join(html.unescape(line).split()) for line in raw.splitlines()]
-    return [line for line in lines if len(line) >= 12]
+    return html_lines(markup, plain)
 
 
 def fetch_lines(url, opener=None):

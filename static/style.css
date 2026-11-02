@@ -217,3 +217,7 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .btn{gap:8px}
 .brand .brand-logo{height:52px}.topbar{padding-top:8px;padding-bottom:8px}
 @media(max-width:860px){.brand .brand-logo{height:42px}}
+.presets{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 6px}
+.chip-btn{padding:9px 18px;border:1px solid var(--line2);border-radius:999px;background:var(--field);color:var(--ink);font:inherit;font-size:16px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+.chip-btn:hover:not(:disabled){background:var(--soft);border-color:#F27435}.chip-btn:disabled{opacity:.45;cursor:not-allowed}.chip-btn.on{background:var(--soft);border-color:#F27435}
+.chip-btn:focus-visible{outline:3px solid #b3440c;outline-offset:2px}

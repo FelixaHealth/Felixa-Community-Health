@@ -1,6 +1,21 @@
 {% extends "base.html" %}{% from "_icons.html" import icon, dropzone %}{% block title %}Felixa Community Health — New check, step {{ step }} of {{ last }}{% endblock %}
 {% macro engine_card(e) %}<label class="engine"><input type="radio" name="engine" value="{{ e.name }}" {% if e.name == engine %}checked{% endif %} {% if not e.installed %}disabled{% endif %}><span><b>{{ e.label }}</b>{% if e.default %} <em class="badge">Default</em>{% endif %}<small>{{ e.size }}{% if e.kind == 'local' and not e.installed %} · not downloaded: run <code>ollama pull {{ e.name }}</code>{% elif e.kind == 'cloud' and not e.installed %} · needs a key on the server{% elif e.kind == 'login' and not e.installed %} · needs Claude Code, signed in on this computer{% endif %}</small></span>
 <span class="est"><strong>{{ e.estimate.text }}</strong><small>{{ '{:,}'.format(e.estimate.total) }} model calls for {{ '{:,}'.format(e.estimate.messages) }} messages</small></span></label>{% endmacro %}
+{% macro local_group() %}{% if local_enabled %}<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>{% endif %}
+{% endmacro %}
+{% macro api_group() %}{% if cloud_ready or not login_offered %}<h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
+<p class="small-note">Claude runs on Anthropic's servers, through the key set on this server, so it costs you nothing while you test. It reads more carefully and answers faster than a small local model, but your messages leave this computer to be read.{% if not incognito %} Turn on Incognito (step 3) first if the messages hold names.{% endif %}</p>
+{% if not cloud_ready %}<div class="notice warn">Claude is not set up on this server yet. Set <code>FELIXA_ANTHROPIC_API_KEY</code> and restart the app to turn it on.</div>{% endif %}
+<div class="engine-list">{% for e in engines if e.kind == 'cloud' %}{{ engine_card(e) }}{% endfor %}</div>
+{% endif %}
+{% endmacro %}
+{% macro login_group() %}{% if login_offered %}<h2 class="mini-h">Your Claude login <em class="badge">Testing, no key</em></h2>
+<p class="small-note">This asks the Claude Code program on this computer, signed in as you, so no key is needed. It is slower, because the program starts again for every step, and it counts against your own Claude usage. Your messages go to Anthropic to be read, as with the cloud engines. It works only while this app runs on your own computer.</p>
+{% if not login_ready %}<div class="notice warn">Claude Code was not found on this computer. Install <a href="https://claude.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a>, run <code>claude</code> once in a terminal to sign in, then reload this page.</div>{% endif %}
+<div class="engine-list">{% for e in engines if e.kind == 'login' %}{{ engine_card(e) }}{% endfor %}</div>
+{% if login_ready %}<p class="small-note"><button class="btn" type="submit" formaction="/analysis/{{ a.id }}/check/6/test-login" formnovalidate>Test my Claude login</button> Sends one word to Claude and tells you if it worked.</p>{% endif %}
+{% endif %}
+{% endmacro %}
 {% block content %}
 <div class="shell three">{% include "_rail.html" %}
 <section class="question-card">
@@ -12,7 +27,7 @@
 <div class="tab-bar" role="presentation"><label for="t-file">{{ icon('upload') }} File</label><label for="t-paste">{{ icon('file') }} Paste text</label><label for="t-voice">{{ icon('mic') }} Voice</label><label for="t-link">{{ icon('link') }} From a link</label></div>
 <div class="tab-panels">
 <div class="tab-panel" id="p-file"><form method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="check">{{ dropzone() }}
-<p class="small-note">Chat exports, spreadsheets, transcripts and documents: {{ extensions }}. A CSV needs a text, comment, content, message or transcript column. A channel or source column splits one file into separate sources. A file identical to one already added is skipped. A file may be up to {{ max_file_mb }} MB, and one upload {{ max_upload_mb }} MB in all.</p><button class="btn primary">Add files</button></form></div>
+<p class="small-note">Any kind of file with text in it: Excel (.xlsx, .xls), CSV, Word (.docx, .doc), PDF, plain text, JSON, RTF, PowerPoint, OpenDocument, web pages, email (.eml), subtitles and transcripts (.srt, .vtt) and more. A spreadsheet or CSV is read one row to a message, from a column called text, comment, content, message or transcript, or else the column that reads like prose. A column named channel or source splits it into separate sources, and each sheet of a workbook is its own source. A file identical to one already added is skipped. A file may be up to {{ max_file_mb }} MB, and one upload {{ max_upload_mb }} MB in all.</p><button class="btn primary">Add files</button></form></div>
 <div class="tab-panel" id="p-paste"><form method="post" action="/analysis/{{ a.id }}/add-text"><input type="hidden" name="back" value="check"><label class="field">Paste messages, one per line<textarea name="raw_text" placeholder="Paste a chat, comments or replies here…"></textarea></label><button class="btn primary">Add text</button></form></div>
 <div class="tab-panel" id="p-voice"><form method="post" action="/analysis/{{ a.id }}/add-voice" enctype="multipart/form-data"><input type="hidden" name="back" value="check">{{ dropzone(name='files', accept=audio, title='Drop a recording here, or click to choose', chips=['MP3', 'WAV', 'M4A', 'OGG', 'FLAC'], icon_name='mic') }}
 <p class="small-note">{% if voice_ok %}Recordings are turned into text on this computer, then checked like any other message.{% else %}Turning speech into text needs an add-on that is not installed on this computer yet: <code>pip install faster-whisper</code>. Until then, add a transcript as a file or paste it.{% endif %}</p><button class="btn primary" {% if not voice_ok %}disabled{% endif %}>Add recordings</button></form></div>
@@ -38,12 +53,15 @@
 <div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/2">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
 {% elif step == 4 %}
 <h1>Which dates should it look at?</h1><p class="lead">{% if dates %}Your messages run from {{ dates[0] }} to {{ dates[1] }} (UTC). {% endif %}Leave both blank to use every message. Messages with no readable date are always kept.</p>
-<form method="post"><div class="periods"><fieldset class="group"><legend class="field-legend">From</legend><div class="when"><label class="field">Date<input type="date" name="period_start" value="{{ period_form.start[0] }}"></label><label class="field">Time <em>optional</em><input type="time" name="period_start_time" value="{{ period_form.start[1] }}"></label></div></fieldset>
+<form method="post"><fieldset class="group"><legend class="field-legend">Quick choices</legend>
+<div class="presets">{% for key, label in presets %}<button class="chip-btn{% if preset_on == key %} on{% endif %}" name="preset" value="{{ key }}" formnovalidate {% if not dates %}disabled{% endif %}>{{ label }}</button>{% endfor %}<button class="chip-btn" name="all_dates" value="1" formnovalidate>All dates</button></div>
+{% if dates %}<p class="small-note">A quick choice counts back from your newest message, which is from {{ dates[1] }} (UTC).</p>{% endif %}</fieldset>
+<div class="periods"><fieldset class="group"><legend class="field-legend">From</legend><div class="when"><label class="field">Date<input type="date" name="period_start" value="{{ period_form.start[0] }}"></label><label class="field">Time <em>optional</em><input type="time" name="period_start_time" value="{{ period_form.start[1] }}"></label></div></fieldset>
 <fieldset class="group"><legend class="field-legend">To</legend><div class="when"><label class="field">Date<input type="date" name="period_end" value="{{ period_form.end[0] }}"></label><label class="field">Time <em>optional</em><input type="time" name="period_end_time" value="{{ period_form.end[1] }}"></label></div></fieldset></div>
 <input type="hidden" name="tz_offset" value="0">
 <p class="small-note">Times are in your own time zone (<span id="tz-label">UTC</span>) and the report states them in UTC. To check one episode or one evening, set both dates and both times. Leave the times blank to use whole days.</p>
 {% if period_text %}<p class="small-note">{{ period_text }}</p>{% endif %}
-<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/3">{{ icon('back') }} Back</a><span class="btn-row"><button class="btn" name="all_dates" value="1" formnovalidate>Use all dates</button><button class="btn primary">Next {{ icon('arrow') }}</button></span></div></form>
+<div class="actions"><a class="btn" href="/analysis/{{ a.id }}/check/3">{{ icon('back') }} Back</a><button class="btn primary">Next {{ icon('arrow') }}</button></div></form>
 {% elif step == 5 %}
 <h1>How sensitive should the check be?</h1><p class="lead">This sets the bar for what counts as unfriendly.</p>
 <form method="post"><fieldset class="group"><legend class="sr-only">Sensitivity</legend><div class="option-grid one">{% for key, label, help in sens_options %}<label class="option"><input type="radio" name="vibe_sensitivity" value="{{ key }}" required {% if sensitivity == key %}checked{% endif %}><span><b>{{ label }}</b><small>{{ help }}</small></span></label>{% endfor %}</div></fieldset>
@@ -52,18 +70,7 @@
 <h1>Pick an engine</h1><p class="lead">The engine is the language model that reads your messages. {% if local_enabled %}Pick one that runs on this computer, or Claude in the cloud.{% else %}Claude reads them in the cloud.{% endif %} A bigger one reads more carefully and takes longer.</p>
 {% if local_enabled and not model_server_up %}<div class="notice warn">The model server is not answering. Start Ollama, then reload this page.</div>{% endif %}
 <form method="post"><fieldset class="group"><legend class="sr-only">Engine</legend>
-{% if local_enabled %}<h2 class="mini-h">On this computer</h2><div class="engine-list">{% for e in engines if e.kind == 'local' %}{{ engine_card(e) }}{% endfor %}</div>{% endif %}
-{% if cloud_ready or not login_offered %}<h2 class="mini-h">Claude, in the cloud <em class="badge">Free while testing</em></h2>
-<p class="small-note">Claude runs on Anthropic's servers, through the key set on this server, so it costs you nothing while you test. It reads more carefully and answers faster than a small local model, but your messages leave this computer to be read.{% if not incognito %} Turn on Incognito (step 3) first if the messages hold names.{% endif %}</p>
-{% if not cloud_ready %}<div class="notice warn">Claude is not set up on this server yet. Set <code>FELIXA_ANTHROPIC_API_KEY</code> and restart the app to turn it on.</div>{% endif %}
-<div class="engine-list">{% for e in engines if e.kind == 'cloud' %}{{ engine_card(e) }}{% endfor %}</div>
-{% endif %}
-{% if login_offered %}<h2 class="mini-h">Your Claude login <em class="badge">Testing, no key</em></h2>
-<p class="small-note">This asks the Claude Code program on this computer, signed in as you, so no key is needed. It is slower, because the program starts again for every step, and it counts against your own Claude usage. Your messages go to Anthropic to be read, as with the cloud engines. It works only while this app runs on your own computer.</p>
-{% if not login_ready %}<div class="notice warn">Claude Code was not found on this computer. Install <a href="https://claude.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a>, run <code>claude</code> once in a terminal to sign in, then reload this page.</div>{% endif %}
-<div class="engine-list">{% for e in engines if e.kind == 'login' %}{{ engine_card(e) }}{% endfor %}</div>
-{% if login_ready %}<p class="small-note"><button class="btn" type="submit" formaction="/analysis/{{ a.id }}/check/6/test-login" formnovalidate>Test my Claude login</button> Sends one word to Claude and tells you if it worked.</p>{% endif %}
-{% endif %}
+{% if login_ready %}{{ login_group() }}{{ local_group() }}{{ api_group() }}{% else %}{{ local_group() }}{{ api_group() }}{{ login_group() }}{% endif %}
 <label class="consent"><input type="checkbox" name="cloud_ok" value="1" {% if cloud_ok %}checked{% endif %}><span>I understand that my messages are sent to Anthropic to be read when I choose a Claude engine. Nothing else leaves this computer.</span></label>
 </fieldset>
 <p class="small-note">Estimates come from typical speeds, so your computer or connection may be faster or slower. Cost: none while testing. The run goes on in the background and you can leave the page.</p>
