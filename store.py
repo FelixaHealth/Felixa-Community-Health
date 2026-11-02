@@ -5,11 +5,12 @@ behavior_metrics, findings) plus `jobs`, `vibe_runs` and the two tables of earli
 felixa.db opens as is: missing tables and columns are added, nothing is dropped.
 
 What outlives the messages. Delete evidence and results (`clear_evidence`) and New check (`new_check`) remove the messages and every result built from
-them, and keep the analysis details (name, role, goals) and the numbers of earlier checks, so the next check can show what moved:
+them, and keep the analysis details (name, role, goals) and the numbers of earlier checks (scores and counts, never messages, names or file names), so the next
+check can show what moved:
   vibe_history      the scores and counts of each Vibe Check; every source only as a fingerprint (see fingerprint_history and vibe_check.forecast.source_key)
   measure_history   the scores and counts of Measures over time for each check, and the names of the settings used (model, sensitivity, review period);
                     a record is checked against the allow-list MEASURE_FIELDS when it is written and again when it is read
-Neither table holds a message, a person's name or a file name. A table added later that could hold one of those has to be cleared in `clear_evidence`.
+A table added later that could hold a message, a person's name or a file name has to be cleared in `clear_evidence`.
 """
 import contextlib
 import datetime
@@ -326,8 +327,9 @@ def timestamp_span(aid):
 
 
 def rated_units(aid) -> list:
-    """The units of an analysis that have all of their signal ratings, in upload order: [{'id', 'timestamp', 'ratings': {signal: 0..3}}].
-    A unit with some ratings missing is left out, as `calculate_metrics` leaves it out of the metrics. No message text is read."""
+    """The units of an analysis that have at least one signal rating, in upload order: [{'id', 'timestamp', 'ratings': {signal: 0..3}}].
+    A unit with no rating at all is left out. A unit with only some of its 13 ratings is returned with the ones it has, and `measures.analyse` leaves out
+    the incomplete ones and counts them (`m['incomplete']`). No message text is read."""
     with db() as c:
         rows = c.execute('SELECT cu.id, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
                          'JOIN unit_ratings ur ON ur.unit_id=cu.id WHERE cu.analysis_id=? ORDER BY cu.id', (aid,)).fetchall()
@@ -394,9 +396,9 @@ def evidence_by_source(aid) -> list:
 
 def clear_evidence(aid):
     """Removes the messages and every result that quotes them, including full Vibe Check runs, and overwrites them in the database file.
-    The analysis itself (name, role, goals) and the numbers of earlier checks stay, so trends survive a re-upload: `vibe_history` (the scores and
-    counts of each Vibe Check, every source only as a fingerprint, see vibe_check.forecast.source_key) and `measure_history` (the scores and counts of
-    Measures over time and the names of the settings used, see MEASURE_FIELDS). Neither holds a message text, a person's name or a file name.
+    The analysis itself (name, role, goals) and the numbers of earlier checks (scores and counts, never messages, names or file names) stay, so trends
+    survive a re-upload: `vibe_history` (every source only as a fingerprint, see vibe_check.forecast.source_key) and `measure_history` (which also names
+    the settings used, see MEASURE_FIELDS).
     The records of the imported files go with the messages (see has_upload), so a file can be uploaded again.
     Finished tasks go too: their message ("Your report is ready: ...") describes results that no longer exist.
     A queued or running task is never touched, so its worker still finds its row."""
@@ -428,7 +430,7 @@ def anonymise_units(aid) -> int:
 
 def new_check(aid):
     """Starts a check from nothing: the messages and results of the last one go, its settings reset. The workplace and the numbers of earlier checks
-    (`vibe_history` and `measure_history`: scores, counts and the names of settings, never a message, a name or a file name) stay."""
+    (scores and counts, never messages, names or file names; see `clear_evidence`) stay."""
     clear_evidence(aid)
     update_analysis(aid, check_volume=None, incognito=0, engine=None, cloud_ok=0, period_start='', period_end='', period_tz=None)
 
@@ -482,7 +484,7 @@ def job_update(jid, status: str, message: str, result=None):
 
 # ---- Vibe Check runs -------------------------------------------------------------
 def save_vibe_run(aid, jid, result: dict) -> int:
-    """Stores the full result, and its numeric snapshot in the history when the run succeeded."""
+    """Stores the full result and, when the run succeeded, its snapshot in `vibe_history`: scores and counts, with each source only as a fingerprint."""
     with db() as c:
         rid = c.execute('INSERT INTO vibe_runs(analysis_id,job_id,status,result_json) VALUES(?,?,?,?)',
                         (aid, jid, result.get('status'), json.dumps(result))).lastrowid
@@ -521,7 +523,7 @@ def vibe_history(aid) -> list:
 _NUMBER = (int, float)
 MEASURE_FIELDS = {
     'created_at': re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?'), 'basis': ('time', 'order'), 'sensitivity': ('low', 'medium', 'high', ''),
-    'model': re.compile(r'[A-Za-z0-9._:/ ()+@-]{0,120}'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
+    'model': re.compile(r'[A-Za-z0-9._:/ ()+@-]{0,120}'), 'model_key': re.compile(r'(?:[0-9a-f]{12})?'), 'period_start': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'),
     'period_end': re.compile(r'(?:\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)?'), 'sig': re.compile(r'\d+(?::\d+){0,6}'),
     'gen': int, 'n': int, 'total': int, 'sampled': int, 'stretches': int, 'hostile_n': int, 'care_n': int, 'dig_n': int, 'heated_n': int, 'episodes': int,
     'health': float, 'health_sd': float, 'peak': float,
@@ -529,7 +531,8 @@ MEASURE_FIELDS = {
 
 
 def clean_measure_snapshot(raw):
-    """The record with only the fields of MEASURE_FIELDS, each coerced to its type and dropped when it does not fit. None when it has no date, count or health score."""
+    """The record with only the fields of MEASURE_FIELDS, each coerced to its type and dropped when it does not fit. A count of hostile, care, dig or heated
+    messages above `n` is dropped too. None when it has no date, no message count or no health score, because the comparison cannot read such a record."""
     if not isinstance(raw, dict):
         return None
     out = {}
@@ -555,6 +558,8 @@ def clean_measure_snapshot(raw):
             continue
     if 'created_at' not in out or 'n' not in out or 'health' not in out:
         return None                                       # a record the comparison cannot read is dropped like any other bad row
+    if not 0 <= out['health'] <= 100:
+        return None                                       # a health score off its own scale is damage
     for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):
         if key in out and out[key] > out['n']:
             del out[key]                                  # a count above its own total is damage, never a number to compare

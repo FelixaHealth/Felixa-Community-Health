@@ -120,14 +120,50 @@ class CleanSnapshotTests(unittest.TestCase):
         self.assertEqual(got, snap())
         self.assertNotIn('ZQ', json.dumps(got))
 
-    def test_a_record_needs_a_date_and_a_count(self):
+    def test_a_record_needs_a_date_a_count_and_a_health_score(self):
+        """MEASURES.md: a record without a date, a count of messages or a health score is dropped as damaged, because the comparison cannot read it."""
         self.assertIsNone(store.clean_measure_snapshot({k: v for k, v in snap().items() if k != 'created_at'}))
         self.assertIsNone(store.clean_measure_snapshot({k: v for k, v in snap().items() if k != 'n'}))
+        self.assertIsNone(store.clean_measure_snapshot({k: v for k, v in snap().items() if k != 'health'}))
         self.assertIsNone(store.clean_measure_snapshot({'health': 50.0, 'hostile_n': 1}))
+        self.assertIsNone(store.clean_measure_snapshot({'created_at': '2026-06-01T12:00:00', 'n': 5}))
         self.assertIsNone(store.clean_measure_snapshot({}))
         for bad in (None, [], [snap()], 'created_at', 5, 5.5, (1, 2), True, b'x'):
             with self.subTest(raw=bad):
                 self.assertIsNone(store.clean_measure_snapshot(bad))
+        lean = {'created_at': '2026-06-01T12:00:00', 'n': 5, 'health': 50.0}
+        self.assertEqual(store.clean_measure_snapshot(lean), lean, 'a date, a count and a health score are all a record needs')
+
+    def test_a_health_score_that_does_not_fit_makes_the_record_nothing(self):
+        """The health score is the one optional-looking field that the comparison and the check-by-check chart read without a guard, so a record without a
+        readable one is dropped whole (it used to stay, and every page of the analysis failed with a KeyError for good)."""
+        for bad in ('50', '', 'not a number', True, False, None, [50.0], {'a': 1}, math.nan, math.inf, -math.inf, 1e9 + 1, -1e9 - 1, 1e300, b'50'):
+            with self.subTest(health=bad):
+                self.assertIsNone(clean(health=bad))
+        for good, want in [(0, 0.0), (0.0, 0.0), (100, 100.0), (51.85185185, 51.852), (-1e9, -1e9), (1e9, 1e9)]:
+            with self.subTest(health=good):
+                self.assertEqual(clean(health=good)['health'], want)
+
+    def test_a_count_above_the_number_of_messages_is_left_out_and_the_rest_is_kept(self):
+        """MEASURES.md: a count of hostile, care, dig or heated messages that is higher than the number of messages is left out of its record. The comparison
+        used to raise 'math domain error' on such a record (n + 2 or more), which broke the report page."""
+        for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):
+            for count, kept in [(0, True), (95, True), (96, True), (97, False), (250, False), (10 ** 9, False), (2 ** 53 - 1, False)]:
+                with self.subTest(field=key, count=count):
+                    got = clean(**{key: count})
+                    self.assertEqual(key in got, kept)
+                    if kept:
+                        self.assertEqual(got[key], count)
+                    self.assertEqual({k: v for k, v in got.items() if k != key}, {k: v for k, v in snap().items() if k != key})
+        got = clean(hostile_n=500, care_n=500, dig_n=500, heated_n=500)
+        self.assertTrue(all(key not in got for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n')))
+        self.assertEqual((got['n'], got['health']), (96, 51.852), 'the record itself stays')
+        self.assertEqual(clean(n=10, hostile_n=10, care_n=11)['hostile_n'], 10, 'a count is judged against the n of its own record')
+        self.assertNotIn('care_n', clean(n=10, hostile_n=10, care_n=11))
+        self.assertEqual(clean(n=0, hostile_n=0)['hostile_n'], 0)
+        self.assertNotIn('hostile_n', clean(n=0, hostile_n=1))
+        for key in ('episodes', 'stretches', 'total', 'sampled', 'gen'):
+            self.assertEqual(clean(n=10, **{key: 500})[key], 500, f'{key} is not a count of messages rated: it is not judged against n')
 
     def test_a_date_that_does_not_fit_makes_the_record_nothing(self):
         for bad in ('2026-06-01', '2026-06-01T12', '2026-06-01T12:00:00Z', '2026-06-01 12:00:00', 'yesterday', '', '2026-06-01T12:00:00\n', ' 2026-06-01T12:00:00',
@@ -157,17 +193,28 @@ class CleanSnapshotTests(unittest.TestCase):
                     self.assertNotIn(key, got)
                     self.assertEqual({k: v for k, v in got.items()}, {k: v for k, v in snap().items() if k != key})
         for key in FLOAT_FIELDS:
+            if key == 'health':
+                continue                                    # a bad health score drops the whole record: test_a_health_score_that_does_not_fit_makes_the_record_nothing
             for bad in ('5.0', '', True, False, [5.0], {'a': 1}, math.nan, math.inf, -math.inf, 1e9 + 1, -1e9 - 1, 1e300):
                 with self.subTest(field=key, value=bad):
-                    self.assertNotIn(key, clean(**{key: bad}))
+                    got = clean(**{key: bad})
+                    self.assertNotIn(key, got)
+                    self.assertEqual({k: v for k, v in got.items()}, {k: v for k, v in snap().items() if k != key})
         for key in INT_FIELDS + FLOAT_FIELDS:
-            if key not in ('n',):
+            if key not in ('n', 'health'):                  # a record needs its date, its count and its health score
                 self.assertNotIn(key, clean(**{key: None}))
 
     def test_the_edges_of_the_ranges(self):
+        counts = ('hostile_n', 'care_n', 'dig_n', 'heated_n')      # a count of messages cannot pass the n of its own record (96 in the test record)
         for key in INT_FIELDS:
             self.assertEqual(clean(**{key: 0})[key], 0)
-            self.assertEqual(clean(**{key: 2 ** 53 - 1})[key], 2 ** 53 - 1)
+            if key in counts:
+                self.assertEqual(clean(**{key: 96})[key], 96)
+                self.assertNotIn(key, clean(**{key: 97}))
+            else:
+                self.assertEqual(clean(**{key: 2 ** 53 - 1})[key], 2 ** 53 - 1)
+        for key in counts:
+            self.assertEqual(clean(n=2 ** 53 - 1, **{key: 2 ** 53 - 1})[key], 2 ** 53 - 1, 'a count may be as large as a record of that many messages')
         for key in FLOAT_FIELDS:
             self.assertEqual(clean(**{key: 1e9})[key], 1e9)
             self.assertEqual(clean(**{key: -1e9})[key], -1e9)
@@ -182,11 +229,17 @@ class CleanSnapshotTests(unittest.TestCase):
         self.assertEqual(clean(health=51.85185185)['health'], 51.852)               # three decimals
         self.assertEqual(clean(health=0.0004)['health'], 0.0)
 
-    def test_the_model_name_is_a_short_plain_name(self):
-        for good in ('qwen2.5:7b', 'llama3.1:8b-instruct', 'claude-3.5 (sonnet)', 'gpt+4/x', 'a' * 64, '', 'Model_1.0'.replace('_', '-')):
+    def test_the_model_name_is_a_plain_name_of_up_to_120_characters(self):
+        """MEASURES.md: the model name is up to 120 characters of letters, digits and . _ : / @ + - ( ) and spaces. Real Hugging Face tags that Ollama runs are
+        longer than the 64 characters this used to allow, and a name that was dropped made two checks of the same model read 'a different model'."""
+        hf = 'hf.co/mradermacher/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF:Q4_K_M'
+        self.assertEqual(len(hf), 65)
+        for good in ('qwen2.5:7b', 'llama3.1:8b-instruct', 'claude-3.5 (sonnet)', 'gpt+4/x', 'a' * 64, 'a' * 65, 'a' * 119, 'a' * 120, hf, 'user@host:model_v1.0', '',
+                     'Model_1.0'.replace('_', '-'), 'a_b', 'a b', 'A.B:C/D@E+F-G(H)'):
             with self.subTest(model=good):
                 self.assertEqual(clean(model=good)['model'], good)
-        for bad in ('a' * 65, '<script>', 'a;b', 'line\nbreak', 'quote"', "it's", 'emoji \U0001f600', 'ñ', 'tab\there', 'a,b', 'a=b', 'a&b', 5, ['x'], None, 'a\\b', 'a#b'):
+        for bad in ('a' * 121, 'a' * 500, '<script>', 'a;b', 'line\nbreak', 'quote"', "it's", 'emoji \U0001f600', 'ñ', 'tab\there', 'a,b', 'a=b', 'a&b', 5, ['x'], None, 'a\\b',
+                    'a#b', 'a' * 119 + '<', 'a%20b', 'a\x00b'):
             with self.subTest(model=bad):
                 self.assertNotIn('model', clean(model=bad))
 
@@ -231,9 +284,10 @@ class CleanSnapshotTests(unittest.TestCase):
         got_valid = 0
         for _ in range(4000):
             raw = {rng.choice(keys): rng.choice(pool) for _ in range(rng.randint(0, 24))}
-            if rng.random() < .5:
+            if rng.random() < .5:                                                       # a record that has what every record needs: a date, a count and a health score
                 raw['created_at'] = rng.choice(['2026-06-01T12:00:00', '2026-06-01T12:00'])
                 raw['n'] = rng.choice([1, 96, 96.0, 500])
+                raw['health'] = rng.choice([0, 12.5, 50.0, 61, 100.0, -3.5, 1e9])
             out = store.clean_measure_snapshot(raw)
             if out is None:
                 continue
@@ -241,6 +295,9 @@ class CleanSnapshotTests(unittest.TestCase):
             self.assertTrue(set(out) <= ALLOWED, out)
             self.assertIn('created_at', out)
             self.assertIn('n', out)
+            self.assertIn('health', out)
+            for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):
+                self.assertTrue(key not in out or out[key] <= out['n'], (key, out))      # a count never passes the number of messages
             for key, value in out.items():
                 rule = store.MEASURE_FIELDS[key]
                 if rule is int:
@@ -303,10 +360,42 @@ class SaveAndHistoryTests(StoreCase):
 
     def test_a_record_with_nothing_to_keep_is_refused_and_nothing_is_written(self):
         aid = store.create_analysis()
-        for bad in ({}, {'n': 5}, {'created_at': '2026-06-01T12:00:00'}, {'created_at': 'x', 'n': 1}, None, 'x', [snap()], 5):
+        no_health = {k: v for k, v in snap().items() if k != 'health'}
+        for bad in ({}, {'n': 5}, {'created_at': '2026-06-01T12:00:00'}, {'created_at': 'x', 'n': 1}, {'created_at': '2026-06-01T12:00:00', 'n': 5}, no_health,
+                    snap(health='not a number'), snap(health=math.nan), snap(health=None), None, 'x', [snap()], 5):
             with self.subTest(raw=bad):
                 self.assertFalse(store.save_measure_snapshot(aid, bad))
         self.assertEqual(self.raw_rows(aid), [])
+
+    def test_a_record_that_is_refused_leaves_the_record_of_its_check_as_it_was(self):
+        aid = store.create_analysis()
+        store.save_measure_snapshot(aid, snap(gen=5, hostile_n=1))
+        self.assertFalse(store.save_measure_snapshot(aid, snap(gen=5, hostile_n=2, health=None)))
+        self.assertEqual([(r['gen'], r['hostile_n']) for r in store.measure_history(aid)], [(5, 1)])
+        self.assertEqual(len(self.raw_rows(aid)), 1)
+
+    def test_a_count_above_the_number_of_messages_is_dropped_when_it_is_saved_and_when_it_is_read(self):
+        aid = store.create_analysis()
+        self.assertTrue(store.save_measure_snapshot(aid, snap(gen=1, hostile_n=500, care_n=7)))
+        saved_row = json.loads(self.raw_rows(aid)[0]['snapshot_json'])
+        self.assertNotIn('hostile_n', saved_row)
+        self.assertEqual(saved_row['care_n'], 7)
+        with store.db() as c:                                                           # a row written by something else, or by an older build
+            c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)',
+                      (aid, 'x', json.dumps(snap(gen=2, dig_n=10 ** 9, heated_n=97)), 2))
+        got = store.measure_history(aid)
+        self.assertEqual([r['gen'] for r in got], [1, 2])
+        self.assertNotIn('dig_n', got[1])
+        self.assertNotIn('heated_n', got[1])
+        self.assertEqual((got[1]['n'], got[1]['hostile_n']), (96, 4))
+
+    def test_a_long_model_name_is_saved_and_read_back(self):
+        aid = store.create_analysis()
+        name = 'hf.co/mradermacher/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF:Q4_K_M'
+        store.save_measure_snapshot(aid, snap(gen=1, model=name))
+        store.save_measure_snapshot(aid, snap(gen=2, model='m' * 120))
+        store.save_measure_snapshot(aid, snap(gen=3, model='m' * 121))
+        self.assertEqual([r.get('model') for r in store.measure_history(aid)], [name, 'm' * 120, None])
 
     def test_only_allowed_fields_reach_the_table(self):
         aid = store.create_analysis()
@@ -321,22 +410,35 @@ class SaveAndHistoryTests(StoreCase):
         store.save_measure_snapshot(aid, snap(gen=1, hostile_n=1))
         with store.db() as c:
             for gen, text in [(2, 'not json'), (3, '{"n": 3}'), (4, '[1, 2]'), (5, '"a string"'), (6, 'null'), (7, '{"created_at": "x", "n": 1}'), (8, '{'), (9, '12'),
-                              (10, json.dumps(snap(gen=10, created_at='yesterday')))]:
+                              (10, json.dumps(snap(gen=10, created_at='yesterday'))),
+                              (12, '{"created_at": "2026-06-01T12:00:00", "n": 3}'),                                             # a date and a count, no health score
+                              (13, json.dumps(snap(gen=13, health='not a number'))), (14, json.dumps(snap(gen=14, health=1e300))),
+                              (15, json.dumps({k: v for k, v in snap(gen=15).items() if k != 'health'}))]:
                 c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, 'x', text, gen))
         store.save_measure_snapshot(aid, snap(gen=11, hostile_n=11))
         self.assertEqual([(r['gen'], r['hostile_n']) for r in store.measure_history(aid)], [(1, 1), (11, 11)])
 
     def test_a_row_is_checked_again_when_it_is_read(self):
         aid = store.create_analysis()
-        evil = dict(snap(gen=1), text='ZQTEXT', author='ZQAUTHOR', hostile_n='lots', model='<b>x</b>', health=1e300, peak=-1e300)
+        evil = dict(snap(gen=1), text='ZQTEXT', author='ZQAUTHOR', hostile_n='lots', model='<b>x</b>', peak=-1e300)
         with store.db() as c:
             c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, evil['created_at'], json.dumps(evil), 1))
         got = store.measure_history(aid)
         self.assertEqual(len(got), 1)
         self.assertNotIn('ZQ', json.dumps(got))
-        for key in ('hostile_n', 'model', 'health', 'peak', 'text', 'author'):
+        for key in ('hostile_n', 'model', 'peak', 'text', 'author'):
             self.assertNotIn(key, got[0])
-        self.assertEqual(got[0]['n'], 96)
+        self.assertEqual((got[0]['n'], got[0]['health']), (96, 51.852))
+
+    def test_a_row_with_a_health_score_that_cannot_be_read_is_not_returned_at_all(self):
+        """The row used to come back without a health score, and measures.since_table raised a KeyError for it on every page of the analysis, for good, because
+        the records survive Delete evidence and New check."""
+        aid = store.create_analysis()
+        evil = dict(snap(gen=1), text='ZQTEXT', author='ZQAUTHOR', hostile_n='lots', model='<b>x</b>', health=1e300, peak=-1e300)
+        with store.db() as c:
+            c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, evil['created_at'], json.dumps(evil), 1))
+        self.assertEqual(store.measure_history(aid), [])
+        self.assertEqual(len(self.raw_rows(aid)), 1, 'the row stays in the table: it is only left out of what the app reads')
 
     def test_a_saved_record_survives_a_second_start_of_the_database(self):
         aid = store.create_analysis()
@@ -587,6 +689,45 @@ class SaveSnapshotTests(StoreCase):
         before = store.measure_history(aid)
         measures.build(aid, store.get_analysis(aid), None, {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0})
         self.assertEqual(store.measure_history(aid), before)
+
+    def test_a_damaged_record_in_the_history_never_breaks_the_build(self):
+        """A record with no health score is left out of the trail; one with a count above its total keeps the rest of its numbers. Neither makes the build raise."""
+        self.add_chat(store.create_analysis(), 5, rate=False)                                                              # moves the message ids on, so the generations below stay positive
+        aid = store.create_analysis()
+        self.check(aid)
+        live = store.evidence_generation(aid)
+        self.assertGreater(live, 3)
+        rows = [dict(snap(gen=live - 3, n=60, total=60), health=None),                                                      # no health score: not a record
+                snap(gen=live - 2, n=60, total=60, hostile_n=10 ** 9, care_n=70, dig_n=0, heated_n=3, health=50.0),            # counts above 60: left out
+                snap(gen=live - 1, n=60, total=60, hostile_n=10, care_n=0, dig_n=0, heated_n=10, health=50.0)]
+        with store.db() as c:
+            for row in rows:
+                c.execute('INSERT INTO measure_history(analysis_id,created_at,snapshot_json,gen) VALUES(?,?,?,?)', (aid, row['created_at'], json.dumps(row), row['gen']))
+        ctx = measures.build(aid, store.get_analysis(aid), {'status': 'ok', 'analyzed_n': 60, 'toxicity_types': {}, 'flagged': []},
+                             {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0})
+        self.assertEqual([r['gen'] for r in ctx['trail']], [live - 2, live - 1, live], 'the record with no health score is not in the trail')
+        self.assertNotIn('hostile_n', ctx['trail'][0])
+        self.assertTrue(ctx['since']['comparable'])
+        self.assertEqual(len(ctx['since']['rows']), 5)
+        self.assertTrue(all(isinstance(r['before'], (str, int, float)) for r in ctx['since']['rows']))
+
+    def test_the_model_name_of_a_long_tag_is_kept_so_two_checks_of_the_same_model_compare(self):
+        """The saved record used to drop a model name of more than 64 characters while the record of the check being shown kept it, so two checks of the same
+        model read 'Your last check used a different model' for ever."""
+        aid = store.create_analysis()
+        name = 'hf.co/mradermacher/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF:Q4_K_M'
+        store.update_analysis(aid, model_used=name)
+        self.add_chat(aid, 60, tones=lambda i: {'Rude': 2} if i % 6 == 0 else {})
+        self.assertEqual(measures.save_snapshot(aid, dict(self.RATED))['model'], name)
+        store.new_check(aid)
+        self.add_chat(aid, 60)
+        measures.save_snapshot(aid, dict(self.RATED))
+        history = store.measure_history(aid)
+        self.assertEqual([r.get('model') for r in history], [name, name])
+        ctx = measures.build(aid, store.get_analysis(aid), {'status': 'ok', 'analyzed_n': 60, 'toxicity_types': {}, 'flagged': []},
+                             {'sampled': False, 'total': 60, 'scope': 60, 'added_since': 0})
+        self.assertEqual(ctx['record']['model'], name)
+        self.assertTrue(ctx['since']['comparable'], ctx['since']['why'])
 
     def test_nothing_is_saved_without_ratings_and_it_does_not_raise(self):
         aid = store.create_analysis()

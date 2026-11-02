@@ -2040,6 +2040,84 @@ class CapsAndStyling(unittest.TestCase):
         self.assertIn('shut.forEach(function(d){d.open=false});shut=[]', render.JS)             # ... and shuts exactly that
         self.assertIn('@media print{.vc details::details-content{content-visibility:visible!important;display:block!important}}', render.CSS)
 
+    def test_the_dark_palette_is_for_the_screen_only_so_paper_always_gets_the_light_colours(self):
+        """A reader who uses dark mode and prints (or saves a PDF) got the dark palette on paper: pale grey text on white (2.8 to 1), or with background
+        graphics on a page of near black. The dark values are inside `@media screen`, so a printer never sees them."""
+        from vibe_check import render
+        css = re.sub(r'/\*.*?\*/', '', render.CSS, flags=re.S)
+        self.assertIn('@media screen{[data-theme="dark"] .vc{', css)
+        for found in re.finditer(r'\[data-theme="dark"\]', css):                             # every use of the attribute sits inside @media screen
+            before = css[:found.start()]
+            self.assertGreater(before.rfind('@media screen{'), before.rfind('}}'), 'a dark rule outside @media screen')
+
+
+class SafetySentence(unittest.TestCase):
+    """The flagged messages say what to do when one of them describes a real risk, but only when one of them is a threat or hate speech."""
+    SAFETY = "A model can be wrong. If a message describes a real risk to someone, follow your community's safety process or contact local emergency services."
+
+    def flag(self, kind, severity=9):
+        return {'message': 'you will regret this', 'type': kind, 'severity': severity, 'source': 'chat.csv', 'role': None, 'timestamp': None}
+
+    def test_a_threat_or_hate_speech_flag_puts_the_sentence_under_the_heading_and_an_insult_does_not(self):
+        from vibe_check import render
+        for kind in ('threat', 'hate_speech'):
+            html = render._flagged_html({'flagged': [self.flag('insult', 5), self.flag(kind)], 'flagged_total': 2})
+            note = f'<p class="vc-note">{render.E(self.SAFETY)}</p>'
+            self.assertIn(note, html, kind)
+            self.assertTrue(html.startswith(f'<h3 id="vc-flagged">Flagged messages (2)</h3>{note}'), kind)             # directly under the heading
+            self.assertEqual(html.count('A model can be wrong'), 1, kind)
+        for kind in ('insult', 'harassment', 'spam', 'profanity', 'bullying'):
+            self.assertNotIn('A model can be wrong', render._flagged_html({'flagged': [self.flag(kind, 6)], 'flagged_total': 1}), kind)
+        self.assertNotIn('A model can be wrong', render._flagged_html({'flagged': [], 'flagged_total': 0}))
+        self.assertEqual(render.SAFETY_NOTE, self.SAFETY)
+
+    def test_the_pdf_says_it_under_the_flagged_heading_in_the_same_case(self):
+        import pypdf
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate
+
+        def pdf_of(kind):
+            res = run_vibe_check(units(8), FakeModel(lambda i, p, n: reply(n, unfriendly=1, flagged=[{'n': 2, 'type': kind, 'severity': 9}],
+                                                                           tox={**{k: 0 for k in engine.TOX_KEYS}, 'threats': 1})), sleep=NOSLEEP, now=NOW)
+            buf = io.BytesIO()
+            SimpleDocTemplate(buf, pagesize=letter).build(pdf_flowables(res))
+            return ' '.join(' '.join(page.extract_text().split()) for page in pypdf.PdfReader(io.BytesIO(buf.getvalue())).pages)
+        text = pdf_of('threat')
+        self.assertIn(self.SAFETY, text)
+        self.assertLess(text.index('Flagged messages (1)'), text.index(self.SAFETY))
+        self.assertNotIn('A model can be wrong', pdf_of('insult'))
+
+
+class TouchAndScroll(unittest.TestCase):
+    """The shared script of the charts. A browser test would be better; this holds the code to what was tried by hand in Chromium (DEV.md)."""
+
+    def test_the_readout_goes_when_the_page_scrolls_because_it_is_a_fixed_box(self):
+        from vibe_check import render
+        self.assertIn("window.addEventListener('scroll',function(){if(Date.now()-shownAt>250)hide()},{passive:true,capture:true})", render.JS)
+        self.assertIn('.vc-cross', render.JS)                                         # and so does the crosshair of every chart
+
+    def test_a_tap_anywhere_in_a_line_chart_chooses_the_part_nearest_by_its_x_position(self):
+        from vibe_check import render
+        for needle in ("e.pointerType!=='touch'", "svg.vc-svg", ".vc-hit[data-vc-x]", "svg.viewBox.baseVal", "getAttribute('data-vc-x')", "tapAt=Date.now()"):
+            self.assertIn(needle, render.JS)
+        self.assertIn("function(e){if(e.pointerType!=='touch')hide()}", render.JS)    # a finger that lifts is not a pointer that left: the readout stays
+        self.assertEqual(render.JS.count('<script'), 0)
+
+
+class PdfStory(unittest.TestCase):
+    def test_no_heading_is_left_at_the_foot_of_a_page_because_reportlab_does_not_keep_a_paragraph_with_a_container(self):
+        """A heading with keepWithNext followed by a KeepTogether was not grouped with it (reportlab leaves containers out of the group): 'Behaviour forecast'
+        could end a page with its bar on the next. The heading has to be inside the block."""
+        from reportlab.platypus import KeepTogether, Paragraph
+        hist = [snap(1, 4.0, 20, 40, 40, flagged=9, tox={'insults': 5}), snap(8, 5.0, 30, 40, 30, flagged=7, tox={'insults': 3})]
+        res = Render.result(self, history=hist)
+        story = pdf_flowables(res)
+        self.assertTrue(any(isinstance(f, Paragraph) and f.getPlainText() == 'Behaviour forecast' for f in story + [g for f in story if isinstance(f, KeepTogether) for g in f._content]))
+        for a, b in zip(story, story[1:]):
+            self.assertFalse(a.getKeepWithNext() and isinstance(b, KeepTogether), f'a heading apart from its block: {getattr(a, "getPlainText", lambda: a)()}')
+        block = next(f for f in story if isinstance(f, KeepTogether) and any(isinstance(g, Paragraph) and g.getPlainText() == 'Behaviour forecast' for g in f._content))
+        self.assertEqual(block._content[0].getPlainText(), 'Behaviour forecast')
+
 
 # ======================================================================================
 class ChartKeyboardAccess(unittest.TestCase):

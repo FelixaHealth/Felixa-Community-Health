@@ -16,6 +16,7 @@ choice, written down as a named constant. None of them is a validated norm.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import logging
 import math
 import re
@@ -35,6 +36,7 @@ NEGATIVE_WEIGHTS = {'Ignorant': 1, 'Egocentric': 1, 'Neurotic': 1, 'Sarcastic': 
 HEALTH_DIVISOR = 4.5       # the backend divides by 9 (every positive tone present). A tone has about half its full strength when it is present, so 4.5 keeps its scale.
 HEALTH_STATUS = ((80, 'Excellent'), (60, 'Good'), (40, 'Fair'), (0, 'Needs attention'))
 HEALTH_TONE = {'Excellent': 'good', 'Good': 'good', 'Fair': 'info', 'Needs attention': 'bad'}
+TONE_WORDS = {'good': 'A good sign', 'info': 'Neutral', 'warn': 'Worth a look', 'bad': 'Look at this first'}      # the icon in words, for the PDF and the CSV
 KINDS = ('hostile', 'care', 'dig', 'heated', 'polite', 'encouraging', 'funny')      # the flags counted for every message
 KEYS = ('escalation', 'conflict', 'empathy', 'passive')            # the four measures, in the order they are shown
 NAMES = {'escalation': 'Escalation', 'conflict': 'Conflict', 'empathy': 'Empathy', 'passive': 'Passive-aggressive'}
@@ -79,6 +81,11 @@ SILENT_SHARE = (19, 20)    # when 19 in 20 messages have all 13 ratings at 0, th
 
 
 # ---- helpers ------------------------------------------------------------------------------------
+def is_silent(m) -> bool:
+    """True when 19 in 20 messages have all 13 ratings at 0: the model most likely did not read the text, so nothing here may look like good news."""
+    return bool(m['n']) and SILENT_SHARE[1] * m['silent'] >= SILENT_SHARE[0] * m['n']
+
+
 def whole(x) -> int:
     """A figure as it is printed: whole numbers, halves up. Every word and cut-off is judged on this, so a printed 8 is never called Rare."""
     return js_round(x + 1e-9)
@@ -434,7 +441,9 @@ def cards(m) -> list:
             hottest = max((s['rates']['heated'] for s in stretches), default=0.0)
             card['note'] = ('The mood was already tense when the messages start. Escalation only counts a rise.' if m['opening_heated'] and m['verdicts'] else
                             'Some parts were heated, but not by more than chance alone would give.' if m['verdicts'] and not eps and whole(hottest) >= 30 else '')
-            card['count'] = len(eps)
+            card['count'] = len(eps) if m['verdicts'] else None
+            if m['opening_heated'] and m['verdicts'] and not eps:       # hot from the first part: a rise could not be seen, so no green mark
+                card['tone'] = 'info'
         else:
             word = level_word(kind, rate(o, kind), m['scale'])
             what = {'hostile': 'were openly hostile.', 'care': 'showed care or understanding.', 'dig': 'had sarcasm without open hostility.'}[kind]
@@ -444,6 +453,9 @@ def cards(m) -> list:
                 card['tone'] = 'info'
             if m['last3'] and m['verdicts']:
                 card['latest'] = level_word(kind, rate(m['last3'], kind), m['scale'])
+        if is_silent(m):                                             # almost no tone found: nothing here is good news
+            card['tone'] = 'info'
+        card['tone_word'] = TONE_WORDS[card['tone']]
         out.append(card)
     return out
 
@@ -454,7 +466,8 @@ def health_tile(m) -> dict:
     trend = ''
     if t is not None:
         trend = 'No clear change.' if t['call'] == 'steady' else f'{"Rising" if t["call"] == "rising" else "Falling"}: {whole(t["first"])} early on, {whole(t["last"])} lately.'
-    return {'key': 'health', 'name': 'Health score', 'score': m['health'], 'status': status, 'tone': HEALTH_TONE[status], 'trend': trend,
+    tone = 'info' if m['n'] < MIN_VERDICT or is_silent(m) else HEALTH_TONE[status]       # too few messages, or no tone found: a neutral mark
+    return {'key': 'health', 'name': 'Health score', 'score': m['health'], 'status': status, 'tone': tone, 'tone_word': TONE_WORDS[tone], 'trend': trend,
             'series': [round(s['health'], 2) for s in m['stretches']],
             'caption': "One number that adds up all 13 tones. 50 means neutral and higher is warmer. Vibe Check's score is a separate read of how friendly the chat "
                        'feels, so the two can differ.'}
@@ -467,9 +480,10 @@ def record(m, a=None, rated=None, gen=None, created_at=None) -> dict:
     a = a or {}
     keys = a.keys() if hasattr(a, 'keys') else ()
     get = lambda k: (a[k] if k in keys else None)       # noqa: E731
+    model = get('model_used') or (rated or {}).get('model') or ''
     rec = {'created_at': created_at or utc_now(), 'gen': gen, 'n': m['n'], 'total': (rated or {}).get('total') or m['n'], 'sampled': int(bool((rated or {}).get('note'))),
-           'basis': m['basis'], 'stretches': len(m['stretches']), 'model': get('model_used') or (rated or {}).get('model') or '',
-           'sensitivity': m['sensitivity'], 'period_start': get('period_start') or '', 'period_end': get('period_end') or '',
+           'basis': m['basis'], 'stretches': len(m['stretches']), 'model': model,
+           'model_key': hashlib.sha256(str(model).encode('utf-8', 'replace')).hexdigest()[:12] if model else '', 'sensitivity': m['sensitivity'], 'period_start': get('period_start') or '', 'period_end': get('period_end') or '',
            'health': round(m['health'], 3), 'health_sd': round(math.sqrt(_d_var(o)) * 50 / HEALTH_DIVISOR, 3),
            'hostile_n': o['hostile'], 'care_n': o['care'], 'dig_n': o['dig'], 'heated_n': o['heated'],
            'episodes': len(m['episodes']), 'peak': round(max((e['peak'] for e in m['episodes']), default=0.0), 3), 'sig': m['sig']}
@@ -498,7 +512,7 @@ def compare(cur, prev) -> dict | None:
     if not prev:
         return None
     out = {'previous': prev, 'comparable': True, 'why': '', 'changes': {}}
-    if (cur.get('model') or '') != (prev.get('model') or ''):
+    if (cur.get('model_key') or cur.get('model') or '') != (prev.get('model_key') or prev.get('model') or ''):
         out.update(comparable=False, why='Your last check used a different model, so part of the change may come from the model and not from the community.')
     elif (cur.get('sensitivity') or '') != (prev.get('sensitivity') or ''):
         out.update(comparable=False, why='Your last check used a different sensitivity, so part of the change may come from the setting and not from the community.')
@@ -549,7 +563,7 @@ def trail_of(history, live) -> list:
 
 
 # ---- alerts and notes ---------------------------------------------------------------------------
-NOTE_ABOUT = {'no_vibe': 'alerts', 'not_alike': 'alerts'}       # every other note is about the measures; a page prints each note once, in its own section
+NOTE_ABOUT = {'no_vibe': 'alerts'}       # every other note is about the measures; a page prints each note once, in its own section
 def _alert(level, key, title, detail, step, base, when='') -> dict:
     return {'level': level, 'key': key, 'title': title, 'detail': detail, 'try': step, 'base': base, 'when': when}
 
@@ -680,9 +694,7 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
                                 'Thank everyone who helped reset the tone.', f'Based on {m["first3"]["n"]:,} early and {m["last3"]["n"]:,} recent messages.'))
 
     # against the check before
-    if comparison and not comparison['comparable']:
-        notes.append({'key': 'not_alike', 'text': comparison['why']})
-    elif comparison:
+    if comparison and comparison['comparable']:
         ch = comparison['changes']
         h = ch.get('health')
         before_n = comparison['previous']['n']
@@ -718,14 +730,11 @@ def alerts(m, vibe=None, comparison=None, cov=None) -> tuple:
             notes.append({'key': 'undated', 'text': f'Only {m["timeline_n"]:,} of {m["n"]:,} messages have a date. The lines show those. The figures above still count all {m["n"]:,}.'})
     if m['incomplete']:
         notes.append({'key': 'incomplete', 'text': f'{m["incomplete"]:,} message{"" if m["incomplete"] == 1 else "s"} had incomplete ratings and {"is" if m["incomplete"] == 1 else "are"} left out of these figures.'})
-    if m['opening_heated'] and m['verdicts']:
-        notes.append({'key': 'opening', 'text': 'The mood was already tense when the messages start, so a climb before them cannot be seen.'})
     if cov.get('sampled'):
-        notes.append({'key': 'sampled', 'text': f'Built from {m["n"]:,} of {cov.get("total", m["n"]):,} messages, an even sample. A short flare-up can fall between the samples. '
-                                                 'Choose "all of them" for the volume to see every message.'})
+        notes.append({'key': 'sampled', 'text': 'A short flare-up can fall between the samples. Choose "all of them" for the volume to see every message.'})
     if m['scale'] > 1:
         notes.append({'key': 'low_sensitivity', 'text': 'Your sensitivity is Low, so banter counts as normal. The bars for Conflict, Passive-aggressive and heated moments are higher.'})
-    if m['n'] >= MIN_BADGE and SILENT_SHARE[1] * m['silent'] >= SILENT_SHARE[0] * m['n']:
+    if m['n'] >= MIN_BADGE and is_silent(m):
         notes.append({'key': 'silent', 'text': 'Almost no tone was found in these messages. The model may not have read this text well.'})
     if cov.get('added_since'):
         k = cov['added_since']
@@ -771,7 +780,7 @@ def badges(m, vibe=None, cov=None) -> tuple:
     ok = bool(vibe) and vibe.get('status') == 'ok'
     full = not cov.get('sampled') and not cov.get('added_since')
     out, note = [], ''
-    silent = SILENT_SHARE[1] * o['silent'] >= SILENT_SHARE[0] * n
+    silent = is_silent(m)
     few = f'Badges start at {MIN_BADGE} messages. This check has {n:,}.' if n < MIN_BADGE else ''
     if not few and silent:
         note = 'Almost no tone was found in these messages, so no badges were given. The model may not have read this text well.'
@@ -814,7 +823,8 @@ def since_table(comparison, cur) -> dict | None:
             before, now = whole(prev.get('health') or 0), whole(cur.get('health') or 0)
         else:
             kind = {'conflict': 'hostile', 'empathy': 'care', 'passive': 'dig', 'heated': 'heated'}[key]
-            before, now = f'{prev.get(kind + "_n", 0):,} of {prev["n"]:,}', f'{cur.get(kind + "_n", 0):,} of {cur["n"]:,}'
+            before = f'{prev[kind + "_n"]:,} of {prev["n"]:,}' if prev.get(kind + '_n') is not None else 'Not known'
+            now = f'{cur.get(kind + "_n", 0):,} of {cur["n"]:,}'
         rows.append({'label': label, 'before': before, 'now': now, 'verdict': WORDS[ch['verdict']] if ch else ''})
     return {'rows': rows, 'comparable': comparison['comparable'], 'why': comparison['why']}
 
@@ -852,8 +862,12 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
     found, notes = alerts(m, vibe, comparison, cov)
     earned, badge_note = badges(m, vibe, cov)
     counts = {level: sum(1 for x in found if x['level'] == level) for level in LEVELS}
+    if counts['high']:
+        for b in earned:
+            if b['key'] == 'noflags' and b['earned']:
+                b.update(earned=False, evidence='', needs='Held back while a High priority alert stands.')
     ok_vibe = bool(vibe) and vibe.get('status') == 'ok'
-    all_clear = ok_vibe and not counts['high'] and not counts['medium'] and not any(n['key'] == 'silent' for n in notes)
+    all_clear = ok_vibe and not counts['high'] and not counts['medium'] and not is_silent(m)
     return {'m': m, 'cards': cards(m), 'health': health_tile(m), 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
             'badges_earned': sum(1 for b in earned if b['earned']), 'trail': trail, 'since': since_table(comparison, live), 'comparison': comparison, 'record': live,
             'basis_text': basis_text(m, cov, vibe), 'all_clear': all_clear,
@@ -864,7 +878,7 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
 def basis_text(m, cov, vibe=None) -> str:
     """What the figures are built from, in one sentence: how many messages, which part of them, and how many Vibe Check read."""
     total = cov.get('total') or m['n']
-    text = f'Built from the {m["n"]:,} messages that were rated' + (f' (an even sample of {total:,})' if cov.get('sampled') else '') + '.'
+    text = f'Built from the {m["n"]:,} message{"" if m["n"] == 1 else "s"} that {"was" if m["n"] == 1 else "were"} rated' + (f' (an even sample of {total:,})' if cov.get('sampled') else '') + '.'
     if vibe and vibe.get('status') == 'ok':
         text += f' Vibe Check read {vibe.get("analyzed_n", 0):,}.'
     return text

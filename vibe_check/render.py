@@ -23,8 +23,8 @@ CSS = """
 .vc{--vc-surface:var(--panel,#fff);--vc-ink:var(--ink,#0b0b0b);--vc-ink2:#52514e;--vc-muted:#898781;--vc-grid:#e1e0d9;--vc-axis:#c3c2b7;
 --vc-series1:#1f66bf;--vc-pos:#1f66bf;--vc-neu:#898781;--vc-neg:#c93838;--vc-good:#0ca30c;--vc-warn:#fab219;--vc-serious:#ec835a;--vc-crit:#d03b3b;
 --vc-on-fill:#fff;--vc-on-neu:#0b0b0b;--vc-on-warn:#0b0b0b;--vc-tile:#f4f4f1;--vc-soft:#fff0e0;--vc-rule:var(--line,#dfe3e8)}
-[data-theme="dark"] .vc{--vc-surface:#1a1a19;--vc-ink:#f0efec;--vc-ink2:#c3c2b7;--vc-grid:#2c2c2a;--vc-axis:#383835;--vc-series1:#3987e5;--vc-pos:#3987e5;
---vc-neu:#c3c2b7;--vc-neg:#e66767;--vc-on-neu:#0b0b0b;--vc-tile:#242423;--vc-soft:#33200f;--vc-rule:#383835}
+@media screen{[data-theme="dark"] .vc{--vc-surface:#1a1a19;--vc-ink:#f0efec;--vc-ink2:#c3c2b7;--vc-grid:#2c2c2a;--vc-axis:#383835;--vc-series1:#3987e5;--vc-pos:#3987e5;
+--vc-neu:#c3c2b7;--vc-neg:#e66767;--vc-on-neu:#0b0b0b;--vc-tile:#242423;--vc-soft:#33200f;--vc-rule:#383835}}
 .vc h3{margin:40px 0 4px;font-size:22px}.vc h4{margin:24px 0 4px;font-size:18px}
 .vc .vc-hero{display:grid;grid-template-columns:minmax(230px,300px) 1fr;gap:36px;align-items:center;margin:28px 0 8px}
 .vc .vc-score{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;line-height:1}
@@ -56,21 +56,24 @@ CSS = """
 .vc .vc-table{margin-top:6px}.vc .vc-table summary{font-size:16px;font-weight:600;color:var(--vc-ink2)}
 .vc .vc-table table{font-size:16px}.vc .vc-table th{font-size:13px}
 .vc details{margin-top:14px}
-.vc-tip{position:fixed;z-index:50;max-width:280px;pointer-events:none;background:var(--vc-surface,#fff);color:var(--vc-ink,#0b0b0b);border:1px solid var(--vc-axis,#c3c2b7);border-radius:8px;
+.vc-tip{position:fixed;z-index:50;max-width:min(320px,calc(100vw - 16px));pointer-events:none;background:var(--vc-surface,#fff);color:var(--vc-ink,#0b0b0b);border:1px solid var(--vc-axis,#c3c2b7);border-radius:8px;
 padding:9px 12px;box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:15px;line-height:1.4}
 .vc-tip[hidden]{display:none}.vc-tip .vc-tip-t{font-weight:650;margin-bottom:4px}
-.vc-tip .vc-tip-r{display:flex;gap:8px;align-items:center}.vc-tip .vc-tip-r strong{font-weight:650}
+.vc-tip .vc-tip-r{display:flex;flex-wrap:wrap;gap:0 8px;align-items:center}.vc-tip .vc-tip-r strong{flex:none;font-weight:650;white-space:nowrap}
 .vc-tip .vc-key{flex:none;width:12px;height:3px;border-radius:2px}
 @media(max-width:640px){.vc .vc-wide{display:none}.vc .vc-narrow{display:block}}
 @media(max-width:1000px){.vc .vc-hero{grid-template-columns:1fr;gap:20px}}
 @media(max-width:760px){.vc .vc-cols{grid-template-columns:1fr;gap:20px}.vc .vc-score-num{font-size:64px}.vc .vc-flags li{grid-template-columns:1fr}.vc .vc-src{grid-column:1}}
 @media print{.vc-tip{display:none}.vc .vc-wide{display:block!important}.vc .vc-narrow{display:none!important}}
 @media print{.vc details::details-content{content-visibility:visible!important;display:block!important}}
-/* A heading stays with the note and chart it introduces (`.vc-keep` holds the three in one block), and a tile, card or message is not cut in two. */
-@media print{.vc-keep,.vc>p,.vc-fig,.vc-kpi,.vc-card,.vc-callout,.vc-flags li,.vc-lines li{break-inside:avoid}.vc h3,.vc h4,.vc>p,.vc summary{break-after:avoid}}
+/* A heading stays with the note and chart it introduces (`.vc-keep` holds the three in one block), and a tile, card or message is not cut in two. A paragraph is
+   neither kept whole nor kept with what follows it: a chain of such rules (heading, count, caveat, first alert) moved a whole panel to the next page and left the
+   one before it half empty. Only a heading is kept with the first paragraph after it. */
+@media print{.vc-keep,.vc-fig,.vc-kpi,.vc-card,.vc-callout,.vc-flags li,.vc-lines li,.vc table tr{break-inside:avoid}.vc h3,.vc h4,.vc summary{break-after:avoid}}
 """
 
-# Hover and keyboard-focus readouts. Progressive: the table beneath every chart carries every value.
+# Hover and keyboard-focus readouts. Progressive: the table beneath every chart carries every value. On a touch screen a tap anywhere in a line chart chooses the part
+# nearest to the finger by its x position (the parts are only 4 to 18 pixels wide on a phone), and the readout is a fixed box, so it goes away when the page scrolls.
 # The second function is for the printer: a closed <details> prints as its summary line alone, so every table twin, the flagged messages past the
 # tenth, the forecast factors and the note on limits would be missing from paper. It opens the ones that are closed for the print and shuts exactly
 # those again afterwards (a fold the reader had opened stays open). Both signals are used because browsers differ in which one they send; the
@@ -78,6 +81,7 @@ padding:9px 12px;box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:15px;line-heigh
 JS = """
 (function(){if(window.__vcTip)return;window.__vcTip=1;
 var tip=document.createElement('div');tip.className='vc-tip';tip.setAttribute('role','status');tip.hidden=true;document.body.appendChild(tip);
+var shownAt=0,tapAt=0;
 function show(el,ev){var d;try{d=JSON.parse(el.getAttribute('data-vc-tip'))}catch(e){return}
 var host=el.closest('.vc')||document.body;if(tip.parentNode!==host)host.appendChild(tip);
 while(tip.firstChild)tip.removeChild(tip.firstChild);
@@ -89,13 +93,19 @@ row.appendChild(k);row.appendChild(v);row.appendChild(l);tip.appendChild(row)});
 tip.hidden=false;var x,y;if(ev&&ev.clientX!=null){x=ev.clientX;y=ev.clientY}else{var b=el.getBoundingClientRect();x=b.left+b.width/2;y=b.top}
 tip.style.left=Math.max(8,Math.min(innerWidth-tip.offsetWidth-8,x+14))+'px';tip.style.top=Math.max(8,y-tip.offsetHeight-12)+'px';
 var cx=el.getAttribute('data-vc-x'),svg=el.ownerSVGElement,c=svg&&svg.querySelector('.vc-cross');
-if(c&&cx!==null){c.setAttribute('x1',cx);c.setAttribute('x2',cx);c.style.visibility='visible'}}
-function hide(el){tip.hidden=true;var svg=el&&el.ownerSVGElement,c=svg&&svg.querySelector('.vc-cross');if(c)c.style.visibility='hidden'}
+if(c&&cx!==null){c.setAttribute('x1',cx);c.setAttribute('x2',cx);c.style.visibility='visible'}shownAt=Date.now()}
+function hide(el){tip.hidden=true;var svg=el&&el.ownerSVGElement,all=svg?[svg.querySelector('.vc-cross')]:[].slice.call(document.querySelectorAll('.vc-cross'));all.forEach(function(c){if(c)c.style.visibility='hidden'})}
 function target(e){return e.target.closest&&e.target.closest('[data-vc-tip]')}
 document.addEventListener('pointermove',function(e){var t=target(e);if(t)show(t,e);else hide()});
-document.addEventListener('pointerleave',function(){hide()},true);
-document.addEventListener('focusin',function(e){var t=target(e);if(t)show(t)});
-document.addEventListener('focusout',function(e){var t=target(e);if(t)hide(t)});
+document.addEventListener('pointerleave',function(e){if(e.pointerType!=='touch')hide()},true);
+document.addEventListener('pointerdown',function(e){if(e.pointerType==='touch'&&!(e.target.closest&&e.target.closest('svg.vc-svg')))hide()});
+document.addEventListener('pointerup',function(e){if(e.pointerType!=='touch')return;var svg=e.target.closest&&e.target.closest('svg.vc-svg');if(!svg)return;
+var hits=[].slice.call(svg.querySelectorAll('.vc-hit[data-vc-x]')),r=svg.getBoundingClientRect(),vb=svg.viewBox&&svg.viewBox.baseVal;if(!hits.length||!r.width||!vb||!vb.width)return;
+var ux=(e.clientX-r.left)*vb.width/r.width+vb.x,best=hits[0],d=Infinity;
+hits.forEach(function(h){var dx=Math.abs(parseFloat(h.getAttribute('data-vc-x'))-ux);if(dx<d){d=dx;best=h}});tapAt=Date.now();show(best)});
+document.addEventListener('focusin',function(e){var t=target(e);if(t&&Date.now()-tapAt>600)show(t)});
+document.addEventListener('focusout',function(e){var t=target(e);if(t&&Date.now()-tapAt>600)hide(t)});
+window.addEventListener('scroll',function(){if(Date.now()-shownAt>250)hide()},{passive:true,capture:true});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){hide();return}
 var t=target(e);if(!t||!t.ownerSVGElement)return;var k=e.key,m=[].slice.call(t.ownerSVGElement.querySelectorAll('[data-vc-tip]')),i=m.indexOf(t),j;
 if(k==='ArrowRight'||k==='ArrowDown')j=Math.min(i+1,m.length-1);else if(k==='ArrowLeft'||k==='ArrowUp')j=Math.max(i-1,0);else if(k==='Home')j=0;else if(k==='End')j=m.length-1;else return;
@@ -179,6 +189,11 @@ def _sev_role(severity: int) -> str:
 
 
 # ---- sections --------------------------------------------------------------------
+# Printed under the heading of the flagged messages when any of them is a threat or hate speech: the page, the PDF and the alert that points here say the same thing.
+SAFETY_NOTE = "A model can be wrong. If a message describes a real risk to someone, follow your community's safety process or contact local emergency services."
+SAFETY_TYPES = ('threat', 'hate_speech')
+
+
 def _flagged_html(vibe) -> str:
     flagged = vibe.get('flagged') or []
     total = vibe.get('flagged_total', len(flagged))
@@ -196,7 +211,8 @@ def _flagged_html(vibe) -> str:
     rest = flagged[10:]
     more = (f'<details><summary>Show the other {"flagged message" if len(rest) == 1 else fmt_int(len(rest)) + " flagged messages"}</summary>'
             f'<ul class="vc-flags">{"".join(item(f) for f in rest)}</ul></details>') if rest else ''
-    return (f'<h3 id="vc-flagged">Flagged messages ({fmt_int(total)})</h3>'
+    safety = f'<p class="vc-note">{E(SAFETY_NOTE)}</p>' if any(f.get('type') in SAFETY_TYPES for f in flagged) else ''
+    return (f'<h3 id="vc-flagged">Flagged messages ({fmt_int(total)})</h3>{safety}'
             '<p class="vc-note">Ordered by severity. Each message is copied from your upload, never paraphrased.</p>'
             f'<ul class="vc-flags">{head}</ul>{more}')
 
@@ -412,6 +428,8 @@ def pdf_flowables(vibe: dict | None, *, fonts=('Helvetica', 'Helvetica-Bold'), w
                  KeepTogether([P('Toxicity breakdown', 'sub'), P('No toxicity detected.')]))
     flagged = vibe.get('flagged') or []
     story.append(P(f'Flagged messages ({fmt_int(vibe.get("flagged_total", 0))})', 'sub'))
+    if any(f.get('type') in SAFETY_TYPES for f in flagged):
+        story.append(P(SAFETY_NOTE))
     if flagged:
         rows = [[P('Type', 'small'), P('Message', 'small'), P('Source', 'small')]] + [
             [P(f'{type_label(f["type"])} {f["severity"]}/10', 'small'), P(f'"{truncate(f["message"], 220)}"', 'small'),
@@ -442,8 +460,9 @@ def pdf_flowables(vibe: dict | None, *, fonts=('Helvetica', 'Helvetica-Bold'), w
                 story += [Spacer(1, 4), KeepTogether([P(scene.title, 'sub'), drawing(scene)])]
         fc = prog.get('forecast')
         if fc:
-            story += [P('Behaviour forecast', 'sub'),
-                      KeepTogether([drawing(charts.forecast_bar(fc['improve'], fc['worsen']))]),
+            # The heading goes inside the KeepTogether with its bar: reportlab does not keep a paragraph with a container that follows it, so a heading placed
+            # before a KeepTogether was left alone at the bottom of a page.
+            story += [KeepTogether([P('Behaviour forecast', 'sub'), drawing(charts.forecast_bar(fc['improve'], fc['worsen']))]),
                       P(f'{fc["improve"]}% chance the community improves | {fc["worsen"]}% chance toxicity increases | '
                         f'confidence {fc["confidence"]} ({fc["n_reports"]} reports)'),
                       P(fc['caveat'], 'small')]

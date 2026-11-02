@@ -8,26 +8,27 @@
     table         ONE table twin for all four charts: every part of the chat, its messages, the rates per 100 messages and the health score
     health        the health meter on its 0 to 100 track, in both layouts
     health_score  the health score as the whole number it is printed as (the status word is judged on the same number)
-    trail         the check-by-check chart followed by its table, from the third check on, else ''
+    trail         the check-by-check chart followed by its table, from the third check on, else '' (`trail_chart` and `trail_table` are the two pieces)
     icons         {'good': svg, 'info': svg, 'warn': svg, 'bad': svg}: the status icons of Vibe Check (a shape as well as a colour, never colour alone)
     levels        {'high': {'name': 'High priority', 'tone': 'bad'}, ...}: the words and the tone of the alert priorities (from measures.py)
     verdict_tone  {'Better': 'good', 'Worse': 'warn', 'About the same': 'info'}: the tone of each word of the "Since your last check" table
 
-Only builder HTML is marked for output: `vibe_check.figure` (charts), `vibe_check.data_table` (tables, which escape every cell) and
-`vibe_check.charts.icon_svg` (icons). The module reads numbers and the fixed wording of measures.py; no message, name or file name reaches it.
-Under Incognito no clock time is printed: the part labels come ready-made from measures.py (`stretch['label']`), and the check-by-check table
-names a check by its number and its date only.
+Only builder HTML is marked for output: `vibe_check.figure` (charts), the tables below (every cell goes through `html.escape`) and `vibe_check.charts.icon_svg`
+(icons). The module reads numbers and the fixed wording of measures.py; no message, name or file name reaches it. Under Incognito no clock time is printed: the
+part labels come ready-made from measures.py (`stretch['label']`), and the check-by-check chart and table name a check by its number and its date only.
+
+The two wide tables sit in a scroll region that a keyboard can reach (tabindex, a role and a name), and on a phone each row turns into a small block: every cell
+carries the name of its column (`data-label`) and the ARIA roles keep it a table for a screen reader whatever the style does to it (see `.vc-over-table` in style.css).
 """
-import re
+import html as _html
 
 import bei_charts
 import measures
-from vibe_check import data_table, figure
+from vibe_check import figure
 from vibe_check.charts import icon_svg
 from vibe_check.common import long_date
 
 TONES = ('good', 'info', 'warn', 'bad')
-CLOCK_TIME = re.compile(r'\b\d{1,2}:\d{2}\b')        # an hour and a minute, as in "04:26 UTC"
 
 
 def _bands(card, scale):
@@ -46,6 +47,16 @@ def _charts(ms) -> dict:
     return {card['key']: figure(lambda w, c=card: bei_charts.measure_chart(c, m['stretches'], _bands(c, m['scale']), width=w)) for card in ms['cards']}
 
 
+def _table(headers, rows, summary, label) -> str:
+    """A table twin in a fold, like vibe_check.data_table, with three additions: its scroll region can be reached with the keyboard and has a name, every cell
+    names its column for the phone layout, and the ARIA roles keep it a table when that layout takes the table styling away. Every string is escaped here."""
+    e = _html.escape
+    head = ''.join(f'<th scope="col" role="columnheader">{e(str(h))}</th>' for h in headers)
+    body = ''.join('<tr role="row">' + ''.join(f'<td role="cell" data-label="{e(str(h))}">{e(str(c))}</td>' for h, c in zip(headers, row)) + '</tr>' for row in rows)
+    return (f'<details class="vc-table"><summary>{e(summary)}</summary><div class="table-wrap" tabindex="0" role="region" aria-label="{e(label)}">'
+            f'<table role="table"><thead role="rowgroup"><tr role="row">{head}</tr></thead><tbody role="rowgroup">{body}</tbody></table></div></details>')
+
+
 def _parts_table(ms) -> str:
     """The table twin of the four charts and the health score: one row for every part of the chat, with the label measures.py built for it."""
     m = ms['m']
@@ -53,37 +64,37 @@ def _parts_table(ms) -> str:
         return ''
     rows = [[s['label'], f'{s["n"]:,}', measures.whole(s['rates']['hostile']), measures.whole(s['rates']['care']), measures.whole(s['rates']['dig']),
              measures.whole(s['rates']['heated']), measures.whole(s['health'])] for s in m['stretches']]
-    return data_table(['Part of the chat', 'Messages', 'Conflict per 100 messages', 'Empathy per 100 messages', 'Passive-aggressive per 100 messages',
-                       'Heated per 100 messages', 'Health score'], rows, summary='View the four charts as a table')
+    return _table(['Part of the chat', 'Messages', 'Conflict per 100 messages', 'Empathy per 100 messages', 'Passive-aggressive per 100 messages',
+                   'Heated per 100 messages', 'Health score'], rows, 'View the four charts as a table', 'Table of the four charts')
 
 
 def _of(r, kind) -> str:
     return f'{r.get(kind + "_n") or 0:,} of {r.get("n") or 0:,}'
 
 
-def _trail(ms) -> str:
-    """The health score check by check: the chart and its table, from the third check on."""
+def _trail(ms) -> tuple:
+    """The health score check by check, from the third check on: (the chart, its table), or ('', '') before that. A check is named by its number and its date, never
+    by the time of day it ran, so the chart is the same under Incognito."""
     trail = ms['trail']
     chart = figure(lambda w: bei_charts.trail_chart(trail, 'health', title='Health score, check by check', series='Health score', width=w))
     if not chart:
-        return ''
-    if ms['m']['incognito'] and CLOCK_TIME.search(chart):      # the chart names two checks of one day by the time they ran: Incognito shows no clock time, so only the table stays
-        chart = ''
+        return '', ''
     rows = []
     for i, r in enumerate(trail, 1):
         rows.append([f'Check {i}' + (' (this check)' if i == len(trail) else ''), long_date(r.get('created_at')), f'{r.get("n") or 0:,}',
                      measures.whole(r.get('health') or 0), _of(r, 'hostile'), _of(r, 'care'), _of(r, 'dig'), _of(r, 'heated')])
-    table = data_table(['Check', 'Date', 'Messages rated', 'Health score', 'Conflict', 'Empathy', 'Passive-aggressive', 'Heated messages'], rows,
-                       summary='View the checks as a table')
-    return chart + table
+    table = _table(['Check', 'Date', 'Messages rated', 'Health score', 'Conflict', 'Empathy', 'Passive-aggressive', 'Heated messages'], rows,
+                   'View the checks as a table', 'Table of the checks')
+    return chart, table
 
 
 def html(ms, a=None) -> dict:
     if not ms:
         return {}
+    trail_chart, trail_table = _trail(ms)
     return {'charts': _charts(ms), 'table': _parts_table(ms),
             'health': figure(lambda w: bei_charts.health_meter(ms['health']['score'], ms['health']['tone'], width=w)),
-            'health_score': measures.whole(ms['health']['score']), 'trail': _trail(ms),
+            'health_score': measures.whole(ms['health']['score']), 'trail': trail_chart + trail_table, 'trail_chart': trail_chart, 'trail_table': trail_table,
             'icons': {tone: icon_svg(tone) for tone in TONES},
             'levels': {level: {'name': measures.LEVEL_NAMES[level], 'tone': measures.LEVEL_TONE[level]} for level in measures.LEVELS},
             'verdict_tone': {measures.WORDS['better']: 'good', measures.WORDS['worse']: 'warn', measures.WORDS['same']: 'info'}}

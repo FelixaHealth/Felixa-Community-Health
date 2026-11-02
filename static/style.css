@@ -98,13 +98,16 @@ body{background:var(--bg);color:var(--ink);font-size:17px}
 @media(max-width:1180px){.shell.three{grid-template-columns:200px minmax(0,1fr)}.setup{grid-column:1/-1;position:static}.setup dl{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
 @media(max-width:860px){.shell.three,.shell.two{grid-template-columns:1fr}.rail{position:static}.rail ol{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}.rail-item{padding:6px 12px 6px 6px;white-space:nowrap}.rail-rule{display:none}.rail>.rail-item{display:none}
 .topbar{padding:10px 16px}.navlink span{display:none}.navlink{padding:9px}.question-card{padding:28px 22px 0}.actions{margin:28px -22px 0;padding:16px 22px}.welcome{flex-direction:column;align-items:flex-start}.help-fab span{display:none}.help-fab{padding:10px}}
-/* Dark theme: warm browns, the same orange. The charts switch on the same attribute. */
+/* Dark theme: warm browns, the same orange. The charts switch on the same attribute. It is for the screen only: paper always gets the light colours, so a reader who
+   uses dark mode and prints (or saves a PDF) gets dark text on white, not pale grey text on white or a page of ink. */
+@media screen{
 [data-theme="dark"]{color-scheme:dark;--bg:#16110c;--panel:#1f1812;--ink:#f4ece1;--muted:#c4b5a3;--line:#3a2e22;--line2:#5a4838;--control:#8f7e6b;--accent:#ffa563;--soft:#33200f;--soft-line:#6a4320;--tile:#2a2118;--stripe:#241b14;--field:#1a140f;--shadow:none}
 [data-theme="dark"] .confidence{border:1px solid var(--line2)}
 [data-theme="dark"] .help-fab .ic{background:#1f1a14}
 [data-theme="dark"] .welcome{background:linear-gradient(180deg,#3a2410,#2f1d0d)}
 [data-theme="dark"] .welcome p{color:var(--ink)}
-[data-theme="dark"] a:focus-visible,[data-theme="dark"] button:focus-visible{outline-color:#ffa563}
+[data-theme="dark"] a:focus-visible,[data-theme="dark"] button:focus-visible,[data-theme="dark"] .table-wrap:focus-visible{outline-color:#ffa563}
+}
 @media print{h1,h2,h3,h4,summary{break-after:avoid}.privacy-bar,.help-fab,.help-dialog,.rail,.setup{display:none!important}.shell{display:block}.topbar::after{display:none}}
 .shell>*{min-width:0}.rail ol{max-width:100%}
 
@@ -149,7 +152,7 @@ fieldset.bare{border:0;margin:0;padding:0;min-width:0}.field textarea:disabled,.
 .badge{font-style:normal;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 9px;border-radius:999px;background:#F27435;color:#2b1500;margin-left:6px}
 .rail-item b .ic{width:16px;height:16px}
 @media(max-width:860px){.results-grid.two-up{grid-template-columns:1fr}.engine{flex-direction:column;align-items:flex-start}.engine .est{text-align:left}.brand-logo{height:38px}}
-[data-theme="dark"] .welcome-logo{filter:none}
+@media screen{[data-theme="dark"] .welcome-logo{filter:none}}
 .brand .brand-logo{width:auto;height:44px;max-width:none;object-fit:contain}
 @media(max-width:860px){.brand .brand-logo{height:36px}}
 fieldset.group{border:0;padding:0;margin:0;min-width:0}
@@ -209,8 +212,8 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .page .vc .vc-kpi{border-radius:16px;padding:18px 22px}.page .vc .vc-kpi strong{font-family:var(--serif);font-weight:600;font-size:36px}
 .page .vc h3{font-family:var(--serif);font-weight:600}
 .stage .panel{margin-bottom:22px}
-[data-theme="dark"] .new-panel{background:linear-gradient(135deg,#2a1d12,#33200f)}
-[data-theme="dark"] .panel{box-shadow:none}
+@media screen{[data-theme="dark"] .new-panel{background:linear-gradient(135deg,#2a1d12,#33200f)}
+[data-theme="dark"] .panel{box-shadow:none}}
 @media(max-width:1100px){.results-head{flex-direction:column;gap:16px}.head-actions{flex-wrap:wrap}}
 @media(max-width:860px){.how{grid-template-columns:repeat(2,minmax(0,1fr))}.welcome.hero{padding:26px 24px;flex-direction:column;align-items:flex-start;gap:20px}.welcome.hero .welcome-logo{width:104px}.panel{padding:24px 22px}.new-panel{padding:22px}}
 @media(max-width:560px){.how{grid-template-columns:1fr}.wp-list a{grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:14px 18px}.wp-when,.wp-go{display:none}}
@@ -229,9 +232,10 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 
 /* ---- Summary, alerts, measures over time and badges ----
    These sections sit in .vc panels, so every colour below is a --vc-* role and dark mode follows with no extra rule. --vc-brand is the page's orange as a role of
-   its own. The Vibe Check stylesheet is inline and comes after this file, so a rule that has to beat one of its own carries one class more. */
-.vc{--vc-brand:#F27435}
-.vc[id],.vc h3[id]{scroll-margin-top:16px}
+   its own, and --vc-edge the darker orange of an edge that has to be seen (3:1 against the cream page, which the brand orange just misses). The Vibe Check stylesheet is
+   inline and comes after this file, so a rule that has to beat one of its own carries one class more. */
+.vc{--vc-brand:#F27435;--vc-edge:#c2540f}
+.vc[id],.vc h3[id],#behaviour,#guidance,#vc-flagged,#vc-toxicity{scroll-margin-top:16px}
 
 /* Summary strip: three tiles, then links to the parts of the page. */
 .vc .vc-kpis.vc-summary-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:18px}
@@ -252,8 +256,13 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .vc .vc-alert .vc-try{margin-top:12px;padding:12px 16px;font-size:17px;line-height:1.55}
 .vc ul.vc-quiet{list-style:none;padding:0;margin:18px 0 0}
 .vc .vc-quiet li{margin:8px 0;padding-left:12px;border-left:2px solid var(--vc-rule);font-size:15px;line-height:1.55;color:var(--vc-ink2);max-width:80ch}
+.vc .vc-note+ul.vc-quiet,.vc .vc-caveat+ul.vc-quiet{margin-top:14px}
+
+/* The amber disc of a "worth a look" icon is 1.8:1 on the cream page. A ring in dark amber, half of it inside the disc, brings the edge to 3:1 (the words beside it carry the meaning). */
+.vc .vc-icon circle[style*="--vc-warn"]{stroke:#8a5a00;stroke-width:2}
 
 /* Measures over time: a card for each measure. A card is narrow even on a wide page, so it shows the phone layout of its chart until the card itself is wide enough. */
+.vc .vc-chart-key{margin:16px 0 0}
 .vc .vc-cols.vc-measures{grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr))}
 .vc .vc-card.vc-measure{container-type:inline-size;display:flex;flex-direction:column;padding-bottom:18px}
 .vc .vc-measure .vc-fig{margin-top:auto;padding-top:14px}
@@ -268,11 +277,11 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .vc .vc-measure .vc-headline{margin:10px 0 2px;font-size:17px;font-weight:600;color:var(--vc-ink)}
 .vc .vc-measure .vc-card-trend{margin:2px 0;font-size:16px;color:var(--vc-ink)}
 .vc .vc-measure .vc-card-note{margin:6px 0;font-size:15px;line-height:1.5;color:var(--vc-ink2)}
-.vc .vc-tip .vc-tip-r strong{flex:none;white-space:nowrap}
 .vc .vc-over-table{margin-top:14px}
 .vc .vc-over-table th,.vc .vc-since th{white-space:normal;vertical-align:bottom}
 .vc .vc-over-table td:first-child{min-width:11em}
 .vc .vc-over-table td:not(:first-child){white-space:nowrap}
+.vc .table-wrap:focus-visible{outline:3px solid #b3440c;outline-offset:2px}
 .vc .vc-card.vc-health{margin-top:20px;padding-bottom:18px}
 .vc .vc-health-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px;margin:10px 0 4px}
 .vc .vc-health .vc-badge{margin-top:0}
@@ -283,7 +292,7 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 
 /* Badges: a tile for each one earned, and the rules of the others in a fold. */
 .vc .vc-awards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:18px 0 8px}
-.vc .award{padding:16px 20px;color:var(--vc-ink);background:var(--vc-soft);border-left:3px solid var(--vc-brand);border-radius:0 12px 12px 0}
+.vc .award{padding:16px 20px;color:var(--vc-ink);background:var(--vc-soft);border-left:3px solid var(--vc-edge);border-radius:0 12px 12px 0}
 .vc .award-tag{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vc-ink2)}
 .vc .award-tag .vc-icon{margin:0}
 .vc .award-name{display:block;margin:6px 0 4px;font-family:var(--serif);font-size:24px;font-weight:600;line-height:1.25;color:var(--vc-ink)}
@@ -294,13 +303,23 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .vc .vc-how,.vc .vc-needs{display:block;font-size:16px;line-height:1.5;color:var(--vc-ink2)}
 .vc .vc-needs{margin-top:4px;font-style:italic}
 
+/* The Method panel of the report is a column of headings and paragraphs. (.how is the landing page's strip of four steps.) */
+.method h3{margin:26px 0 4px}
+
+/* A phone: less padding around the charts, so that a chart is about 290 px wide and its text reads at 11 to 13 px; the tables and the table of the last check
+   turn each row into a small block (every cell carries the name of its column; the roles in the markup keep it a table for a screen reader). */
 @media(max-width:560px){
-  .vc .vc-since thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .vc .vc-since,.vc .vc-since tbody{display:block}
-  .vc .vc-since tbody tr{display:flex;flex-wrap:wrap;gap:2px 12px;padding:12px 0;border-bottom:1px solid var(--vc-rule);background:none}
+  .stage .panel.vc,.report-content .panel.vc{padding-left:16px;padding-right:16px}
+  .vc .vc-card.vc-measure,.vc .vc-card.vc-health{padding-left:12px;padding-right:12px}
+  .vc .vc-since thead,.vc .vc-over-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .vc .vc-since,.vc .vc-since tbody,.vc .vc-over-table table,.vc .vc-over-table tbody{display:block}
+  .vc .vc-since tbody tr,.vc .vc-over-table tbody tr{display:flex;flex-wrap:wrap;gap:2px 12px;padding:12px 0;border-bottom:1px solid var(--vc-rule);background:none}
   .vc .vc-since tbody th{flex:1 1 100%;padding:0 0 4px;border:0}
   .vc .vc-since td{flex:1 1 0;min-width:0;padding:0;border:0}
-  .vc .vc-since td::before{content:attr(data-label);display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vc-ink2)}
+  .vc .vc-over-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+  .vc .vc-over-table td:first-child,.vc .vc-over-table td:not(:first-child){display:block;min-width:0;padding:0;border:0;white-space:normal}
+  .vc .vc-over-table td:first-child{grid-column:1/-1;font-weight:600}
+  .vc .vc-since td::before,.vc .vc-over-table td:not(:first-child)::before{content:attr(data-label);display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--vc-ink2)}
   .vc .vc-kpis.vc-summary-kpis{grid-template-columns:1fr;gap:10px}
   .page .vc .vc-summary-kpis .vc-kpi{display:flex;align-items:baseline;gap:14px;padding:12px 18px}
   .page .vc .vc-summary-kpis .vc-kpi strong{flex:none;font-size:30px}
@@ -309,19 +328,34 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
   .vc .vc-alert-title{font-size:18px}
   .vc .award-name{font-size:22px}
 }
+
+/* Print. The tables are laid out by their content (a fixed layout cut a column title in two and ran the last one off the page), set small, and a row is never cut
+   across two pages. A card, a tile, an alert, a badge and a rule stay whole; everything else flows, so the page ends where the text ends and not at the
+   next block that would not fit. */
 @media print{
-  .vc .vc-over-table table{width:100%;table-layout:fixed;font-size:13px}
-  .vc .vc-over-table th,.vc .vc-over-table td{padding:6px 4px}
-  .vc .vc-over-table th{font-size:10px;letter-spacing:0}
-  .vc .vc-over-table th:first-child{width:23%}
-  .vc .vc-over-table td:first-child{min-width:0}
-  .vc .vc-over-table td:not(:first-child){white-space:normal}
-  .vc .vc-parts th:nth-child(5){width:15%}
-  .vc .vc-trail th:nth-child(7){width:14%}
+  .vc .vc-over-table .vc-table table{width:100%;table-layout:fixed;font-size:12px}
+  .vc .vc-over-table .vc-table th,.vc .vc-over-table .vc-table td{padding:5px 4px;overflow-wrap:anywhere}
+  .vc .vc-over-table .vc-table th{font-size:9px;letter-spacing:0}
+  .vc .vc-over-table .vc-table td:first-child{min-width:0}
+  .vc .vc-over-table .vc-table td:not(:first-child){white-space:normal}
+  .vc .vc-parts th:nth-child(1){width:33%}.vc .vc-parts th:nth-child(2){width:10%}.vc .vc-parts th:nth-child(3){width:12%}.vc .vc-parts th:nth-child(4){width:12%}
+  .vc .vc-parts th:nth-child(5){width:14%}.vc .vc-parts th:nth-child(6){width:11%}.vc .vc-parts th:nth-child(7){width:8%}
+  .vc .vc-trail th:nth-child(1){width:17%}.vc .vc-trail th:nth-child(2){width:14%}.vc .vc-trail th:nth-child(3){width:11%}.vc .vc-trail th:nth-child(4){width:9%}
+  .vc .vc-trail th:nth-child(5){width:11%}.vc .vc-trail th:nth-child(6){width:11%}.vc .vc-trail th:nth-child(7){width:14%}.vc .vc-trail th:nth-child(8){width:13%}
+  .vc .vc-cols.vc-measures{grid-template-columns:repeat(2,minmax(0,1fr))}
   .vc .vc-links{display:none}
-  .vc .award,.vc .vc-since tr,.vc .vc-measure,.vc .vc-health{break-inside:avoid}
+  .vc .award,.vc .vc-since tr,.vc .vc-measure,.vc .vc-health,.vc table tr,.vc .vc-rules li,.vc .vc-quiet li{break-inside:avoid}
   .vc .vc-measure .vc-wide{display:none!important}
   .vc .vc-measure .vc-narrow{display:block!important}
-  .vc .award{border:1px solid var(--vc-rule);border-left:3px solid var(--vc-brand)}
+  .vc .award{border:1px solid var(--vc-rule);border-left:3px solid var(--vc-edge)}
+  /* Paper is read closer than a screen, so the text of these sections is set smaller: an alert is about a third shorter, and fewer pages end early because the next one would not fit. */
+  .vc p.vc-note,.vc p.vc-caveat{font-size:14px;line-height:1.5}
+  .vc .vc-alerts li{padding:10px 0}
+  .vc .vc-alert-title{font-size:16px}
+  .vc .vc-alert .vc-alert-detail{font-size:14.5px;line-height:1.5}
+  .vc .vc-alert .vc-try{font-size:14px;line-height:1.5;padding:8px 14px;margin-top:8px}
+  .vc .vc-alert .vc-alert-base,.vc .vc-alert .vc-alert-when{font-size:12.5px}
+  .vc .vc-quiet li,.vc .vc-measure .vc-meaning,.vc .vc-measure .vc-card-note{font-size:13px}
+  .vc .vc-measure .vc-headline,.vc .vc-measure .vc-card-trend{font-size:14.5px}
+  .vc .vc-how,.vc .vc-needs,.vc .award-evidence{font-size:14px}
 }
-@media print{@container (min-width:560px){.vc .vc-measure .vc-wide{display:block!important}.vc .vc-measure .vc-narrow{display:none!important}}}

@@ -6,7 +6,13 @@ builds the exact counts the arithmetic needs, so a boundary is tried on both sid
 
 The ratings are synthetic. Nothing here says how well a model rates real chats. Two floors of the spec cannot be tried alone, because other rules always
 bind first: the 3 hostile messages of a level alert (a rate of 12 per 100 over at least 24 messages already means 3) and the 5 care messages that a fall must
-start from (a fall that is "strong" needs about 9). They are covered through the rules that imply them. Run with:
+start from (a fall that is "strong" needs about 9). They are covered through the rules that imply them.
+
+What the wording and the surfaces rely on is held here too, number by number: Escalation reads Too early (grey) while nothing can be judged, and the three rate cards are
+grey below 48 rated messages; the card note for a hot part that chance could give; the quiet notes (Low sensitivity, too few dated messages, almost no tone, messages added
+later) and the section each note belongs to (`about`); `all_clear`; the two fixed sentences (`texts`) and the five caveats; the mark of every card and of the health tile in
+words (`tone_word`); one message or several in the serious alert; one record per check in the trail; a damaged count clamped by `compare`; raw part dates that are days only
+under Incognito. Run with:
 
     python3 -m unittest tests.test_measures -v
 """
@@ -14,6 +20,7 @@ import collections
 import datetime
 import functools
 import itertools
+import json
 import math
 import pathlib
 import random
@@ -146,10 +153,12 @@ def page_strings(ctx):
         add('stretch.label', s['label'])
         add('stretch.axis', s['axis'])
     for c in ctx['cards']:
-        for key in ('name', 'meaning', 'level', 'headline', 'trend', 'note', 'latest'):
+        for key in ('name', 'meaning', 'level', 'tone_word', 'headline', 'trend', 'note', 'latest'):
             add(f'card.{c["key"]}.{key}', c.get(key))
-    for key in ('name', 'status', 'trend', 'caption'):
+    for key in ('name', 'status', 'tone_word', 'trend', 'caption'):
         add(f'health.{key}', ctx['health'].get(key))
+    for key, text in ctx['texts'].items():
+        add(f'text.{key}', text)
     for a in ctx['alerts']:
         for key in ('title', 'detail', 'try', 'base', 'when'):
             add(f'alert.{a["key"]}.{key}', a.get(key))
@@ -296,6 +305,16 @@ class FlagTests(unittest.TestCase):
         # a missing tone is a 0
         only_rude = measures.message_flags({'Rude': 3})
         self.assertTrue(only_rude['hostile'] and not only_rude['care'])
+
+    def test_a_rating_that_is_not_a_finite_number_counts_as_0_and_never_raises(self):
+        """measures.py says bad values count as 0. An infinity raised OverflowError (int(float('inf'))), a nan ValueError; neither may reach a page."""
+        for bad in (float('inf'), float('-inf'), float('nan'), -10 ** 400, [], {}, object(), '\x00', 1j, None):
+            with self.subTest(rating=repr(bad)[:30]):
+                got = measures.message_flags(ratings(Rude=bad, Empathetic=bad, Polite=bad, Sarcastic=bad, Funny=bad, Agitated=bad))
+                self.assertEqual([got[k] for k in KINDS], [0] * len(KINDS))
+                self.assertEqual((got['pos'], got['neg']), (0, 0))
+                self.assertEqual(got['silent'], 1, 'a rating that cannot be read is a 0, and a message of 0s is silent')
+        self.assertTrue(self.flags(Rude=10 ** 400)['hostile'], 'a number above 3, however large, is a 3')
 
     def test_a_rating_of_7_acts_exactly_like_3_in_the_health_score_too(self):
         wild = an([unit(0, Rude=7, Polite=9)])['health']
@@ -1077,7 +1096,9 @@ class ClimbTests(unittest.TestCase):
                            (40, 'steep'), (41, 'steep'), (80, 'steep'), (100, 'steep')]:
             with self.subTest(peak=peak):
                 self.assertEqual(measures.escalation_word(peak), word)
-        self.assertEqual(measures.ESCALATION_LABEL, {'none': 'None', 'small': 'Small', 'clear': 'Clear', 'steep': 'Steep'})
+        self.assertEqual(measures.ESCALATION_LABEL, {'none': 'None', 'small': 'Small', 'clear': 'Clear', 'steep': 'Steep', 'early': 'Too early'})
+        for peak in (0, 14, 15, 25, 40, 100):                                      # a judged check is never worded 'Too early': that word is for a check that could not be judged
+            self.assertNotEqual(measures.escalation_word(peak), 'early')
 
     def test_the_card_names_the_word_of_the_biggest_counted_climb(self):
         # 24 stretches of 20; a calm run of one heated message per stretch (5%) for three stretches, then a spike: climb = 5 x heated - 5
@@ -1311,6 +1332,34 @@ class LabelTests(unittest.TestCase):
         for s in m['stretches']:
             self.assertNotRegex(s['axis'] + s['label'], CLOCK)
 
+    def test_under_incognito_the_raw_start_and_end_of_each_part_are_days_only(self):
+        """MEASURES.md: while Incognito is on, even the raw start and end of each part in the analysis are days, never times of day."""
+        day, moment = re.compile(r'^\d{4}-\d{2}-\d{2}$'), re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}')
+        shapes = {f'{step} minutes': chat(48, step=step) for step in (1, 75, 105, 300)}
+        shapes['offsets'] = [unit(i, stamp(i, 7) + '+02:00') for i in range(48)]
+        shapes['zulu'] = [unit(i, stamp(i, 7) + 'Z') for i in range(48)]
+        shapes['days only'] = [unit(i, (T0.date() + datetime.timedelta(days=i)).isoformat()) for i in range(48)]
+        for name, units in shapes.items():
+            with self.subTest(shape=name):
+                quiet, loud = an(units, incognito=True), an(units)
+                self.assertEqual((quiet['basis'], len(quiet['stretches'])), ('time', 6))
+                for s, t in zip(quiet['stretches'], loud['stretches']):
+                    self.assertRegex(s['start'], day)
+                    self.assertRegex(s['end'], day)
+                    self.assertEqual((s['start'], s['end']), (t['start'][:10], t['end'][:10]), 'the same days as with Incognito off')
+                    self.assertRegex(t['start'], moment, 'the control: with Incognito off the raw start keeps its time')
+                everything = json.dumps({k: quiet[k] for k in ('stretches', 'episodes', 'first3', 'last3')}, default=str)
+                self.assertNotRegex(everything, r'T\d{2}:\d{2}|(?<![\d:])\d{1,2}:\d{2}(?![\d:])', 'no time of day anywhere in what the analysis holds')
+        by_order = an(chat(48, dated=False), incognito=True)
+        self.assertEqual(by_order['basis'], 'order')
+        self.assertTrue(all(s['start'] is None and s['end'] is None for s in by_order['stretches']), 'in the order they were added there are no dates at all')
+
+    def test_the_days_of_a_heated_moment_are_still_named_under_incognito(self):
+        _, found, _ = scan(spike(9), incognito=True)
+        (alert,) = find(found, r'heated up')
+        self.assertRegex(alert['when'], MONTH_DAY)
+        self.assertNotRegex(alert['when'], CLOCK)
+
     def test_times_are_called_utc_only_when_every_stamp_carries_an_offset(self):
         every = an([unit(i, stamp(i) + ('Z' if i % 2 else '+00:00')) for i in range(48)])
         self.assertTrue(every['utc'])
@@ -1463,6 +1512,107 @@ class CardTests(unittest.TestCase):
         self.assertRegex(tile['trend'], r'^No clear change\.?$')
         rising = measures.health_tile(an(chat(96, lambda i: {'Polite': 3} if i >= 64 else {'Rude': 2} if i < 32 else None)))
         self.assertRegex(rising['trend'], r'(?i)\brising\b')
+
+    # -- Too early, the grey marks below 48 messages, and the note for a part that chance alone could make hot -------------------------------------------------
+    def test_escalation_reads_too_early_in_grey_when_nothing_could_be_judged_and_never_a_green_none(self):
+        """MEASURES.md: below 48 timeline messages nothing can be judged, so the card reads Too early with a neutral mark, never a green None."""
+        burst = lambda i: {'Agitated': 2} if 16 <= i < 24 else None                 # what a longer chat could call a heated moment
+        for n in (1, 10, 23, 24, 30, 40, 47):
+            with self.subTest(n=n):
+                card = self.card(chat(n, burst), 'escalation')
+                self.assertEqual((card['level'], card['word'], card['tone'], card['tone_word'], card['count']), ('Too early', 'early', 'info', 'Neutral', 0))
+                self.assertRegex(card['headline'], r'\b24\b' if n < 24 else r'\b48\b')                 # it says how many messages it needs
+                self.assertNotRegex(card['headline'], r'(?i)no heated moment')
+        for n in (48, 49, 96):                                                       # judged and calm: a real None, with the green mark
+            with self.subTest(n=n):
+                card = self.card(chat(n), 'escalation')
+                self.assertEqual((card['level'], card['word'], card['tone'], card['tone_word']), ('None', 'none', 'good', 'A good sign'))
+                self.assertRegex(card['headline'], r'(?i)\bno heated moments')
+
+    def test_too_early_counts_the_messages_on_the_timeline_and_not_the_ones_that_were_rated(self):
+        units = chat(70, lambda i: {'Rude': 2} if i % 3 == 0 else None)
+        for u in units[45:]:
+            u['timestamp'] = ''                                                      # 45 of 70 carry a date: over 3 in 5, so the lines follow the clock and hold 45
+        m = an(units)
+        self.assertEqual((m['n'], m['timeline_n'], m['basis'], m['has_series'], m['verdicts']), (70, 45, 'time', True, False))
+        cards = {c['key']: c for c in measures.cards(m)}
+        self.assertEqual((cards['escalation']['level'], cards['escalation']['tone']), ('Too early', 'info'))
+        self.assertEqual((cards['conflict']['level'], cards['conflict']['tone']), ('Often', 'bad'), '70 messages were rated, so the rate cards keep their marks')
+
+    def test_the_rate_cards_are_grey_below_48_rated_messages_and_keep_their_level_words(self):
+        """MEASURES.md: below 48 rated messages the mark of Conflict, Empathy and Passive-aggressive is neutral grey (too few messages to call it good or bad)."""
+        mixed = lambda i: {'Rude': 2} if i % 3 == 0 else {'Empathetic': 2} if i % 3 == 1 else {'Sarcastic': 2}       # a third of the messages for each of the three
+        for n, tones in ((1, 'info'), (24, 'info'), (47, 'info')):
+            with self.subTest(n=n):
+                cards = {c['key']: c for c in measures.cards(an(chat(n, mixed)))}
+                self.assertEqual([cards[k]['tone'] for k in ('conflict', 'empathy', 'passive')], ['info'] * 3)
+                self.assertEqual([cards[k]['tone_word'] for k in ('conflict', 'empathy', 'passive')], ['Neutral'] * 3)
+        for n in (48, 49):
+            with self.subTest(n=n):
+                cards = {c['key']: c for c in measures.cards(an(chat(n, mixed)))}
+                self.assertEqual([cards[k]['level'] for k in ('conflict', 'empathy', 'passive')], ['Often'] * 3)
+                self.assertEqual([cards[k]['tone'] for k in ('conflict', 'empathy', 'passive')], ['bad', 'good', 'warn'])
+        cards47, cards48 = ({c['key']: c for c in measures.cards(an(chat(n, mixed)))} for n in (47, 48))
+        for key in ('conflict', 'empathy', 'passive'):
+            self.assertEqual(cards47[key]['level'], cards48[key]['level'], 'the words are the same at 47 and 48: only the mark is neutral')
+        calm47, calm48 = ({c['key']: c for c in measures.cards(an(chat(n)))} for n in (47, 48))
+        self.assertEqual([calm47[k]['tone'] for k in ('conflict', 'empathy', 'passive')], ['info', 'info', 'info'], 'Rare is not called good below 48 messages')
+        self.assertEqual([calm48[k]['tone'] for k in ('conflict', 'empathy', 'passive')], ['good', 'info', 'good'])
+        some47, some48 = (self.card(hostile_chat(n, 4 if n == 47 else 5), 'conflict') for n in (47, 48))                  # 4 of 47 and 5 of 48 are Some (9 and 10 in 100)
+        self.assertEqual((some47['level'], some47['tone'], some48['level'], some48['tone']), ('Some', 'info', 'Some', 'warn'))
+
+    def test_the_card_note_says_when_a_hot_part_could_be_chance_and_only_then(self):
+        """MEASURES.md: when a part of the chat has 30 or more heated messages in 100 but no heated moment passed the chance test, the card says it."""
+        said = 'Some parts were heated, but not by more than chance alone would give.'
+        busy = [2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3]            # 12 parts of 8: the first is at 25 in 100, the seventh at 75, the rest at 38: a community that is often heated
+        m = an(part_chat(busy, 8, HEAT))
+        self.assertEqual((m['episodes'], m['opening_heated'], m['verdicts']), ([], False, True), 'the precondition: a hot part, no heated moment, no tense start')
+        self.assertGreaterEqual(max(s['rates']['heated'] for s in m['stretches']), 30)
+        card = measures.cards(m)[0]
+        self.assertEqual((card['note'], card['level'], card['count']), (said, 'None', 0))
+        self.assertNotIn('opening', [n['key'] for n in scan(part_chat(busy, 8, HEAT))[2]], 'it is a card note, and not the tense start')
+        # the edge: 24 parts of 10 with the hottest at exactly 30 in 100 has the note, at 20 in 100 it has none
+        for hottest, note in ((3, said), (2, '')):
+            counts = [2] * 24
+            counts[11] = hottest
+            m = an(part_chat(counts, 10, HEAT))
+            self.assertEqual(m['episodes'], [], hottest)
+            self.assertEqual(measures.cards(m)[0]['note'], note, hottest)
+        # not with a heated moment: the same community with one part that does pass the chance test
+        moment = an(part_chat([0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0], 8, HEAT))
+        self.assertEqual((len(moment['episodes']), measures.cards(moment)[0]['note']), (1, ''))
+        # not under 48 messages on the timeline: nothing can be judged yet, whatever the parts hold
+        young = an(part_chat([0, 0, 6, 0, 0], 8, HEAT))
+        self.assertEqual((young['verdicts'], measures.cards(young)[0]['note']), (False, ''))
+        # not instead of the tense start: the note about a first part that is already tense stands alone
+        tense = measures.cards(an(part_chat([3] + busy[1:], 8, HEAT)))[0]
+        self.assertRegex(tense['note'], r'(?i)already tense')
+        self.assertNotIn('chance', tense['note'])
+        # the other three cards never carry it
+        self.assertEqual([c['note'] for c in measures.cards(an(part_chat(busy, 8, HEAT)))[1:]], ['', '', ''])
+
+    def test_every_card_and_the_health_tile_say_their_mark_in_words(self):
+        """MEASURES.md: a surface that cannot show the icon (the PDF and the CSV) says the mark in words instead, from tone_word."""
+        self.assertEqual(measures.TONE_WORDS, {'good': 'A good sign', 'info': 'Neutral', 'warn': 'Worth a look', 'bad': 'Look at this first'})
+        seen = set()
+        for units in (chat(96), chat(96, lambda i: {'Rude': 2} if i % 3 == 0 else None), chat(96, lambda i: {'Sarcastic': 2} if i % 3 == 0 else None),
+                      chat(96, lambda i: {'Empathetic': 2} if i % 3 == 0 else None), chat(40, lambda i: {'Rude': 2} if i % 3 == 0 else None),
+                      chat(96, lambda i: {'Agitated': 2} if 40 <= i < 56 else None)):
+            m = an(units)
+            for card in measures.cards(m):
+                self.assertEqual(card['tone_word'], measures.TONE_WORDS[card['tone']], card['key'])
+                seen.add(card['tone'])
+            tile = measures.health_tile(m)
+            self.assertEqual(tile['tone_word'], measures.TONE_WORDS[tile['tone']])
+        self.assertEqual(seen, {'good', 'info', 'warn', 'bad'}, 'the chats above show every mark')
+
+    def test_the_health_tile_says_a_good_sign_neutral_or_look_at_this_first_by_its_band(self):
+        for tones, status, tone, word in [({'Polite': 3}, 'Excellent', 'good', 'A good sign'), ({'Polite': 2}, 'Good', 'good', 'A good sign'),
+                                          ({'Ignorant': 2}, 'Fair', 'info', 'Neutral'), ({}, 'Fair', 'info', 'Neutral'),
+                                          ({'Rude': 3}, 'Needs attention', 'bad', 'Look at this first')]:
+            with self.subTest(status=status):
+                tile = measures.health_tile(an(chat(48, lambda i: dict(tones))))
+                self.assertEqual((tile['status'], tile['tone'], tile['tone_word']), (status, tone, word))
 
 
 def hostile_chat(n, k, tone='Rude'):
@@ -1811,10 +1961,58 @@ class AlertTests(unittest.TestCase):
                 self.assertFalse(find(found, r'slipped|improved|Fewer messages show care|Care is growing'))
                 self.assertEqual(len([n for n in notes if n['text'] == comparison['why']]), 1, 'a quiet note says why')
 
+    def test_a_comparison_alert_says_in_each_check_when_both_checks_rated_the_same_number_of_messages(self):
+        """MEASURES.md: a base line reads "Based on 72 messages in each check" when two checks of the same size are compared."""
+        cases = [('mood_down', 'health', 40.0, 50.0), ('mood_up', 'health', 60.0, 50.0),                        # the health score in points, a count as a share of the messages
+                 ('empathy', 'care_n', .30, .50), ('empathy_up', 'care_n', .50, .30),
+                 ('conflict_down', 'hostile_n', .10, .50), ('conflict', 'hostile_n', .50, .10)]
+        for n in (200, 2000):
+            for key, field, now, was in cases:
+                with self.subTest(alert=key, n=n):
+                    value = lambda x: x if field == 'health' else round(n * x)           # noqa: E731
+                    _, found, _ = self.compared(saved(n, **{field: value(now)}), saved(n, gen=0, **{field: value(was)}), n=n)
+                    (alert,) = [a for a in found if a['key'] == key]
+                    self.assertEqual(alert['base'], f'Based on {n:,} messages in each check.')
+        _, found, _ = self.compared(saved(200, health=40.0), saved(100, health=50.0, gen=0), n=200)          # not the same size: both numbers, and no 'in each check'
+        (alert,) = [a for a in found if a['key'] == 'mood_down']
+        self.assertRegex(alert['base'], r'^Based on 100 and 200 messages\.?$')
+        self.assertNotIn('in each check', alert['base'])
+
     # -- Vibe Check's serious flags -------------------------------------------------------------------------------------------------------------------
     @staticmethod
     def serious(vibe, n=60):
         return find(scan(neutral(n), vibe=vibe)[1], r'Vibe Check flagged serious messages')
+
+    def test_the_serious_alert_says_one_message_in_the_singular_and_several_in_the_plural(self):
+        def alert(flagged=(), **tally):
+            vibe = dict(vibe_ok(60, **tally), flagged=list(flagged))
+            return self.serious(vibe)[0]['detail']
+
+        threat, hate, harass = ({'type': t, 'severity': 9, 'index': i} for i, t in enumerate(('threat', 'hate_speech', 'harassment'), 3))
+        one = alert([threat], threats=1)
+        self.assertRegex(one, r'\bflagged 1 message as a threat\b')
+        self.assertRegex(one, r'\bIt scored 7 or more out of 10\b')
+        self.assertRegex(one, r'\bIt is quoted under Flagged messages\b')
+        self.assertNotRegex(one, r'1 messages|as threats|\bThey\b|\bThey are\b')
+        self.assertIn('A model can be wrong', one)
+        two = alert([threat, dict(threat, index=9)], threats=2)
+        self.assertRegex(two, r'\bflagged 2 messages as threats\b')
+        self.assertRegex(two, r'\b2 scored 7 or more out of 10\b')
+        self.assertRegex(two, r'\bThey are quoted under Flagged messages\b')
+        self.assertNotRegex(two, r'\bIt is quoted|as a threat\b')
+        self.assertRegex(alert([hate], hate_speech=1), r'\bflagged 1 message as hate speech\b')
+        self.assertRegex(alert([harass], harassment=1), r'\bflagged 1 message as harassment\b')
+        mixed = alert([threat, harass], threats=1, harassment=1)
+        self.assertRegex(mixed, r'\bflagged 2 messages as a threat and harassment\b')
+        self.assertRegex(alert([threat, hate, harass, dict(threat, index=11)], threats=2, hate_speech=1, harassment=1), r'\bflagged 4 messages as threats, hate speech and harassment\b')
+        # counted but not quoted (Vibe Check kept the count and no message)
+        self.assertRegex(alert(threats=1), r'\bIt was counted, not quoted\b')
+        self.assertRegex(alert(threats=2), r'\bThey were counted, not quoted\b')
+        self.assertNotRegex(alert(threats=1), r'scored 7')                       # no message to score
+        # nothing scored 7 or more: the sentence is not there
+        mild = alert([dict(harass, severity=4)], harassment=1)
+        self.assertNotIn('scored 7', mild)
+        self.assertRegex(mild, r'\bIt is quoted\b')
 
     def test_the_serious_alert_is_high_for_threats_and_hate_speech_and_medium_for_harassment_and_bullying(self):
         for kind, level in [('threats', 'high'), ('hate_speech', 'high'), ('harassment', 'medium'), ('bullying', 'medium')]:
@@ -1933,6 +2131,22 @@ def lively(units, filler='Ignorant'):
     return out
 
 
+def undated_tail(n, dated):
+    """n messages (each with a weak reading, so none is silent) of which only the first `dated` carry a date."""
+    units = lively(chat(n))
+    for u in units[dated:]:
+        u['timestamp'] = ''
+    return units
+
+
+def with_holes(n=96, k=3):
+    """n messages of which the first k lack one of their 13 ratings: incomplete, so left out of the figures."""
+    units = lively(chat(n))
+    for u in units[:k]:
+        del u['ratings']['Rude']
+    return units
+
+
 def badge_map(units, vibe='ok', cov=None, sensitivity='medium'):
     """{badge name: badge} and the note, for a chat."""
     m = an(units, sensitivity)
@@ -2015,8 +2229,88 @@ class NoteTests(unittest.TestCase):
         m, found, notes = scan(lively(chat(20, dated=False)), vibe=None)
         self.assertTrue(len(notes) >= 2)
         for x in notes:
-            self.assertEqual(sorted(x), ['key', 'text'])
+            self.assertEqual(sorted(x), ['about', 'key', 'text'])
+            self.assertEqual(x['about'], 'alerts' if x['key'] in ('no_vibe', 'not_alike') else 'measures', x['key'])
         self.assertFalse([a for a in found if a['key'] in {x['key'] for x in notes}])
+
+    # -- the notes that were added, and which section prints each note ---------------------------------------------------------------------------------------
+    LOW = 'Your sensitivity is Low, so banter counts as normal. The bars for Conflict, Passive-aggressive and heated moments are higher.'
+
+    def keyed(self, units, key, **kw):
+        return [x for x in self.notes(units, **kw) if x['key'] == key]
+
+    def test_low_sensitivity_says_so_in_a_quiet_note_and_the_other_settings_do_not(self):
+        """MEASURES.md: at Low sensitivity a quiet note says so, with this very sentence."""
+        for n in (10, 30, 96, 300):
+            units = lively(chat(n))
+            with self.subTest(n=n):
+                self.assertEqual([(x['text'], x['about']) for x in self.keyed(units, 'low_sensitivity', sensitivity='low')], [(self.LOW, 'measures')])
+                for sensitivity in ('medium', 'high'):
+                    self.assertEqual(self.keyed(units, 'low_sensitivity', sensitivity=sensitivity), [], sensitivity)
+        _, found, _ = scan(lively(chat(96)), 'low')
+        self.assertFalse([a for a in found if 'sensitiv' in a['key'] or 'sensitiv' in a['title'].lower()], 'it is a note and not an alert')
+
+    def test_too_few_dated_messages_for_lines_say_so_with_both_counts(self):
+        """Lines need 24 messages on the timeline: 24 or more rated messages of which fewer than 24 carry a usable date have no lines, and the note says why."""
+        keys = lambda n, k: [x['key'] for x in self.notes(undated_tail(n, k))]             # noqa: E731
+        text = self.keyed(undated_tail(30, 20), 'few_dated')
+        self.assertEqual(len(text), 1)
+        self.assertEqual(text[0]['about'], 'measures')
+        self.assertRegex(text[0]['text'], r'^Only 20 of 30 messages have a date\b')
+        self.assertRegex(text[0]['text'], r'no lines over time')
+        self.assertRegex(text[0]['text'], r'\b24 messages with a date')
+        self.assertEqual(sorted(keys(30, 20)), ['few_dated'], 'it says it once, and no other note about the lines is there as well')
+        self.assertEqual(sorted(keys(30, 23)), ['few_dated'])
+        self.assertEqual(sorted(keys(30, 24)), ['no_verdict', 'undated'], 'with 24 on the timeline there are lines, and the note is the one for lines')
+        self.assertEqual(sorted(keys(60, 40)), ['no_verdict', 'undated'])
+        self.assertEqual(sorted(keys(30, 17)), ['no_verdict', 'order'], 'under 3 in 5 dated the lines follow the order, and all 30 are on the timeline')
+        self.assertEqual(sorted(keys(23, 20)), ['few'], 'under 24 rated messages it is the note for too few messages')
+        self.assertEqual(keys(48, 48), [])
+
+    def test_a_silent_chat_says_so_in_a_quiet_note_from_30_messages(self):
+        # 19 in 20 messages with all 13 ratings at 0: the fewest silent messages that trip it are 29 of 30, 38 of 40, 57 of 60, 95 of 100 and 190 of 200
+        for n, tripped in [(30, 29), (40, 38), (60, 57), (100, 95), (200, 190)]:
+            for silent, said in [(n, True), (tripped, True), (tripped - 1, False)]:
+                with self.subTest(n=n, silent=silent):
+                    units = chat(n, lambda i: {'Ignorant': 1} if i < n - silent else None)
+                    got = self.keyed(units, 'silent')
+                    self.assertEqual([x['about'] for x in got], ['measures'] if said else [])
+                    if said:                                                                 # it says almost no tone was found, and that the model may not have read the text
+                        self.assertRegex(got[0]['text'], r'^Almost no tone was found in these messages\.')
+                        self.assertRegex(got[0]['text'], r'(?i)\bthe model may not have read\b')
+        for n in (1, 10, 29):
+            self.assertEqual(self.keyed(chat(n), 'silent'), [], f'{n} messages: the note needs at least 30')
+        self.assertEqual(self.keyed(chat(100, lambda i: {'Funny': 1}), 'silent'), [], 'a weak reading is a reading')
+
+    def test_messages_added_after_the_check_are_a_quiet_note_in_the_singular_and_the_plural(self):
+        units = lively(chat(96))
+        for added, pattern in [(1, r'^1 message was added after this check and is not included\. Run the check again to include it\.$'),
+                               (2, r'^2 messages were added after this check and are not included\. Run the check again to include them\.$'),
+                               (1200, r'^1,200 messages were added after this check and are not included\.')]:
+            with self.subTest(added=added):
+                got = self.keyed(units, 'added', cov={'sampled': False, 'total': 96, 'scope': 96 + added, 'added_since': added})
+                self.assertEqual(len(got), 1)
+                self.assertEqual(got[0]['about'], 'measures')
+                self.assertRegex(got[0]['text'], pattern)
+        self.assertEqual(self.keyed(units, 'added', cov=cov_full(96)), [])
+        self.assertEqual(self.keyed(units, 'added', cov={'sampled': False, 'total': 96, 'scope': 96, 'added_since': 0}), [])
+
+    def test_each_note_belongs_to_the_alerts_or_to_the_measures_and_never_to_both(self):
+        """`about` says which section prints the note: 'alerts' for the Vibe Check note and the note about checks that are not alike, 'measures' for every other."""
+        cases = {
+            'no_vibe': scan(lively(chat(96)), vibe=None)[2],
+            'not_alike': measures.alerts(an(lively(neutral(96))), vibe_ok(96), measures.compare(saved(96, model='a'), saved(96, model='b', gen=0)), cov_full(96))[1],
+            'few': scan(lively(chat(10)))[2], 'no_verdict': scan(lively(chat(30)))[2], 'order': scan(lively(chat(96, dated=False)))[2],
+            'undated': self.notes(undated_tail(100, 70)), 'incomplete': scan(with_holes())[2], 'opening': scan(lively(part_chat([6] + [0] * 23, 20, HEAT)))[2],
+            'sampled': scan(lively(chat(96)), cov={'sampled': True, 'total': 500, 'scope': 500, 'added_since': 0})[2], 'low_sensitivity': scan(lively(chat(96)), 'low')[2],
+            'silent': scan(chat(96))[2], 'added': scan(lively(chat(96)), cov={'sampled': False, 'total': 96, 'scope': 100, 'added_since': 4})[2]}
+        for key, notes in cases.items():
+            with self.subTest(key=key):
+                mine = [x for x in notes if x['key'] == key]
+                self.assertEqual(len(mine), 1, [x['key'] for x in notes])
+                self.assertEqual(mine[0]['about'], 'alerts' if key in ('no_vibe', 'not_alike') else 'measures')
+                self.assertEqual(len({x['key'] for x in notes}), len(notes), 'a note is there once')
+                self.assertEqual(len({x['text'] for x in notes}), len(notes), 'and no sentence is said twice')
 
 
 # =============================================================================================================================================
@@ -2163,6 +2457,22 @@ class BadgeTests(unittest.TestCase):
                 vibe = vibe_ok(400, harassment=1)
                 vibe['flagged'] = [{'type': 'harassment', 'severity': severity, 'index': 3}]
                 self.assertEqual(badge_map(big, vibe=vibe)[0]['No serious flags']['earned'], earned)
+
+    def test_the_no_flags_evidence_says_what_a_serious_flag_is_and_counts_in_the_singular_and_the_plural(self):
+        """MEASURES.md: a serious flag is a threat, hate speech, harassment or bullying; the evidence of the badge says so."""
+        flags = r'\(threats, hate speech, harassment or bullying\)'
+        badges, _ = badge_map(lively(neutral(200)), vibe=vibe_ok(200))
+        self.assertTrue(badges['No serious flags']['earned'])
+        self.assertRegex(badges['No serious flags']['evidence'], r'^200 messages read, with 0 serious flags ' + flags)
+        badges, _ = badge_map(lively(neutral(400)), vibe=vibe_ok(400, harassment=1))                      # 1 in 400 is fewer than 1 in 200
+        self.assertTrue(badges['No serious flags']['earned'])
+        self.assertRegex(badges['No serious flags']['evidence'], r'^400 messages read, with 1 serious flag ' + flags)
+        self.assertNotIn('flags', badges['No serious flags']['evidence'])
+        badges, _ = badge_map(lively(neutral(1200)), vibe=vibe_ok(1200, bullying=2, insults=40))          # insults are not serious flags
+        self.assertRegex(badges['No serious flags']['evidence'], r'^1,200 messages read, with 2 serious flags ' + flags)
+        for b in badges.values():
+            if not b['earned']:
+                self.assertEqual(b['evidence'], '', 'only an earned badge shows its figure')
 
     def test_the_absence_badges_need_every_message_read(self):
         calm = lively(hostile_chat(100, 30, 'Polite'))
@@ -2332,6 +2642,28 @@ class CompareTests(unittest.TestCase):
         self.assertRegex(table['why'], r'(?i)model')
         self.assertFalse([r for r in table['rows'] if r['verdict'] in ('Better', 'Worse', 'About the same')])
 
+    def test_a_damaged_count_is_clamped_to_the_range_of_its_own_checks_messages_before_the_checks_are_compared(self):
+        """MEASURES.md: a damaged count (below 0 or above the number of messages) is clamped to that range before the two checks are compared. Before this it
+        raised 'math domain error' once a count passed its total by 2 or more."""
+        fields = {'hostile_n': 'conflict', 'care_n': 'empathy', 'dig_n': 'passive', 'heated_n': 'heated'}
+        for field, key in fields.items():
+            for damaged, clamped in [(101, 100), (102, 100), (250, 100), (10 ** 9, 100), (-1, 0), (-5, 0), (-10 ** 9, 0)]:
+                for side in ('now', 'before'):
+                    def pair(value):
+                        if side == 'now':
+                            return saved(100, **{field: value}), saved(100, gen=0, **{field: 30})
+                        return saved(100, **{field: 30}), saved(100, gen=0, **{field: value})
+                    with self.subTest(field=field, damaged=damaged, side=side):
+                        got, want = measures.compare(*pair(damaged)), measures.compare(*pair(clamped))
+                        self.assertTrue(got['comparable'])
+                        self.assertEqual(got['changes'], want['changes'])
+                        self.assertTrue(all(math.isfinite(v) for c in got['changes'].values() for v in (c['first'], c['last'], c['delta'], c['se'])))
+        # each count is clamped to the number of messages of its own record
+        got = measures.compare(saved(200, hostile_n=250), saved(100, hostile_n=250, gen=0))['changes']['conflict']
+        self.assertEqual((got['first'], got['last'], got['verdict']), (100.0, 100.0, 'same'))
+        got = measures.compare(saved(100, hostile_n=-9), saved(200, hostile_n=-9, gen=0))['changes']['conflict']
+        self.assertEqual((got['first'], got['last'], got['verdict']), (0.0, 0.0, 'same'))
+
 
 # =============================================================================================================================================
 class TrailAndRecordTests(unittest.TestCase):
@@ -2354,6 +2686,31 @@ class TrailAndRecordTests(unittest.TestCase):
         newer = saved(100, gen=1, created_at='2026-05-01T11:00:00', hostile_n=2)
         live = saved(100, gen=2, created_at='2026-05-03T10:00:00')
         self.assertEqual(measures.trail_of([old, newer], live), [newer, live])
+
+    def test_trail_of_keeps_one_record_per_check_whatever_the_number_of_records_and_whatever_stands_between(self):
+        """MEASURES.md: two records of one check count once (the newest). The check keeps its place in the trail."""
+        a1 = saved(100, gen=1, created_at='2026-05-01T10:00:00', hostile_n=1)
+        a2 = saved(100, gen=1, created_at='2026-05-01T11:00:00', hostile_n=2)
+        a3 = saved(100, gen=1, created_at='2026-05-01T12:00:00', hostile_n=3)
+        b = saved(100, gen=2, created_at='2026-05-02T10:00:00', hostile_n=4)
+        c1 = saved(100, gen=3, created_at='2026-05-03T10:00:00', hostile_n=5)
+        c2 = saved(100, gen=3, created_at='2026-05-03T11:00:00', hostile_n=6)
+        live = saved(100, gen=4, created_at='2026-05-04T10:00:00', hostile_n=7)
+        self.assertEqual(measures.trail_of([a1, a2, a3], live), [a3, live])
+        self.assertEqual(measures.trail_of([a1, a2, b, c1, c2], live), [a2, b, c2, live])
+        self.assertEqual(measures.trail_of([a1, b, a2, c1, a3, c2], live), [a3, b, c2, live], 'records of one check that are not next to each other are still one check')
+        history = [a1, a2, b]
+        measures.trail_of(history, live)
+        self.assertEqual(history, [a1, a2, b], 'the history it was given is left as it was')
+        self.assertEqual(len({r['gen'] for r in measures.trail_of([a1, a2, a3, b, c1, c2], live)}), 4)
+
+    def test_the_live_check_stands_for_every_record_of_its_own_check(self):
+        old = saved(100, gen=2, created_at='2026-05-01T10:00:00', hostile_n=1)
+        again = saved(100, gen=2, created_at='2026-05-01T11:00:00', hostile_n=2)
+        live = saved(100, gen=2, created_at='2026-05-03T10:00:00', hostile_n=9)
+        earlier = saved(100, gen=1, created_at='2026-04-01T10:00:00')
+        self.assertEqual(measures.trail_of([earlier, old, again], live), [earlier, live])
+        self.assertEqual(measures.trail_of([old, again], live), [live])
 
     def test_the_record_holds_the_numbers_and_the_names_of_the_settings_and_nothing_else(self):
         units = blend(hostile_chat(96, 10, 'Rude'), hostile_chat(96, 20, 'Empathetic'), hostile_chat(96, 8, 'Sarcastic'), lively(chat(96)))
@@ -2416,10 +2773,12 @@ class BuildTests(unittest.TestCase):
     def test_the_context_has_every_block(self):
         ctx = build_with(lively(neutral(96)))
         self.assertEqual(sorted(ctx), sorted(['m', 'cards', 'health', 'alerts', 'alert_counts', 'notes', 'badges', 'badges_earned', 'badge_note', 'trail', 'since', 'comparison',
-                                              'record', 'basis_text', 'caveats']))
+                                              'record', 'basis_text', 'caveats', 'texts', 'all_clear']))
         self.assertEqual(len(ctx['cards']), 4)
         self.assertEqual(len(ctx['badges']), 7)
-        self.assertEqual(sorted(ctx['caveats']), ['alerts', 'badges', 'empty', 'measures'])
+        self.assertEqual(sorted(ctx['caveats']), ['alerts', 'badges', 'empty', 'measures', 'since'])
+        self.assertEqual(sorted(ctx['texts']), ['first_check', 'no_badges'])
+        self.assertIsInstance(ctx['all_clear'], bool)
         self.assertEqual(ctx['trail'], [ctx['record']])
         self.assertIsNone(ctx['since'])
         self.assertIsNone(ctx['comparison'])
@@ -2434,7 +2793,7 @@ class BuildTests(unittest.TestCase):
         # MEASURES.md: "Everything here describes wording in the messages. It says nothing about any person or team. A language model made the ratings, trained people have
         # not checked them yet, and every cut-off below is our own starting choice, not a validated norm. The page, the PDF and the CSV all say so."
         c = build_with(lively(neutral(96)))['caveats']
-        self.assertEqual(sorted(c), ['alerts', 'badges', 'empty', 'measures'])
+        self.assertEqual(sorted(c), ['alerts', 'badges', 'empty', 'measures', 'since'])
         for key, text in c.items():
             self.assertTrue(text.strip() and text.rstrip().endswith('.'), key)
         everything = ' '.join(c.values())
@@ -2447,6 +2806,23 @@ class BuildTests(unittest.TestCase):
         self.assertRegex(c['badges'], r'(?i)not (awards|a ranking)')
         self.assertRegex(c['badges'], r'(?i)team')
         self.assertRegex(c['badges'], r'(?i)never cancels? an alert')
+
+    def test_the_since_caveat_says_when_a_change_counts_and_that_it_describes_wording(self):
+        # MEASURES.md: "A change counts when it is at least max(5 points, 2 standard errors)", "when the two checks are alike enough to compare": the caveat says it in plain words
+        c = build_with(lively(neutral(96)))['caveats']
+        self.assertRegex(c['since'], r'(?i)two checks were made alike')
+        self.assertRegex(c['since'], r'(?i)bigger than chance')
+        self.assertRegex(c['since'], r'(?i)wording, not people')
+        self.assertTrue(c['since'].rstrip().endswith('.'))
+        for other in (thirds_chat(100, (12, 6, 0), {'Rude': 2}), lively(chat(12)), hostile_chat(60, 20)):
+            self.assertEqual(build_with(other)['caveats'], c, 'the five caveats are fixed lines: they do not depend on the chat')
+
+    def test_the_two_fixed_sentences_are_the_ones_the_spec_quotes(self):
+        want = {'first_check': 'This is your first check. Run another after your next batch of messages and this panel will show what moved.',
+                'no_badges': 'No badges this time. Each one is earned only when the messages clearly show it.'}
+        self.assertEqual(build_with(lively(neutral(96)))['texts'], want)
+        for other in (thirds_chat(100, (12, 6, 0), {'Rude': 2}), lively(chat(12)), chat(96)):
+            self.assertEqual(build_with(other)['texts'], want, 'the same two sentences for every check')
 
     def test_the_previous_check_is_the_newest_earlier_record_and_this_check_replaces_its_own_record(self):
         units = lively(neutral(96))
@@ -2465,6 +2841,22 @@ class BuildTests(unittest.TestCase):
         ctx = build_with(lively(neutral(96)), history=[saved(96, gen=None)], gen=1)
         self.assertEqual(len(ctx['trail']), 1)
 
+    def test_the_record_of_this_check_follows_the_same_rules_as_a_saved_one_so_two_checks_always_compare_like_with_like(self):
+        """The record of the check being shown is cleaned like a record from the store. A model name too long to be kept is gone from both, so two checks of the
+        same long-named model read as alike and not as 'a different model'."""
+        long_name = 'm' * 130
+        kept = {k: v for k, v in saved(96, gen=1).items() if k != 'model'}                           # what the store keeps of a check made with that model
+        ctx = build_with(lively(neutral(96)), {'model_used': long_name}, history=[kept], gen=2)
+        self.assertNotIn('model', ctx['record'])
+        self.assertTrue(ctx['comparison']['comparable'], ctx['comparison']['why'])
+        self.assertTrue(ctx['since']['comparable'])
+        again = build_with(lively(neutral(96)), {'model_used': 'm' * 120}, history=[dict(kept, model='m' * 120)], gen=2)       # 120 characters are kept, on both
+        self.assertEqual(again['record']['model'], 'm' * 120)
+        self.assertTrue(again['comparison']['comparable'])
+        other = build_with(lively(neutral(96)), {'model_used': 'qwen2.5:7b'}, history=[dict(kept, model='tiny:1b')], gen=2)
+        self.assertFalse(other['comparison']['comparable'])
+        self.assertRegex(other['comparison']['why'], r'(?i)different model')
+
     def test_the_basis_says_how_many_were_rated_and_whether_they_were_a_sample(self):
         units = lively(neutral(96))
         ctx = build_with(units)
@@ -2482,6 +2874,59 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(build_with(units, {'vibe_sensitivity': None})['m']['sensitivity'], 'medium')
         self.assertTrue(build_with(chat(48), {'incognito': 1})['m']['incognito'])
         self.assertFalse(build_with(chat(48), {'incognito': 0})['m']['incognito'])
+
+
+# =============================================================================================================================================
+class AllClearTests(unittest.TestCase):
+    """MEASURES.md: ms['all_clear'] is true only when Vibe Check ran, no High or Medium alert stands and the model found some tone. Only then may a page say
+    'Nothing needs urgent attention in these N messages.'"""
+
+    def test_a_clean_check_that_vibe_check_read_is_an_all_clear(self):
+        for n in (10, 30, 48, 96, 300):
+            with self.subTest(n=n):
+                ctx = build_with(lively(neutral(n)))
+                self.assertEqual((ctx['alert_counts']['high'], ctx['alert_counts']['medium']), (0, 0))
+                self.assertTrue(ctx['all_clear'])
+
+    def test_without_a_vibe_check_that_ran_there_is_no_all_clear(self):
+        units = lively(neutral(96))
+        for vibe in (None, {}, {'status': 'failed', 'reason': 'x', 'analyzed_n': 0}, {'status': 'no_input'}, {'status': 'cancelled', 'analyzed_n': 0}):
+            with self.subTest(vibe=vibe):
+                ctx = build_with(units, vibe=vibe)
+                self.assertEqual(ctx['alerts'], [], 'nothing stands, and still it is no all clear')
+                self.assertFalse(ctx['all_clear'])
+                self.assertIn('no_vibe', [x['key'] for x in ctx['notes']])
+
+    def test_a_high_or_a_medium_alert_that_stands_stops_it(self):
+        cases = [('threat', lively(neutral(96)), vibe_ok(96, threats=1)), ('hate speech', lively(neutral(96)), vibe_ok(96, hate_speech=1)),
+                 ('harassment', lively(neutral(96)), vibe_ok(96, harassment=1)), ('bullying', lively(neutral(96)), vibe_ok(96, bullying=1)),
+                 ('heated high', lively(spike(9)), 'ok'), ('heated medium', lively(spike(6)), 'ok'),
+                 ('hostile high', lively(hostile_chat(60, 20)), 'ok'), ('hostile some', lively(hostile_chat(60, 12)), 'ok'),
+                 ('sarcasm', lively(hostile_chat(60, 14, 'Sarcastic')), 'ok'), ('picking up', lively(thirds_chat(100, (0, 4, 12), {'Rude': 2})), 'ok'),
+                 ('care fading', lively(thirds_chat(100, (20, 14, 7), {'Empathetic': 2})), 'ok')]
+        for name, units, vibe in cases:
+            with self.subTest(alert=name):
+                ctx = build_with(units, vibe=vibe)
+                self.assertGreater(ctx['alert_counts']['high'] + ctx['alert_counts']['medium'], 0, 'the case has an alert to stop it')
+                self.assertFalse(ctx['all_clear'])
+
+    def test_good_news_alone_does_not_stop_it(self):
+        ctx = build_with(lively(thirds_chat(100, (12, 6, 0), {'Rude': 2})))                      # hostility is easing
+        self.assertEqual((ctx['alert_counts']['high'], ctx['alert_counts']['medium']), (0, 0))
+        self.assertGreater(ctx['alert_counts']['good'], 0)
+        self.assertTrue(ctx['all_clear'])
+
+    def test_a_chat_with_almost_no_tone_is_not_an_all_clear_but_a_chat_with_some_is(self):
+        ctx = build_with(chat(96))                                                            # 96 of 96 silent
+        self.assertIn('silent', [x['key'] for x in ctx['notes']])
+        self.assertEqual(ctx['alert_counts'], {'high': 0, 'medium': 0, 'good': 0})
+        self.assertFalse(ctx['all_clear'])
+        edge = lambda silent: chat(100, lambda i: {'Ignorant': 1} if i < 100 - silent else None)      # noqa: E731
+        self.assertFalse(build_with(edge(95))['all_clear'], '95 in 100 silent is almost no tone')
+        some = build_with(edge(94))
+        self.assertNotIn('silent', [x['key'] for x in some['notes']])
+        self.assertTrue(some['all_clear'], '94 in 100 silent is a chat with some tone')
+        self.assertNotIn('silent', [x['key'] for x in build_with(chat(29))['notes']], 'the note about almost no tone needs at least 30 messages')
 
 
 # ---- wording ---------------------------------------------------------------------------------------------------------------------------------
@@ -2631,7 +3076,9 @@ def scenarios():
             'rising': thirds_chat(100, (0, 4, 12), {'Rude': 2}), 'easing': thirds_chat(100, (12, 6, 0), {'Rude': 2}), 'fading': thirds_chat(100, (20, 14, 7), {'Empathetic': 2}),
             'growing': thirds_chat(100, (7, 14, 20), {'Empathetic': 2}), 'snide growing': thirds_chat(100, (0, 4, 12), {'Sarcastic': 2}), 'few': lively(chat(12)),
             'between': lively(chat(40)), 'silent': chat(100), 'courteous': lively(hostile_chat(100, 40, 'Polite')), 'encouraging': lively(hostile_chat(100, 30, 'Encouraging')),
-            'supportive': lively(hostile_chat(100, 30, 'Empathetic')), 'cools': lively(part_chat([0] * 8 + [1, 1, 1, 6, 1] + [0] * 11, 20, HEAT))}
+            'supportive': lively(hostile_chat(100, 30, 'Empathetic')), 'cools': lively(part_chat([0] * 8 + [1, 1, 1, 6, 1] + [0] * 11, 20, HEAT)),
+            'few dated': undated_tail(30, 20), 'some undated': undated_tail(100, 70), 'hot but not a moment': part_chat([2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3], 8, HEAT),
+            'singular': lively(neutral(30))}
     holes = lively(hostile_chat(60, 12))
     for u in holes[:3]:
         del u['ratings']['Rude']                                                        # three messages with a rating missing
@@ -2641,6 +3088,14 @@ def scenarios():
             for inc in (False, True):
                 ctx = build_with(units, {'incognito': int(inc)}, VIBES[vibe](len(units)) if callable(VIBES[vibe]) else VIBES[vibe])
                 out.append((f'hand/{name}/{vibe}/{inc}', ctx))
+    for name, units in (('hostile some', hand['hostile some']), ('neutral', lively(neutral(96))), ('silent', chat(96))):                  # the settings of a check: Low sensitivity, a sample, messages added
+        for sens in ('low', 'medium'):
+            for cov in (cov_full(len(units)), {'sampled': True, 'total': 400, 'scope': 400, 'added_since': 0}, {'sampled': False, 'total': len(units), 'scope': len(units) + 1, 'added_since': 1},
+                        {'sampled': False, 'total': len(units), 'scope': len(units) + 9, 'added_since': 9}):
+                out.append((f'hand/{name}/{sens}/{cov["added_since"]}/{cov["sampled"]}', build_with(units, {'vibe_sensitivity': sens}, cov=cov)))
+    for kind, vibe in (('one threat', dict(vibe_ok(60, threats=1), flagged=[{'type': 'threat', 'severity': 9, 'index': 2}])), ('one counted', vibe_ok(60, hate_speech=1)),
+                       ('two kinds', dict(vibe_ok(60, threats=2, harassment=1), flagged=[{'type': 'harassment', 'severity': 4, 'index': 5}])), ('one mild', dict(vibe_ok(60, bullying=1), flagged=[{'type': 'bullying', 'severity': 3, 'index': 5}]))):
+        out.append((f'hand/serious/{kind}', build_with(lively(neutral(60)), vibe=vibe)))
     for change in ('improved', 'slipped', 'unlike'):
         for name in ('fading', 'growing', 'courteous', 'hostile some'):
             units = hand[name]
@@ -2664,7 +3119,9 @@ class WordingTests(unittest.TestCase):
     def test_the_scenarios_reach_every_kind_of_alert_note_and_badge(self):
         notes_wanted = {'vibe check not run': r'(?i)Vibe Check.*not run', 'too few': r'(?i)rated only', 'no dates': r'(?i)no usable dates', 'a sample': r'(?i)\bsample\b',
                         'not alike': r'(?i)different (model|sensitivity)|fewer than 48|very different numbers', 'too early': r'(?i)direction|too early',
-                        'incomplete': r'(?i)incomplete'}
+                        'incomplete': r'(?i)incomplete', 'low sensitivity': r'^Your sensitivity is Low', 'few dated': r'have a date, so there are no lines',
+                        'some undated': r'^Only \d+ of \d+ messages have a date\. The lines show those', 'silent': r'^Almost no tone was found in these messages\.',
+                        'added one': r'^1 message was added after this check', 'added many': r'^\d+ messages were added after this check', 'tense start': r'already tense'}
         seen_alerts, seen_levels, seen_notes, seen_badges = set(), set(), set(), set()
         for name, ctx in self.found:
             for a in ctx['alerts']:
@@ -2743,12 +3200,50 @@ class WordingTests(unittest.TestCase):
                 if a['level'] != 'good':
                     self.assertTrue(a['try'].strip(), (name, a['key']))
 
+    def test_every_note_says_which_section_prints_it_and_is_there_once(self):
+        about = collections.defaultdict(set)
+        for name, ctx in self.found:
+            keys = [n['key'] for n in ctx['notes']]
+            self.assertEqual(len(keys), len(set(keys)), name)
+            for n in ctx['notes']:
+                about[n['key']].add(n['about'])
+        self.assertEqual({k for k, v in about.items() if v == {'alerts'}}, {'no_vibe', 'not_alike'})
+        self.assertEqual({k for k, v in about.items() if v == {'measures'}}, set(about) - {'no_vibe', 'not_alike'})
+        self.assertLessEqual({'no_vibe', 'not_alike', 'few', 'few_dated', 'no_verdict', 'order', 'undated', 'incomplete', 'opening', 'sampled', 'low_sensitivity', 'silent', 'added'},
+                             set(about), 'the scenarios reach every note')
+
+    def test_every_card_and_health_tile_says_its_mark_in_words_in_every_scenario(self):
+        marks = collections.Counter()
+        for name, ctx in self.found:
+            for c in ctx['cards']:
+                self.assertEqual(c['tone_word'], measures.TONE_WORDS[c['tone']], (name, c['key']))
+                marks[c['tone']] += 1
+                if c['key'] == 'escalation' and c['level'] == 'Too early':
+                    self.assertEqual((c['tone'], c['tone_word']), ('info', 'Neutral'), name)
+            self.assertEqual(ctx['health']['tone_word'], measures.TONE_WORDS[ctx['health']['tone']], name)
+        self.assertEqual(set(marks), {'good', 'info', 'warn', 'bad'})
+
+    def test_the_fixed_lines_are_the_same_in_every_scenario(self):
+        first = self.found[0][1]
+        for name, ctx in self.found:
+            self.assertEqual((ctx['texts'], ctx['caveats']), (first['texts'], first['caveats']), name)
+
+    def test_a_check_that_could_not_be_judged_never_reads_as_an_all_clear_or_a_green_none(self):
+        for name, ctx in self.found:
+            m = ctx['m']
+            if not (m['has_series'] and m['verdicts']):
+                card = ctx['cards'][0]
+                self.assertEqual((card['level'], card['tone']), ('Too early', 'info'), name)
+            if ctx['all_clear']:
+                self.assertEqual((ctx['alert_counts']['high'], ctx['alert_counts']['medium']), (0, 0), name)
+                self.assertNotIn('silent', [n['key'] for n in ctx['notes']], name)
+
 
 class RobustnessTests(unittest.TestCase):
     """Things a record or a chat may hold that the rules did not foresee."""
 
     def test_a_saved_record_that_the_store_accepts_never_breaks_the_comparison(self):
-        # the store checks types and ranges, not that hostile_n <= n: a record from a hand-edited database, or from a bug, still must not break the page
+        # a record from a hand-edited database, or from a bug, still must not break the page, whatever the store lets through
         import store
         base = saved(100)
         for bad in [dict(hostile_n=250), dict(care_n=101), dict(dig_n=10 ** 9), dict(heated_n=10 ** 9), dict(health=1e9), dict(health_sd=-5.0), dict(health_sd=0.0),
@@ -2761,6 +3256,20 @@ class RobustnessTests(unittest.TestCase):
                     self.assertIn('comparable', got)
                     measures.since_table(got, pair[0])
                     measures.trail_of([pair[1]], pair[0])
+
+    def test_a_record_that_did_not_come_through_the_store_cannot_break_the_comparison_either(self):
+        """compare() is the second line of defence: a count above its total or below 0 is clamped, whatever way it got here."""
+        for bad in [dict(hostile_n=250), dict(care_n=101), dict(dig_n=10 ** 9), dict(heated_n=10 ** 9), dict(hostile_n=-1), dict(care_n=-10 ** 9), dict(dig_n=-7),
+                    dict(heated_n=102), dict(hostile_n=102, care_n=102, dig_n=102, heated_n=102), dict(hostile_n=-1, care_n=-1, dig_n=-1, heated_n=-1)]:
+            raw = dict(saved(100), gen=1, **bad)
+            for pair in ((saved(100), raw), (raw, saved(100))):
+                with self.subTest(record=bad, now_is_raw=pair[0] is raw):
+                    got = measures.compare(*pair)
+                    self.assertTrue(got['comparable'])
+                    self.assertEqual(sorted(got['changes']), ['conflict', 'empathy', 'health', 'heated', 'passive'])
+                    for change in got['changes'].values():
+                        self.assertTrue(all(math.isfinite(change[k]) for k in ('first', 'last', 'delta', 'se')), change)
+                    measures.since_table(got, pair[0])
 
     def test_no_text_in_a_rating_can_reach_a_figure_or_a_sentence(self):
         units = chat(60, lambda i: {'Rude': 2})
@@ -2977,6 +3486,8 @@ class FuzzTests(unittest.TestCase):
             history[0]['total'] = history[0]['n']
             for key in ('hostile_n', 'care_n', 'dig_n', 'heated_n'):                      # a record never counts more messages than it rated
                 history[0][key] = min(history[0][key], history[0]['n'])
+            if rng.random() < .3:                                                         # ... unless it was damaged on its way here: compare() clamps such a count
+                history[0][rng.choice(('hostile_n', 'care_n', 'dig_n', 'heated_n'))] = rng.choice((history[0]['n'] + 2, 10 ** 9, -3))
         ctx = build_with(units, row, vibe, cov, history=history, gen=2)
         check(ctx is not None, k, 'build gives a context')
         if ctx is None:
@@ -2986,11 +3497,16 @@ class FuzzTests(unittest.TestCase):
         for c in cards:
             check(len(c['series']) == len(m['stretches']) and all(0 <= x <= 100 for x in c['series']), k, f'card series {c["key"]}')
             check(c['tone'] in ('good', 'info', 'warn', 'bad'), k, 'card tone')
+            check(c['tone_word'] == measures.TONE_WORDS[c['tone']], k, f'card {c["key"]} says its mark in words')
             if c['key'] != 'escalation':
                 check(0 <= c['count'] <= c['of'] == n, k, 'card count within n')
                 check(c['level'] in ('Rare', 'Some', 'Often'), k, 'card level word')
-            else:
+                check(n >= 48 or c['tone'] == 'info', k, f'card {c["key"]}: neutral below 48 rated messages')
+            elif m['has_series'] and m['verdicts']:
                 check(c['count'] == len(m['episodes']) and c['level'] in ('None', 'Small', 'Clear', 'Steep'), k, 'escalation card')
+            else:
+                check(c['count'] == 0 and (c['level'], c['word'], c['tone']) == ('Too early', 'early', 'info'), k, 'escalation card: Too early, in the neutral tone')
+        check(ctx['health']['tone_word'] == measures.TONE_WORDS[ctx['health']['tone']], k, 'the health tile says its mark in words')
         check(0.0 <= ctx['health']['score'] <= 100.0 and all(0 <= x <= 100 for x in ctx['health']['series']), k, 'health tile')
         levels = [measures.LEVELS.index(a['level']) for a in found]
         check(levels == sorted(levels), k, 'alerts ordered high, medium, good')
@@ -3011,6 +3527,15 @@ class FuzzTests(unittest.TestCase):
         if not vibe or vibe.get('status') != 'ok':
             check(not [b for b in badges if b['name'] == 'No serious flags' and b['earned']] and 'no_vibe' in {x['key'] for x in notes}, k, 'no Vibe Check: no all clear')
         check(ctx['badges_earned'] == sum(b['earned'] for b in badges), k, 'badges earned')
+        check(all(x['about'] == ('alerts' if x['key'] in ('no_vibe', 'not_alike') else 'measures') for x in notes) and len({x['key'] for x in notes}) == len(notes), k,
+              'every note belongs to one section, and each note is there once')
+        check(set(ctx['texts']) == {'first_check', 'no_badges'} and set(ctx['caveats']) == {'alerts', 'empty', 'measures', 'badges', 'since'}, k, 'the fixed lines')
+        vibe_ran = bool(vibe) and vibe.get('status') == 'ok'
+        check(isinstance(ctx['all_clear'], bool), k, 'all_clear is a yes or no')
+        if ctx['all_clear']:
+            check(vibe_ran and not ctx['alert_counts']['high'] and not ctx['alert_counts']['medium'] and 'silent' not in {x['key'] for x in notes}, k,
+                  'all_clear needs a Vibe Check that ran, no High or Medium alert and some tone found')
+        check(vibe_ran or not ctx['all_clear'], k, 'no Vibe Check, no all clear')
         check(ctx['trail'][-1] == ctx['record'] and len(ctx['trail']) == 1 + len(history), k, 'trail ends with this check')
         check((ctx['since'] is not None) == bool(history), k, 'since only after a second check')
         for where, text in page_strings(ctx):

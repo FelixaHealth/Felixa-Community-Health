@@ -1559,7 +1559,8 @@ class PartialFailures(AppCase):
         nothing else, with no word that the 13 signals and the guidance were missing, or why."""
         import report
         self.assertEqual(report.NO_BEHAVIOUR, ('Measured behaviour', 'The 13 communication signals have no ratings for this analysis: the rating was not run, '
-                                               'or it did not finish. Run a check to rate them and write the guidance.'))
+                                               'or it did not finish. Alerts, badges and the measures over time need these ratings too. '
+                                               'Run a check to rate them and write the guidance.'))
         aid = self.with_chat()
         self.fake.garbage_next('rating', 99)                                                      # the ratings fail, Vibe Check works
         job = self.run_job_fast(aid)
@@ -2135,6 +2136,7 @@ class Print(AppCase):
             parsed.feed(page)
             sheets = [self.client.get('/static/style.css').text] + re.findall(r'<style>(.*?)</style>', page, flags=re.S)     # in document order
             cls.built = (parsed.chains, Cascade(sheets, 'screen'), Cascade(sheets, 'print'))
+            cls.page, cls.css = page, sheets[0]
         return cls.built
 
     def test_the_report_prints_without_the_brand_header_and_the_buttons(self):
@@ -2176,6 +2178,249 @@ class Print(AppCase):
             self.assertTrue(found, f'the report has no {what}, so the check below would prove nothing')
             for chain in found:
                 self.assertEqual(paper.get(chain, 'break-inside'), 'avoid', f'{what}: {chain[-1]}')
+
+    def test_the_dark_theme_is_for_the_screen_only_so_a_printed_page_always_has_the_light_colours(self):
+        """A reader who uses dark mode and prints (or saves a PDF) got the dark palette on paper: pale grey headings on white (2.8 to 1), or a page of ink with
+        background graphics on. Every dark rule of the stylesheet sits inside `@media screen`."""
+        self.report()
+        css = type(self).css
+        dark = lambda rules: [s for selectors, _ in rules for s in selectors if 'data-theme' in s]          # noqa: E731
+        self.assertEqual(dark(css_rules(css)), [], 'a dark rule that applies to every medium')
+        self.assertEqual(dark(css_rules(css, 'print')), [], 'a dark rule on paper')
+        self.assertGreaterEqual(len(dark(css_rules(css, 'screen'))), 6)
+
+    def test_a_paragraph_is_neither_kept_whole_nor_kept_with_the_next_block_so_no_chain_moves_a_whole_panel_to_the_next_page(self):
+        """Chained keep-together rules (heading, count, caveat, first alert) pushed a whole panel to the next page and left the one before it half empty (page 1
+        47% blank, page 2 41%). Only a heading is kept with the first paragraph after it; a table row and a rule of the badges are not cut in two."""
+        chains, screen, paper = self.report()
+        paragraphs = [c for c in chains if c[-1][0] == 'p' and len(c) > 1 and 'vc' in c[-2][1] and bool({'vc-caveat', 'vc-trendline', 'vc-note'} & set(c[-1][1]))]
+        self.assertGreaterEqual(len(paragraphs), 6)
+        for chain in paragraphs:
+            self.assertNotEqual(paper.get(chain, 'break-after'), 'avoid', chain[-1])
+            self.assertNotEqual(paper.get(chain, 'break-inside'), 'avoid', chain[-1])
+        rows = [c for c in chains if c[-1][0] == 'tr']
+        self.assertTrue(rows)
+        for chain in rows:
+            self.assertEqual(paper.get(chain, 'break-inside'), 'avoid', 'a table row can be cut in two')
+        rules = [c for c in chains if c[-1][0] == 'li' and len(c) > 1 and 'vc-rules' in c[-2][1]]
+        self.assertTrue(rules)
+        for chain in rules:
+            self.assertEqual(paper.get(chain, 'break-inside'), 'avoid', 'the rule of a badge can be cut in two')
+
+    def test_the_method_panel_of_the_report_is_a_column_and_not_the_landing_pages_strip_of_four_steps(self):
+        """The Method panel carried the class `how`, which lays out the four steps of the front page in four columns: its eyebrow sat alone in the first, the
+        heading in the second, and the headings and paragraphs fell two to a row at random, with the text against the card's edge."""
+        self.report()
+        page = type(self).page
+        self.assertIn('<section class="panel method">', page)
+        self.assertNotIn('class="panel how"', page)
+        self.assertEqual([selector for selectors, declarations in css_rules(type(self).css) if declarations.get('display') == 'grid' for selector in selectors if selector == '.method'], [])
+
+    def test_the_two_wide_tables_are_scroll_regions_a_keyboard_can_reach_and_every_cell_names_its_column_for_the_phone(self):
+        """The tables are 775 and 880 px wide inside a box of 304 px: a scroll box without a tab stop cannot be scrolled with a keyboard (WCAG 2.1.1). On a phone each
+        row turns into a small block, which needs the name of every cell's column in the markup (the roles keep it a table for a screen reader)."""
+        self.report()
+        page = type(self).page
+        regions = re.findall(r'<div class="table-wrap" tabindex="0" role="region" aria-label="([^"]+)">', page)
+        self.assertEqual(regions, ['Table of the four charts'])                                       # one check, so no check-by-check table yet
+        table = re.search(r'<div class="vc-over-table vc-parts">.*?</div></details>', page, re.S).group(0)
+        self.assertEqual(table.count('<table role="table">'), 1)
+        self.assertIn('<th scope="col" role="columnheader">Conflict per 100 messages</th>', table)
+        self.assertEqual(len(re.findall(r'<td role="cell" data-label="Conflict per 100 messages">', table)), table.count('<tr role="row"><td'))
+        phone = [block for block in re.findall(r'@media\s*\(max-width:560px\)\s*\{(.*?)\n\}', type(self).css, re.S)]
+        self.assertTrue(any('.vc-over-table' in block and 'attr(data-label)' in block for block in phone), 'no phone layout for the two wide tables')
+
+
+class MeasureCharts(unittest.TestCase):
+    """The small charts of the measures (bei_charts), as drawings: what is written on them, how big, and what a hover or a screen reader is told."""
+    CARD = {'name': 'Conflict', 'kind': 'hostile', 'series': [0, 0, 10, 25, 5, 0, 0, 0]}
+
+    def parts(self, n=8, counted=(3,)):
+        return [{'label': f'Part {i + 1} of {n}: Mar 5', 'axis': f'#{i * 3 + 1}', 'n': 8, 'counts': {'hostile': 1, 'care': 0, 'dig': 0, 'heated': 0}, 'counted': i in counted, 'climb': 25.0}
+                for i in range(n)]
+
+    def texts(self, scene):
+        return [i for i in scene.items if i['kind'] == 'text']
+
+    def test_a_band_that_is_tall_enough_carries_its_name_and_the_heated_moment_is_darker_than_the_bands(self):
+        import bei_charts
+        scene = bei_charts.measure_chart(self.CARD, self.parts(), (5, 12), width=360)
+        words = [t['s'] for t in self.texts(scene)]
+        for word in ('Rare', 'Some', 'Often'):
+            self.assertEqual(words.count(word), 1, word)
+        tall = bei_charts.measure_chart(dict(self.CARD, series=[0, 0, 80, 100, 5, 0, 0, 0]), self.parts(), (5, 12), width=360)       # a chart up to 100: the thin bands lose their names
+        self.assertEqual([t['s'] for t in self.texts(tall) if t['s'] in ('Rare', 'Some', 'Often')], ['Often'])
+        washes = [i['opacity'] for i in scene.items if i['kind'] == 'rect' and i['fill'] in ('good', 'crit') or (i['kind'] == 'rect' and i['fill'] == 'warn' and i['w'] > 100)]
+        moment = [i['opacity'] for i in scene.items if i['kind'] == 'rect' and i['fill'] == 'warn' and i['w'] < 100]
+        self.assertEqual(len(moment), 1)
+        self.assertGreaterEqual(moment[0], 3 * max(washes))                                          # clearly darker, in colour and in grey
+        care = bei_charts.measure_chart({'name': 'Empathy', 'kind': 'care', 'series': [5, 8, 12, 30, 22, 9, 4, 3]}, self.parts(), (3, 10), width=360)
+        self.assertEqual([t['s'] for t in self.texts(care) if t['s'] in ('Rare', 'Some', 'Often')], ['Often'])        # only the band that is washed carries a name
+        self.assertEqual([t['s'] for t in self.texts(bei_charts.measure_chart(dict(self.CARD, kind='heated', name='Escalation'), self.parts(), None, width=360))
+                          if t['s'] in ('Rare', 'Some', 'Often')], [])
+
+    def test_the_text_of_the_phone_layout_is_drawn_larger_because_it_is_shown_smaller(self):
+        """360 units shown 290 px wide are scaled by 0.8: the 12 units of the old layout came out at 8.6 px. The phone layout draws 14 and 16, the wide one 13."""
+        import bei_charts
+        narrow = {t['s']: t['size'] for t in self.texts(bei_charts.measure_chart(self.CARD, self.parts(), (5, 12), width=360)) if t['weight'] < 600}       # the ticks and the axis
+        wide = {t['s']: t['size'] for t in self.texts(bei_charts.measure_chart(self.CARD, self.parts(), (5, 12), width=720)) if t['weight'] < 600}
+        self.assertEqual((narrow['20'], narrow['0'], narrow['#1']), (14, 14, 14))
+        self.assertEqual((wide['20'], wide['0'], wide['#1']), (13, 13, 13))
+        end = [t for t in self.texts(bei_charts.measure_chart(self.CARD, self.parts(), (5, 12), width=360)) if t['weight'] >= 600]
+        self.assertEqual([t['size'] for t in end], [16])
+
+    def test_with_more_than_twelve_parts_the_dots_are_smaller(self):
+        import bei_charts
+        radius = lambda n: max(i['r'] for i in bei_charts.measure_chart(dict(self.CARD, series=[0] * n), self.parts(n, ()), (5, 12), width=360).items if i['kind'] == 'circle')   # noqa: E731
+        self.assertEqual((radius(12), radius(13), radius(24)), (4.5, 3, 3))
+
+    def test_a_hover_says_part_of_a_heated_moment_with_a_value_in_words_and_the_description_names_what_is_counted(self):
+        import bei_charts
+        scene = bei_charts.measure_chart(self.CARD, self.parts(), (5, 12), width=360)
+        hits = [i['tip'] for i in scene.items if i['kind'] == 'hit']
+        self.assertEqual(hits[3]['r'][2], ['part of a heated moment', 'up 25 per 100 messages', 'warn'])
+        self.assertEqual(hits[0]['r'], [['messages that were openly hostile', '1 of 8', 'series1'], ['per 100 messages', '0', 'series1']])
+        self.assertNotIn('climb', repr(hits))
+        self.assertEqual(scene.desc, 'How many of every 100 messages were openly hostile, in each of 8 parts of the chat. The first part had 0, the last had 0, '
+                                     'and the highest was part 4 with 25. Heated moment: part 4.')
+        care = bei_charts.measure_chart({'name': 'Empathy', 'kind': 'care', 'series': [5, 8, 12, 30, 22, 9, 4, 3]}, self.parts(), (3, 10), width=360)
+        self.assertEqual([i['tip']['r'][0][0] for i in care.items if i['kind'] == 'hit'][0], 'messages that showed care')        # not "messages that were showed care"
+        quiet = bei_charts.measure_chart(dict(self.CARD, series=[0] * 8), self.parts(8, ()), (5, 12), width=360)
+        self.assertIn('and none had any.', quiet.desc)
+        self.assertNotIn('Heated moment', quiet.desc)
+        runs = bei_charts.measure_chart(self.CARD, self.parts(8, (2, 3, 6)), (5, 12), width=360)
+        self.assertTrue(runs.desc.endswith('Heated moments: parts 3 to 4 and part 7.'))
+
+    def test_the_check_by_check_chart_names_a_check_by_its_number_and_its_date_and_never_by_the_time(self):
+        """Under Incognito no time of day may appear in the measures. The chart used the time a check ran to tell two checks of one day apart, so the page left
+        the chart out; a number does the same work and holds no time."""
+        import bei_charts
+        trail = [{'created_at': f'2026-03-05T{h}:04:22', 'health': 60 + h, 'n': 72} for h in (10, 14, 18)]               # three checks on one day
+        scene = bei_charts.trail_chart(trail, 'health', title='T', series='Health score', width=720)
+        titles = [i['tip']['t'] for i in scene.items if i['kind'] == 'hit']
+        self.assertEqual(titles, ['Check 1 \u00b7 Mar 5, 2026', 'Check 2 \u00b7 Mar 5, 2026', 'Check 3 \u00b7 Mar 5, 2026'])
+        self.assertEqual([t['s'] for t in self.texts(scene) if t['s'].startswith('Check')], ['Check 1', 'Check 2', 'Check 3'])
+        self.assertNotRegex(repr(scene.items) + scene.desc, r'\b\d{1,2}:\d{2}\b')
+        self.assertIsNone(bei_charts.trail_chart(trail[:2], 'health', title='T', series='Health score'))
+        self.assertEqual(bei_charts.check_names([{}, {'created_at': ''}])[0], {'short': 'Check 1', 'long': 'Check 1'})
+
+    def test_the_health_meter_has_ticks_at_the_status_edges_and_the_four_words_under_their_segments(self):
+        import bei_charts
+        for width, one_row in ((720, True), (500, True), (360, False)):                              # the wide layout, the PDF, the phone
+            scene = bei_charts.health_meter(42, 'info', width=width)
+            ticks = [i for i in scene.items if i['kind'] == 'line']
+            self.assertEqual([round(i['x1'] / width * 100) for i in ticks], [40, 60, 80], width)
+            words = {t['s']: t for t in self.texts(scene) if t['s'] in ('Needs attention', 'Fair', 'Good', 'Excellent')}
+            self.assertEqual(sorted(words, key=lambda w: words[w]['x']), ['Needs attention', 'Fair', 'Good', 'Excellent'], width)
+            numbers = {t['s']: t for t in self.texts(scene) if t['s'] in ('0', '40', '60', '80', '100')}
+            self.assertEqual(sorted(numbers, key=lambda n: numbers[n]['x']), ['0', '40', '60', '80', '100'], width)
+            self.assertEqual(words['Fair']['y'] == numbers['40']['y'], one_row, width)
+            for word in words.values():                                                              # a word stays under its own segment
+                self.assertTrue(0 <= word['x'] <= width)
+            self.assertIn('Fair 40 to 59', scene.desc)
+        self.assertLessEqual(bei_charts.health_meter(42, 'info', width=500).height, 46)               # the PDF tile has no room for a taller meter
+        self.assertGreaterEqual(self.texts(bei_charts.health_meter(42, 'info', width=360))[0]['size'], 16)
+
+
+# ======================================================================================
+class MeasuresTemplates(AppCase):
+    """The four templates of the measures page print what measures.py hands them, and nothing else of their own but the headings, the key to the charts and the count
+    line. Each is rendered here with the context of a real report, changed in the one place a test looks at."""
+
+    def ctx(self):
+        cls = type(self)
+        if not hasattr(cls, 'built'):
+            import report
+            aid = self.with_chat()
+            self.assertEqual(self.run_job(aid)['status'], 'complete')
+            cls.built = report.build(aid)
+            self.assertTrue(cls.built['measures'] and cls.built['measures']['m']['has_series'])
+        import copy
+        return dict(cls.built, measures=copy.deepcopy(cls.built['measures']), measures_html=copy.deepcopy(cls.built['measures_html']))      # the rest holds database rows
+
+    def text(self, name, ctx):
+        html = self.app.templates.env.get_template(name).render(**ctx)
+        return ' '.join(unescape(re.sub(r'<[^>]+>', ' ', html)).split())
+
+    def test_each_note_is_printed_once_in_its_own_section_by_what_it_is_about(self):
+        ctx = self.ctx()
+        ctx['measures']['notes'] = [{'key': 'no_vibe', 'text': 'NOTE ONE about the alerts.', 'about': 'alerts'},
+                                    {'key': 'order', 'text': 'NOTE TWO about the measures.', 'about': 'measures'},
+                                    {'key': 'sampled', 'text': 'NOTE THREE about the measures.', 'about': 'measures'}]
+        alerts, over, badges = (self.text(name, ctx) for name in ('_alerts.html', '_over_time.html', '_badges.html'))
+        self.assertEqual((alerts.count('NOTE ONE'), alerts.count('NOTE TWO'), alerts.count('NOTE THREE')), (1, 0, 0))
+        self.assertEqual((over.count('NOTE ONE'), over.count('NOTE TWO'), over.count('NOTE THREE')), (0, 1, 1))
+        self.assertNotIn('NOTE', badges)
+        self.assertNotIn('The notes under Alerts', over)                                  # the sentence that sent a reader from one section to the other is gone
+
+    def test_nothing_needs_urgent_attention_is_said_only_when_the_measures_say_all_clear(self):
+        ctx = self.ctx()
+        ms = ctx['measures']
+        ms['alerts'], ms['alert_counts'] = [], {'high': 0, 'medium': 0, 'good': 0}
+        n = ms['m']['n']
+        ms['all_clear'] = True
+        self.assertIn(f'Nothing needs urgent attention in these {n:,} messages.', self.text('_alerts.html', ctx))
+        ms['all_clear'] = False                                                          # Vibe Check did not run, or the model found almost no tone
+        quiet = self.text('_alerts.html', ctx)
+        self.assertNotIn('Nothing needs urgent attention', quiet)
+        self.assertIn(ms['caveats']['empty'], quiet)                                     # the list says it is no all clear
+        ms['alert_counts'] = {'high': 1, 'medium': 0, 'good': 0}
+        ms['all_clear'] = True
+        self.assertIn('1 thing to look at first.', self.text('_alerts.html', ctx))
+        self.assertNotIn('Nothing needs urgent attention', self.text('_alerts.html', ctx))
+
+    def test_the_first_check_and_the_no_badges_sentences_come_from_the_measures(self):
+        ctx = self.ctx()
+        ms = ctx['measures']
+        ms['since'] = None
+        ms['texts'] = {'first_check': 'THIS IS THE FIRST CHECK TEXT.', 'no_badges': 'THIS IS THE NO BADGES TEXT.'}
+        for b in ms['badges']:
+            b['earned'] = False
+        self.assertIn('THIS IS THE FIRST CHECK TEXT.', self.text('_over_time.html', ctx))
+        self.assertIn('THIS IS THE NO BADGES TEXT.', self.text('_badges.html', ctx))
+        self.assertNotIn('This is your first check', self.text('_over_time.html', ctx))
+
+    def test_the_caveat_of_the_comparison_stands_above_the_table_and_the_eyebrows_do_not_repeat_the_headings(self):
+        ctx = self.ctx()
+        ms = ctx['measures']
+        ms['caveats']['since'] = 'THE SINCE CAVEAT.'
+        ms['since'] = {'comparable': True, 'why': '', 'rows': [{'label': 'Health score', 'before': 60, 'now': 65, 'verdict': 'Better'}]}
+        html = self.app.templates.env.get_template('_over_time.html').render(**ctx)
+        self.assertLess(html.index('THE SINCE CAVEAT.'), html.index('<table class="vc-since"'))
+        self.assertGreater(html.index('THE SINCE CAVEAT.'), html.index('Since your last check</h3>'))
+        ms['since'] = {'comparable': False, 'why': 'NOT ALIKE.', 'rows': [{'label': 'Health score', 'before': 60, 'now': 65, 'verdict': ''}]}
+        html = self.app.templates.env.get_template('_over_time.html').render(**ctx)
+        self.assertLess(html.index('THE SINCE CAVEAT.'), html.index('NOT ALIKE.'))
+        self.assertIn('<div class="eyebrow">Look first</div><h2 id="alerts-h">Alerts</h2>', self.app.templates.env.get_template('_alerts.html').render(**ctx))
+        badges = self.app.templates.env.get_template('_badges.html').render(**ctx)
+        self.assertIn('<div class="eyebrow">Celebrate</div><h2 id="badges-h">Badges</h2>', badges)
+        self.assertEqual(len(re.findall(r'\bEarned\b', self.text('_badges.html', ctx))), ms['badges_earned'])           # one word on each earned tile and no more
+
+    def test_the_key_to_the_charts_sits_above_the_cards_and_names_the_message_numbers_only_for_an_ordered_chat(self):
+        ctx = self.ctx()
+        ms = ctx['measures']
+        key = 'Lines show messages per 100. Bands mark Rare, Some and Often. A darker band is a heated moment.'
+        order = 'The numbers under each chart are rated message numbers, in the order you added them.'
+        ms['m']['basis'] = 'time'
+        html = self.app.templates.env.get_template('_over_time.html').render(**ctx)
+        self.assertIn(key, html)
+        self.assertNotIn(order, html)
+        self.assertLess(html.index(key), html.index('<div class="vc-cols vc-measures">'))
+        ms['m']['basis'] = 'order'
+        text = self.text('_over_time.html', ctx)
+        self.assertIn(key + ' ' + order, text)
+        ms['m']['has_series'] = False
+        ctx['measures_html'] = dict(ctx['measures_html'], charts={k: '' for k in ctx['measures_html']['charts']}, table='')
+        text = self.text('_over_time.html', ctx)
+        self.assertNotIn(key, text)
+        self.assertIn('There are no lines over time yet.', text)
+
+    def test_every_card_says_in_words_what_its_icon_shows_to_a_screen_reader(self):
+        ctx = self.ctx()
+        html = self.app.templates.env.get_template('_over_time.html').render(**ctx)
+        words = re.findall(r'<span class="sr-only">, ([^<]+)</span>', html)
+        self.assertEqual(words, [card['tone_word'] for card in ctx['measures']['cards']])
+        self.assertTrue(set(words) <= {'A good sign', 'Neutral', 'Worth a look', 'Look at this first'})
 
 
 # ======================================================================================
@@ -3398,16 +3643,17 @@ class Docs(unittest.TestCase):
         self.assertEqual([heading for heading, _text in analysis.HOW_IT_WORKS],
                          ['What it looks at', 'The 13 tone signals', 'How Vibe Check works', 'How far to trust it', 'Measures, alerts and badges'])
         text = dict(analysis.HOW_IT_WORKS)['Measures, alerts and badges']
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)                              # "MEASURES.md" holds a dot that ends no sentence
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
         self.assertLessEqual(len(sentences), 8)
         for sentence in sentences:
             self.assertLessEqual(len(sentence.split()), 16, sentence)
         for banned in (r'\bFAS\b', r'(?i)\bstretch', r'(?i)\bepisode', r'(?i)\bbaseline', r'(?i)\bpeak', r'(?i)\btoxic', r'(?i)communication unit', r'(?i)standard error',
                        r'(?i)z-score', r'[=<>≤≥−✓✔]'):
             self.assertNotRegex(text, banned)
-        for needle in ('0 to 3', '2 or 3', 'Conflict', 'Empathy', 'Passive-aggressive', 'Escalation', 'MEASURES.md', 'not tested norms', 'not people'):
+        for needle in ('0 to 3', '2 or 3', 'Conflict', 'Empathy', 'Passive-aggressive', 'Escalation', 'not tested norms', 'not people'):
             self.assertIn(needle, text)
-        self.assertNotIn('Alerts and badges', text)                                      # a PDF without measures has no page of that name, and says so (tests.test_measures_export)
+        self.assertNotRegex(text, r'\w\.(?:md|py|html)\b')                                  # a reader of the page or the PDF cannot open a file, so the text names none
+        self.assertNotIn('Alerts and badges Alerts are prompts', text)                   # the text may say "Alerts and badges follow fixed rules"; it never reads like the page of that name (tests.test_measures_export)
         self.assertIn(text, analysis.METHOD_NOTE)
 
     def test_no_stale_names_or_sandbox_text_remain(self):

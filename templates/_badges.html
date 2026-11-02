@@ -1,9 +1,9 @@
 {# Badges. Needs `measures` (measures.build) and `measures_html` (measures_view.html). No locks, no counts out of seven, no bars, no streaks. #}
 {% set ms = measures %}{% set icons = (measures_html or {}).icons or {} %}
 {% set earned = ms.badges|selectattr('earned')|list %}{% set others = ms.badges|rejectattr('earned')|list %}
-<section class="panel vc" id="badges" aria-labelledby="badges-h"><div class="eyebrow">Badges</div><h2 id="badges-h">Badges</h2>
+<section class="panel vc" id="badges" aria-labelledby="badges-h"><div class="eyebrow">Celebrate</div><h2 id="badges-h">Badges</h2>
 {% if earned %}<div class="vc-awards">{% for b in earned %}<div class="award"><span class="award-tag">{{ icons.good|safe }}Earned</span><strong class="award-name">{{ b.name }}</strong><span class="award-evidence">{{ b.evidence }}</span></div>{% endfor %}</div>
-{% else %}<p class="vc-trendline">No badges this time. Each one is earned only when the messages clearly show it.</p>{% endif %}
+{% else %}<p class="vc-trendline">{{ ms.texts.no_badges }}</p>{% endif %}
 {% if ms.badge_note %}<p class="vc-note">{{ ms.badge_note }}</p>{% endif %}
 {% if others %}<details><summary>How the other badges work</summary><ul class="vc-rules">{% for b in others %}<li><strong>{{ b.name }}</strong><span class="vc-how">{{ b.how }}</span>{% if b.needs %}<span class="vc-needs">{{ b.needs }}</span>{% endif %}</li>{% endfor %}</ul></details>{% endif %}
 <p class="vc-caveat">{{ ms.caveats.badges }}</p>

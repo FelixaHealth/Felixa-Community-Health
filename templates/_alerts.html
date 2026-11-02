@@ -1,19 +1,19 @@
-{# Alerts. Needs `measures` (measures.build) and `measures_html` (measures_view.html). All wording comes from measures.py; the headings and the count line are the only text written here. #}
+{# Alerts. Needs `measures` (measures.build) and `measures_html` (measures_view.html). All wording comes from measures.py; the headings and the count line are the only text written here. The notes about the alerts are printed here and the notes about the measures under Measures over time, so no note appears twice. #}
 {% set ms = measures %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set levels = mh.levels or {} %}
-{% set vibe_ok = vibe and vibe.status == 'ok' %}{% set look = ms.alert_counts.high + ms.alert_counts.medium %}
+{% set look = ms.alert_counts.high + ms.alert_counts.medium %}{% set alert_notes = ms.notes|selectattr('about', 'equalto', 'alerts')|list %}
 {# the high and medium priority alerts first, then at most three lines of good news; five show at once and the rest wait in a fold #}
 {% set shown = (ms.alerts|rejectattr('level', 'equalto', 'good')|list) + ((ms.alerts|selectattr('level', 'equalto', 'good')|list)[:3]) %}
 {% macro row(al) %}<li><span class="vc-sev vc-sev-{{ al.level }}">{% if levels[al.level] %}{{ icons[levels[al.level].tone]|safe }}{% endif %}<span>{{ levels[al.level].name if levels[al.level] else al.level }}</span></span>
 <div class="vc-alert"><strong class="vc-alert-title">{{ al.title }}</strong><p class="vc-alert-detail">{{ al.detail }}</p>
 {% if al.base %}<p class="vc-alert-base">{{ al.base }}</p>{% endif %}{% if al.when %}<p class="vc-alert-when">Where in the chat: {{ al.when }}</p>{% endif %}
 {% if al['try'] %}<div class="vc-callout vc-try">Try this: {{ al['try'] }}</div>{% endif %}</div></li>{% endmacro %}
-<section class="panel vc" id="alerts" aria-labelledby="alerts-h"><div class="eyebrow">Alerts</div><h2 id="alerts-h">Alerts</h2>
+<section class="panel vc" id="alerts" aria-labelledby="alerts-h"><div class="eyebrow">Look first</div><h2 id="alerts-h">Alerts</h2>
 {% if look == 1 %}<p class="vc-trendline vc-count">1 thing to look at first.</p>
 {% elif look > 1 %}<p class="vc-trendline vc-count">{{ look }} things worth a look.</p>
-{% elif vibe_ok %}<p class="vc-trendline vc-count">Nothing needs urgent attention in {{ 'this message' if ms.m.n == 1 else 'these {:,} messages'.format(ms.m.n) }}.</p>{% endif %}
+{% elif ms.all_clear %}<p class="vc-trendline vc-count">Nothing needs urgent attention in {{ 'this message' if ms.m.n == 1 else 'these {:,} messages'.format(ms.m.n) }}.</p>{% endif %}
 <p class="vc-caveat">{{ ms.caveats.alerts }}</p>
 {% if shown %}<ul class="vc-flags vc-alerts">{% for al in shown[:5] %}{{ row(al) }}{% endfor %}</ul>
 {% if shown|length > 5 %}<details><summary>Show {{ shown|length - 5 }} more</summary><ul class="vc-flags vc-alerts">{% for al in shown[5:] %}{{ row(al) }}{% endfor %}</ul></details>{% endif %}
 {% else %}<p class="vc-caveat">{{ ms.caveats.empty }}</p>{% endif %}
-{% if ms.notes %}<ul class="vc-quiet">{% for note in ms.notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
+{% if alert_notes %}<ul class="vc-quiet">{% for note in alert_notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
 </section>
