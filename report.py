@@ -4,6 +4,7 @@ import json
 import re
 
 import analysis
+import answers
 import bei_charts
 import measures
 import measures_export
@@ -47,6 +48,7 @@ def build(aid):
     ctx['vibe_html'] = render_html(vibe, assets=False, notice=notice) if vibe else ''
     ctx['assets'] = assets_html() if (metrics or vibe) else ''
     ctx['summary_line'] = summary_line(ctx)
+    ctx['answers'] = answers.build(ctx)
     return ctx
 
 

@@ -15,6 +15,7 @@
 </nav>
 <div class="tabpanel" id="tab-overview" role="tabpanel">
 {% if measures %}{% include "_summary.html" %}{% endif %}
+{% include "_answers.html" %}
 {% if families %}<section class="panel"><div class="eyebrow">Categories</div><h2>Positive, tense and toxic wording</h2><p class="small-note">Open a category to read every message in it and see how it moves over time.</p>
 <div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>{{ f.blurb }}</small><em>See the messages and graphs →</em></a>{% endfor %}</div></section>{% endif %}
 {% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}

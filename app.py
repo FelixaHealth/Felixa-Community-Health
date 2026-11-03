@@ -8,6 +8,7 @@ import base64
 import csv
 import datetime
 import hashlib
+import zipfile
 import io
 import json
 import logging
@@ -621,7 +622,7 @@ async def step6(request: Request, aid: AnalysisId):
     if error:
         return redirect(f'/analysis/{aid}/step/6', error)
     store.update_analysis(aid, goals_json=json.dumps(goals), goal_text=other, status='ready')
-    return redirect(f'/analysis/{aid}/workspace', 'Your workplace is ready. Press New to run the first check.')
+    return redirect(f'/analysis/{aid}/workspace')
 
 
 def unit_total(units):
@@ -671,19 +672,55 @@ def safe_suffix(ext: str) -> str:
     return ext if re.fullmatch(r'\.[a-z0-9]{1,10}', ext) else ''
 
 
+ARCHIVE_MEMBERS = 200
+
+
+def expanded_uploads(files):
+    """The files of an upload as (name, bytes, problems): a zip archive is opened and each file inside is one more file, named 'archive.zip > file'. `bytes` is None for
+    something that is left out, with the reason in `problems`. A file over the size limit comes back with one more byte than the limit, so the reader refuses it."""
+    for f in files:
+        raw_name = (f.filename or '').strip()
+        if not raw_name:
+            continue
+        data = f.file.read(config.MAX_UPLOAD_BYTES + 1)
+        label = file_label(raw_name)
+        if Path(label).suffix.lower() != '.zip' or not data or len(data) > config.MAX_UPLOAD_BYTES:
+            yield raw_name, data, []
+            continue
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+            infos = [i for i in zf.infolist() if not i.is_dir() and not i.filename.startswith('__MACOSX') and not Path(i.filename).name.startswith('.')]
+        except zipfile.BadZipFile:
+            yield raw_name, None, [f'{label}: the archive is damaged or is not really a zip file']
+            continue
+        if not infos:
+            yield raw_name, None, [f'{label}: the archive has no files in it']
+            continue
+        if len(infos) > ARCHIVE_MEMBERS:
+            yield raw_name, None, [f'{label}: only the first {ARCHIVE_MEMBERS} of {len(infos)} files in the archive were read']
+        for info in infos[:ARCHIVE_MEMBERS]:
+            inner = f'{label} > {Path(info.filename).name}'
+            if info.flag_bits & 0x1:
+                yield inner, None, [f'{inner}: the file in the archive is password protected']
+            elif info.file_size > config.MAX_UPLOAD_BYTES:
+                yield inner, None, [f'{inner}: larger than {config.MAX_UPLOAD_BYTES // 1_000_000} MB']
+            else:
+                with zf.open(info) as member:
+                    yield inner, member.read(config.MAX_UPLOAD_BYTES + 1), []
+
+
 def ingest_files(aid, files) -> tuple:
     """Reads uploads into communication units. Returns (units_added, problems). Files are parsed from a temporary copy that is
     deleted straight away, so nothing the user uploaded stays on disk. `problems` also names what the reader or the per-analysis
     limit left out of a file, so a file taken only in part is not reported as a plain success. A file whose bytes are those of a file
     already imported into the analysis is left out as well, or every message in it would be stored, rated and counted twice."""
     added_total, problems = 0, []
-    for f in files:
-        raw_name = (f.filename or '').strip()
-        if not raw_name:
+    for raw_name, data, skipped in expanded_uploads(files):
+        problems.extend(skipped)
+        if data is None:
             continue
         name = file_label(raw_name)
         ext = Path(name).suffix.lower()
-        data = f.file.read(config.MAX_UPLOAD_BYTES + 1)
         if not data:
             problems.append(f'{name}: the file is empty')
             continue
@@ -698,13 +735,16 @@ def ingest_files(aid, files) -> tuple:
             tmp.write(data)
         notes = []
         try:
-            units = ingest.units_from_file(tmp.name, label=name, clean=False, notes=notes)
+            if ext in voice.AUDIO_EXTENSIONS:                                   # a recording in the file tab is turned into text like one in the Voice tab
+                units = ingest.units_from_text('\n'.join(voice.transcribe(tmp.name)), name, mode='lines', clean=False)
+            else:
+                units = ingest.units_from_file(tmp.name, label=name, clean=False, notes=notes)
         except Exception as e:
             log.warning('could not read upload %s: %s: %s', name, type(e).__name__, e)
             # An UnsupportedFileError carries a message written for the user. Any other exception is a reader's own (PdfStreamError,
             # BadZipFile, JSONDecodeError ...), whose name says nothing to the person who uploaded the file: it is logged, and the
             # person is told what is likely wrong with that kind of file.
-            reason = str(e).rstrip('.') if isinstance(e, ingest.UnsupportedFileError) else UNREADABLE.get(ext, UNREADABLE[''])
+            reason = str(e).rstrip('.') if isinstance(e, (ingest.UnsupportedFileError, voice.VoiceUnavailable)) else UNREADABLE.get(ext, UNREADABLE[''])
             problems.append(f'{name}: {reason}')
             continue
         finally:

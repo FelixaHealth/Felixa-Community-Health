@@ -324,7 +324,7 @@ def same_markup(html) -> str:
     return re.sub(r'vc\d+-', 'vcN-', html)
 
 
-NEXT_PARTS = ('Summary and guidance', 'Measured behaviour', 'Vibe Check', 'Evidence and how this report works')
+NEXT_PARTS = ('Your questions answered', 'Summary and guidance', 'Measured behaviour', 'Vibe Check', 'Evidence and how this report works')
 FOOTER = re.compile(r'^Felixa Community Health \| \d{4}-\d{2}-\d{2}(?: Model-rated wording\. Not a verdict on people\.)? \d+ ')     # what every page opens with in the text
 
 
@@ -2959,10 +2959,9 @@ class PageStructure(MeasuresCase):
     def test_the_workplace_page_has_the_headline_before_the_plan_and_the_results_page_has_every_section(self):
         aid = self.flare()
         html = self.page(aid, 'workspace')
-        plan = html.index('<div class="eyebrow">Plan</div>')
-        self.assertLess(html.index('id="results"'), plan)
+        self.assertNotIn('<div class="eyebrow">Plan</div>', html, 'the pathway panel is gone')
+        self.assertLess(html.index('id="results"'), html.index('<div class="eyebrow">Engine</div>'))
         self.assertIn(f'href="/analysis/{aid}/results"', html)
-        self.assertLess(plan, html.index('<div class="eyebrow">Engine</div>'))
         for sid in SECTIONS:
             self.assertNotIn(f'id="{sid}"', html, 'the parts of the results are on the results page')
         page = self.page(aid, 'results')
@@ -2970,7 +2969,7 @@ class PageStructure(MeasuresCase):
             self.assertIn(f'id="{sid}"', page, sid)
         fresh = self.new_analysis()
         html = self.page(fresh, 'workspace')
-        self.assertIn('<div class="eyebrow">Plan</div>', html)
+        self.assertNotIn('<div class="eyebrow">Plan</div>', html)
         self.assertNotIn('id="results"', html)
         for sid in SECTIONS:
             self.assertNotIn(f'id="{sid}"', html)

@@ -189,6 +189,16 @@ def pdf(ctx, base: Path) -> bytes:
     if ctx.get('measures'):
         measures_export.pdf_pages(ctx['measures'], story, p, page, table, lambda scene: to_drawing(scene, fonts=FONTS, scale=TEXT_W / CHART_W), small=lambda t: p(t, 'BeiSmall'))
 
+    # the questions that were asked, answered
+    if ctx.get('answers'):
+        page('Your questions answered')
+        story.append(p('These answers use only the numbers in this report. Each says what the messages show and what they cannot tell.', 'BeiSmall'))
+        for ans in ctx['answers']:
+            block = [p(ans['question'], 'BeiSub'), p('**' + ans['verdict'] + '**')]
+            block += [p('• ' + x) for x in ans['points']]
+            block.append(p(ans['caution'], 'BeiSmall'))
+            story += [KeepTogether(block[:3])] + block[3:]
+
     # summary and guidance
     g = ctx['guidance']
     if g:

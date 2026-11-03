@@ -171,3 +171,88 @@ class EngineStepPrices(AppCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AnyFile(AppCase):
+    def test_a_zip_is_opened_and_each_file_in_it_is_read(self):
+        import io
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as zf:
+            zf.writestr('chat.txt', 'Thanks for the help\nyou idiot\nnice work today\n')
+            zf.writestr('__MACOSX/._chat.txt', 'junk')
+            zf.writestr('notes.csv', 'text\nwelcome everyone\nplease stop that\n')
+            zf.writestr('picture.png', b'\x89PNG\r\n\x1a\n' + b'\0' * 50)
+        aid = self.new_analysis(name='Zipped')
+        r = self.client.post(f'/analysis/{aid}/upload', files={'files': ('bundle.zip', buf.getvalue(), 'application/zip')}, data={'back': ''})
+        self.assertEqual(self.store.count_units(aid), 5)
+        labels = {e['source_label'] for e in self.store.evidence_by_source(aid)}
+        self.assertEqual(labels, {'bundle.zip > chat.txt', 'bundle.zip > notes.csv'})
+        from urllib.parse import unquote
+        self.assertIn('bundle.zip > picture.png: This file cannot be read', unquote(r.headers.get('set-cookie', '')))
+
+    def test_a_broken_zip_and_a_file_of_an_unknown_kind_are_told_apart(self):
+        aid = self.new_analysis(name='Odd files')
+        self.client.post(f'/analysis/{aid}/upload', files=[('files', ('broken.zip', b'not a zip at all', 'application/zip')),
+                                                          ('files', ('chat.weird', b'thanks all\nnice work\nyou are trash\n', 'application/octet-stream'))], data={'back': ''})
+        self.assertEqual(self.store.count_units(aid), 3, 'a file of a kind nobody listed is read when it is text')
+
+    def test_a_recording_in_the_file_tab_says_what_to_do_when_speech_to_text_is_missing(self):
+        from unittest import mock
+        import voice
+        aid = self.new_analysis(name='Audio')
+        with mock.patch.object(voice, 'transcribe', side_effect=voice.VoiceUnavailable('Speech to text is not installed here.')):
+            r = self.client.post(f'/analysis/{aid}/upload', files={'files': ('talk.mp3', b'ID3' + b'\0' * 100, 'audio/mpeg')}, data={'back': ''}, follow_redirects=True)
+        self.assertIn('Speech to text is not installed here', r.text)
+        self.assertEqual(self.store.count_units(aid), 0)
+
+
+class Questions(AppCase):
+    GOALS = ['Is my community healthy?', 'Why are people leaving?', 'Why did my revenue go down?', 'How do people communicate?', 'Are people engaged?']
+
+    def ready(self, goals=None, own=''):
+        import json
+        aid = self.with_chat(name='Asked')
+        self.store.update_analysis(aid, goals_json=json.dumps(goals if goals is not None else self.GOALS), goal_text=own)
+        self.assertEqual(self.run_job(aid)['status'], 'complete')
+        return aid
+
+    def test_every_question_asked_is_answered_in_the_results_and_the_report(self):
+        aid = self.ready(own='Do newcomers feel welcome?')
+        for path in ('results', 'report'):
+            page = self.client.get(f'/analysis/{aid}/{path}').text
+            block = page.split('id="answers"', 1)[1].split('</section>', 1)[0]
+            for q in self.GOALS + ['Do newcomers feel welcome?']:
+                self.assertIn(f'<h3>{q}</h3>', block, (path, q))
+            self.assertEqual(block.count('<article class="answer">'), 6, path)
+            self.assertIn('cannot say, because they hold no revenue figures', block)
+            self.assertNotIn('messages messages', block)
+
+    def test_only_the_questions_that_were_chosen_are_answered(self):
+        aid = self.ready(goals=['Are people engaged?'])
+        block = self.client.get(f'/analysis/{aid}/results').text.split('id="answers"', 1)[1].split('</section>', 1)[0]
+        self.assertEqual(block.count('<article class="answer">'), 1)
+        self.assertIn('Are people engaged?', block)
+
+    def test_the_answers_use_the_numbers_of_the_results(self):
+        import report
+        aid = self.ready()
+        ctx = report.build(aid)
+        by = {a['question']: a for a in ctx['answers']}
+        health = ctx['measures']['health']
+        self.assertIn(f'{health["score"]:.0f} on a scale of 0 to 100', ' '.join(by['Is my community healthy?']['points']))
+        self.assertIn('cannot say', by['Why did my revenue go down?']['verdict'])
+        for a in ctx['answers']:
+            self.assertTrue(a['points'] and a['caution'], a['question'])
+
+    def test_the_pdf_has_the_answers_page(self):
+        aid = self.ready()
+        from test_app import pdf_text
+        text = pdf_text(self.client.get(f'/analysis/{aid}/report.pdf').content)
+        self.assertIn('Your questions answered', text)
+        self.assertIn('Why are people leaving?', text)
+
+    def test_no_results_means_no_answers(self):
+        import report
+        aid = self.new_analysis(name='Nothing yet')
+        self.assertEqual(report.build(aid)['answers'], [])

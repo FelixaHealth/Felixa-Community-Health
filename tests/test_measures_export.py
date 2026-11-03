@@ -99,7 +99,7 @@ def our_start(texts):
 def our_pages(texts):
     """The pages of this feature: from the one headed Alerts and badges to the page before the summary (or the measured behaviour, when there is no summary)."""
     start = our_start(texts)
-    end = next((i for i, t in enumerate(texts) if i > start and ('Summary and guidance' in t or 'Measured behaviour' in t)), len(texts))
+    end = next((i for i, t in enumerate(texts) if i > start and ('Your questions answered' in t or 'Summary and guidance' in t or 'Measured behaviour' in t)), len(texts))
     return texts[start:end]
 
 

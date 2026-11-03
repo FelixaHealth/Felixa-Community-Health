@@ -1,4 +1,5 @@
 {{ assets|safe }}
+{% include "_answers.html" %}
 {% if measures %}{% include "_summary.html" %}{% include "_alerts.html" %}{% include "_over_time.html" %}{% include "_badges.html" %}{% endif %}
 {% include "_signals.html" %}
 

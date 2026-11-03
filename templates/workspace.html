@@ -24,8 +24,7 @@
 {# Once there are results they come first: the summary, the alerts, the measures over time and the badges, then the rest of the report. #}
 {% if has_results %}{% include "_results_card.html" %}{% endif %}
 
-<div class="results-grid two-up">
-<section class="panel"><div class="eyebrow">Plan</div><h2>{{ pathway.name }}</h2><p>{{ pathway.question }}</p><div class="path-list">{% for x in pathway.actions %}<div><b>{{ loop.index }}</b><span>{{ x }}</span></div>{% endfor %}</div></section>
+<div class="engine-row">
 <section class="panel"><div class="eyebrow">Engine</div>{% if local_enabled %}<h2>{{ 'Ready' if local_model_ready else 'Model needed' }}</h2><p>{% if local_model_ready %}{{ model }} is installed on this computer.{% else %}Start Ollama and download the default model: <code>ollama pull {{ model }}</code>{% if claude_ready %}. Or choose a Claude engine when you press New.{% endif %}{% endif %}</p>{% else %}<h2>{{ 'Claude is ready' if claude_ready else 'Claude key needed' }}</h2><p>{% if claude_ready %}Claude reads your messages in the cloud.{% else %}Set <code>FELIXA_ANTHROPIC_API_KEY</code> on the server to turn Claude on.{% endif %}</p>{% endif %}{% if a.model_used %}<p><strong>Last used:</strong> {{ a.model_used }}</p>{% endif %}</section>
 </div>
 

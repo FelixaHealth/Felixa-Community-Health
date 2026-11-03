@@ -525,3 +525,44 @@ a.family-tile.ft-good{border-top-color:var(--green)}a.family-tile.ft-warn{border
 .te p{margin:4px 0 0;color:var(--muted);font-size:15px}.te-state{font-style:normal;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--soft);color:var(--accent);margin-left:6px}
 .te-state.st-intensified{background:var(--red-s);color:var(--red)}.te-state.st-easing,.te-state.st-cleared{background:var(--green-s);color:var(--green)}
 .dash-kpi.kpi-red{border-top-color:#d03b3b}.dash-kpi.kpi-yellow{border-top-color:#fab219}
+
+/* tidy-up: stronger tabs and top bar, an even empty state, one engine panel */
+.engine-row{display:block;margin-bottom:24px}
+.tabs{padding:8px;gap:8px;border:2px solid var(--line2);background:var(--panel);box-shadow:0 6px 20px rgba(122,72,22,.10)}
+.tab{font-size:16px;font-weight:700;color:var(--ink);padding:11px 20px;border:1.5px solid var(--line2);border-radius:12px;background:var(--field)}
+.tab .ic{width:19px;height:19px;color:var(--accent)}
+.tab:hover{background:var(--soft);border-color:var(--hi,#F27435)}
+.tab.on{background:linear-gradient(135deg,#FFB347,#F27435);border-color:#d9631f;color:#2b1500;box-shadow:0 3px 10px rgba(242,116,53,.35)}
+.tab.on .ic{color:#2b1500}
+.navlink{border:1.5px solid var(--line2);background:var(--field);font-weight:700}
+.navlink:hover{background:var(--soft);border-color:var(--hi,#F27435)}
+.navlink.on{background:var(--soft);border-color:var(--hi,#F27435)}
+.dash-empty{text-align:center;padding:48px 24px}
+.dash-empty h2{margin:0 0 10px}
+.dash-empty p{margin:8px auto;max-width:58ch}
+.dash-empty .btn{margin-top:8px}
+.dash-head .lead{max-width:70ch}
+@media(max-width:860px){.tab{padding:10px 14px;font-size:15px}.navlink{padding:9px}}
+
+.answer-list{display:grid;gap:16px;margin-top:14px}
+.answer{border:1px solid var(--line);border-left:5px solid var(--hi,#F27435);border-radius:14px;padding:16px 20px;background:var(--field)}
+.answer:nth-child(5n+2){border-left-color:var(--teal)}.answer:nth-child(5n+3){border-left-color:var(--violet)}.answer:nth-child(5n+4){border-left-color:var(--blue)}.answer:nth-child(5n+5){border-left-color:var(--green)}
+.answer h3{margin:0 0 6px;font-family:var(--serif);font-size:20px}
+.answer-verdict{display:flex;gap:10px;align-items:flex-start;margin:0 0 8px;font-weight:700;font-size:17px;color:var(--ink)}
+.answer-verdict .ic{flex:none;width:20px;height:20px;margin-top:3px;color:var(--green)}
+.answer ul{margin:6px 0 10px;padding-left:20px}.answer li{margin:4px 0;line-height:1.55}
+.answer-links{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.answer-caution{margin:6px 0 0}
+
+/* the danger zone is small and quiet: it sits at the bottom of the workplace page only */
+.danger-panel{margin:28px 0 4px;padding:12px 16px;border-left-width:4px;border-radius:12px}
+.danger-head{gap:10px;margin-bottom:2px}
+.danger-ic{width:26px;height:26px;border-radius:8px}.danger-ic .ic{width:15px;height:15px}
+.danger-head h2{font-family:inherit;font-size:14px;font-weight:700;text-transform:lowercase;letter-spacing:.02em}
+.danger-head p{font-size:12.5px;margin:0;color:var(--muted)}
+.danger-row{padding:8px 0;gap:14px}
+.danger-row h3{font-size:13.5px;margin:0 0 1px;text-transform:lowercase}
+.danger-row p{font-size:12.5px;line-height:1.45}
+.danger-row .btn,.danger-row summary.btn{min-height:32px;padding:5px 12px;font-size:12.5px}
+.danger-row .btn .ic{width:13px;height:13px;margin-right:6px}
+.danger-row details p{font-size:12.5px}
+.dash-head{margin-bottom:20px}

@@ -3954,7 +3954,7 @@ class Workplaces(AppCase):
             self.assertEqual(r.headers['location'], f'/analysis/{aid}/step/{step + 1}', step)
         r = self.client.post(f'/analysis/{aid}/step/6', data={'goals': ['Is my community healthy?', 'Are people engaged?']})
         self.assertEqual(r.headers['location'], f'/analysis/{aid}/workspace')
-        self.assertIn('workplace is ready', flash(r))
+        self.assertEqual(flash(r), '', 'no banner: the workplace page is its own welcome')
         a = self.store.get_analysis(aid)
         self.assertEqual((a['subject_type'], a['person_name'], a['person_role'], a['channel'], a['user_name'], a['user_role'], a['status']),
                          ('Online community', 'Night Owls', 'Gaming', 'Discord', 'Sam Rivera', 'Admin', 'ready'))

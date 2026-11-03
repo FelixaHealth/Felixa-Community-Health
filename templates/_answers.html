@@ -1,0 +1,8 @@
+{# The questions that were asked, answered from the numbers of the results. Needs `answers`. #}
+{% from "_icons.html" import icon %}
+{% if answers %}<section class="panel answers" id="answers" aria-labelledby="answers-h"><div class="eyebrow">Your questions</div><h2 id="answers-h">What you wanted to find out</h2>
+<p class="small-note">Each answer uses only the numbers in these results, and says what the messages cannot tell.</p>
+<div class="answer-list">{% for x in answers %}<article class="answer"><h3>{{ x.question }}</h3><p class="answer-verdict">{{ icon('check') }}<span>{{ x.verdict }}</span></p>
+<ul>{% for pt in x.points %}<li>{{ pt }}</li>{% endfor %}</ul>
+{% if x.links %}<p class="answer-links">{% for label, href in x.links %}<a class="chip-btn" href="{{ href }}">{{ label }}</a>{% endfor %}</p>{% endif %}
+<p class="small-note answer-caution">{{ x.caution }}</p></article>{% endfor %}</div></section>{% endif %}
