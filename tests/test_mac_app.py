@@ -34,6 +34,12 @@ class MacApps(unittest.TestCase):
             self.assertIn(needle, text, needle)
         self.assertIn('FELIXA_SHARE=1', (ROOT / 'Felixa on Phone.app' / 'Contents' / 'MacOS' / 'FelixaOnPhone').read_text())
 
+    def test_the_launcher_updates_itself_from_github_and_keeps_your_data_elsewhere(self):
+        text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
+        for needle in ('commits/main', 'archive/refs/heads/main.zip', 'FELIXA_NO_UPDATE', 'FELIXA_UPDATED', 'exec "$ROOT/Felixa.app/Contents/MacOS/Felixa"', 'Application Support/Felixa'):
+            self.assertIn(needle, text, needle)
+        self.assertLess(text.index('commits/main'), text.index('Python 3.10 or newer'), 'it updates before it starts')
+
     def test_the_launcher_names_what_it_needs_and_does_not_open_a_terminal(self):
         text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
         for needle in ('Application Support/Felixa', 'FELIXA_DATA_DIR', '.local/bin', 'Python.framework', 'FELIXA_NO_LOCAL_MODEL=1', '/health', 'nohup', 'display dialog'):

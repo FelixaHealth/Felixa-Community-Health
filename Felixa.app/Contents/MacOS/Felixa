@@ -24,6 +24,32 @@ stop_with() {
   exit 1
 }
 
+# Update: every time Felixa is opened it checks GitHub for a newer version of itself and, if there is one, installs it (your workplaces and messages are kept
+# elsewhere and are not touched), restarts the app if it was running, and carries on. No internet or no change: nothing happens.
+UPDATE_API="${FELIXA_UPDATE_API:-https://api.github.com/repos/FelixaHealth/Felixa-Community-Health/commits/main}"
+UPDATE_ZIP="${FELIXA_UPDATE_ZIP:-https://github.com/FelixaHealth/Felixa-Community-Health/archive/refs/heads/main.zip}"
+if [ -z "$FELIXA_NO_UPDATE" ] && [ -z "$FELIXA_UPDATED" ] && [ -w "$ROOT" ]; then
+  REMOTE="$(curl -fsS --max-time 8 -H 'Accept: application/vnd.github.sha' "$UPDATE_API" 2>/dev/null | tr -dc 'a-f0-9')"
+  if [ ${#REMOTE} -ge 7 ] && [ "$REMOTE" != "$(cat "$STATE/version" 2>/dev/null)" ]; then
+    TMP="$(mktemp -d 2>/dev/null)"
+    if [ -n "$TMP" ] && curl -fsSL --max-time 120 -o "$TMP/new.zip" "$UPDATE_ZIP" 2>>"$LOG" && unzip -q -o "$TMP/new.zip" -d "$TMP/new" 2>>"$LOG"; then
+      SRC="$(ls -d "$TMP"/new/*/ 2>/dev/null | head -n 1)"
+      if [ -n "$SRC" ] && [ -f "${SRC}app.py" ] && cp -R "${SRC}." "$ROOT/" 2>>"$LOG"; then
+        chmod +x "$ROOT"/*.app/Contents/MacOS/* 2>/dev/null
+        echo "$REMOTE" >"$STATE/version"
+        echo "$(date '+%F %T') updated to $REMOTE" >>"$LOG"
+        if [ -f "$STATE/pid" ]; then kill "$(cat "$STATE/pid")" 2>/dev/null; sleep 1; rm -f "$STATE/pid" "$STATE/port"; fi
+        rm -rf "$TMP"
+        notify "Felixa is up to date."
+        export FELIXA_UPDATED=1
+        exec "$ROOT/Felixa.app/Contents/MacOS/Felixa"
+      fi
+    fi
+    [ -n "$TMP" ] && rm -rf "$TMP"
+    echo "$(date '+%F %T') could not update; using the version already here" >>"$LOG"
+  fi
+fi
+
 # Phone mode ("Felixa on Phone"): share the app with phones on the same Wi-Fi. It restarts the app if it runs for this Mac only.
 if [ -n "$FELIXA_SHARE" ]; then
   if [ -f "$STATE/pid" ]; then kill "$(cat "$STATE/pid")" 2>/dev/null; sleep 1; rm -f "$STATE/pid" "$STATE/port"; fi
