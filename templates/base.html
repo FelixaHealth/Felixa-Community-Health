@@ -16,6 +16,7 @@
 <option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>{% endif %}
 {% if top_workplaces %}<a class="navlink add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
 <button class="navlink nl-violet" type="button" data-help-open>{{ icon('help') }}<span>How to read this</span></button>
+<a class="navlink nl-gear{% if request.url.path.startswith('/settings') %} on{% endif %}" href="/settings"{% if request.url.path.startswith('/settings') %} aria-current="page"{% endif %}>{{ icon('gear') }}<span>Settings</span></a>
 <button class="navlink" type="button" id="theme-toggle" aria-pressed="false">{{ icon('moon') }}<span>Theme</span></button>
 </nav>
 </header>

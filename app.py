@@ -783,6 +783,58 @@ def go(to: str = ''):
     return RedirectResponse('/dashboard#compare', status_code=303)
 
 
+def engine_choices():
+    """The engines that can be a default: [(value, label, group)]. Only what this app can run now is offered."""
+    out = [('', 'Choose for me', 'Automatic')]
+    if cloud.login_offered():
+        out += [(f'claudecode:{m}', f'{name} · {about}', 'Your Claude login') for m, name, about, _s in cloud.LOGIN_MODELS]
+    if config.local_model_enabled():
+        out.append((config.model_name(), f'{config.model_name()} · runs on this computer', 'Felixa engine'))
+    out.append(('rules:words', 'Word rules · no AI, nothing leaves this computer', 'Other engines'))
+    if cloud.available():
+        out += [(f'claude:{m}', f'{name} · {about}', 'Anthropic API') for m, name, about, _s in cloud.CLAUDE_MODELS]
+    if cloud.openai_available():
+        out += [(f'openai:{m}', f'{name} · {about}', 'OpenAI API') for m, name, about, _s in cloud.OPENAI_MODELS]
+    return out
+
+
+@app.get('/settings', response_class=HTMLResponse)
+def settings_page(request: Request):
+    choices = engine_choices()
+    current = store.setting('default_engine')
+    if current and current not in {v for v, _l, _g in choices}:
+        current = ''
+    return render(request, 'settings.html', rail={'steps': [], 'foot': None, 'setup': False}, engine_choices=choices, default_engine=current,
+                  default_sensitivity=store.setting('default_sensitivity') if store.setting('default_sensitivity') in store.SENSITIVITIES else 'medium',
+                  default_incognito=store.setting('default_incognito') == '1', sens_options=[(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
+                  version=config.VERSION, data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
+                  login_offered=cloud.login_offered(), login_ready=cloud.login_available(), local_enabled=config.local_model_enabled(), hosted=bool(os.getenv('FELIXA_PASSWORD')))
+
+
+@app.post('/settings')
+async def settings_save(request: Request):
+    form = await request.form()
+    engine = str(form.get('default_engine', '')).strip()
+    if engine not in {v for v, _l, _g in engine_choices()}:
+        return redirect('/settings', 'Choose one of the engines in the list.')
+    sens = str(form.get('default_sensitivity', 'medium'))
+    if sens not in store.SENSITIVITIES:
+        return redirect('/settings', 'Choose how strict the check should be.')
+    store.set_setting('default_engine', engine)
+    store.set_setting('default_sensitivity', sens)
+    store.set_setting('default_incognito', '1' if form.get('default_incognito') else '0')
+    return redirect('/settings', 'Settings saved. New workplaces and new checks start with them.')
+
+
+@app.post('/settings/delete-all')
+async def settings_delete_all(request: Request):
+    form = await request.form()
+    if str(form.get('confirm', '')).strip().lower() != 'delete everything':
+        return redirect('/settings', 'Nothing was deleted. Type delete everything in the box to confirm.')
+    done, left = store.delete_everything()
+    return redirect('/settings', f'Deleted {done} workplace{"" if done == 1 else "s"} with everything saved for them.' + (f' {left} could not be deleted while a task was running for it. Try again when it finishes.' if left else ''))
+
+
 @app.get('/dashboard', response_class=HTMLResponse)
 def results_dashboard(request: Request):
     ctx = dashboard.build(request.query_params)
@@ -962,6 +1014,8 @@ def check_context(a, step):
         installed = any(m['name'] in (config.model_name(), config.model_name() + ':latest') for m in models)
         if a['engine']:
             ctx['engine'] = a['engine']
+        elif store.setting('default_engine') in {v for v, _l, _g in engine_choices() if v}:    # the engine chosen on the Settings page
+            ctx['engine'] = store.setting('default_engine')
         elif local and installed and a['model_used']:                                       # a check that ran with no engine saved ran on the model on this computer
             ctx['engine'] = config.model_name()
         elif cloud.login_available():                                                       # otherwise your Claude login first when it can run, then the model on this computer

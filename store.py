@@ -131,6 +131,10 @@ CREATE TABLE IF NOT EXISTS measure_history(
   snapshot_json TEXT NOT NULL,
   gen INTEGER
 );
+CREATE TABLE IF NOT EXISTS app_settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS web_sessions(
   key TEXT PRIMARY KEY,
   ends REAL NOT NULL
@@ -214,9 +218,29 @@ def analysis_columns() -> set:
         return {r['name'] for r in c.execute('PRAGMA table_info(analyses)')}
 
 
-def create_analysis() -> int:
+SENSITIVITIES = ('low', 'medium', 'high')
+
+
+def setting(key, default=''):
+    """One app-wide setting (Settings page), or `default` when it was never set."""
     with db() as c:
-        return c.execute('INSERT INTO analyses DEFAULT VALUES').lastrowid
+        row = c.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
+    return row['value'] if row else default
+
+
+def set_setting(key, value):
+    with db() as c:
+        c.execute('INSERT INTO app_settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (key, str(value)))
+
+
+def create_analysis() -> int:
+    """A new workplace, with the app-wide defaults of the Settings page: how strict the check is and whether names are removed."""
+    sens = setting('default_sensitivity')
+    with db() as c:
+        aid = c.execute('INSERT INTO analyses DEFAULT VALUES').lastrowid
+        if sens in SENSITIVITIES:
+            c.execute('UPDATE analyses SET vibe_sensitivity=? WHERE id=?', (sens, aid))
+    return aid
 
 
 def get_analysis(aid):
@@ -431,6 +455,14 @@ def clear_evidence(aid):
     empty_log()
 
 
+def delete_everything() -> tuple:
+    """Deletes every workplace with everything saved for it. Returns (workplaces deleted, workplaces left because a task was running for them)."""
+    with db() as c:
+        ids = [r['id'] for r in c.execute('SELECT id FROM analyses')]
+    done = sum(1 for aid in ids if delete_analysis(aid))
+    return done, len(ids) - done
+
+
 def delete_analysis(aid) -> bool:
     """Deletes a workplace for good: its messages, ratings, results, tasks, the numbers of every earlier check and the workplace itself, and overwrites them in
     the database file. Returns False, deleting nothing, while a task is queued or running (its worker still needs its rows)."""
@@ -465,7 +497,7 @@ def new_check(aid):
     """Starts a check from nothing: the messages and results of the last one go, its settings reset. The workplace and the numbers of earlier checks
     (scores and counts, never messages, names or file names; see `clear_evidence`) stay."""
     clear_evidence(aid)
-    update_analysis(aid, check_volume=None, incognito=0, engine=None, cloud_ok=0, period_start='', period_end='', period_tz=None)
+    update_analysis(aid, check_volume=None, incognito=int(setting('default_incognito') == '1'), engine=None, cloud_ok=0, period_start='', period_end='', period_tz=None)
 
 
 # ---- jobs ------------------------------------------------------------------------

@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Settings{% endblock %}
+{% block content %}
+<div class="shell"><div class="stage settings">
+<section class="dash-head"><div class="eyebrow">Settings</div><h1>Settings for the whole app</h1>
+<p class="lead">These apply to every workplace. A workplace keeps its own details in its Settings button.</p></section>
+
+<section class="panel set-card" aria-labelledby="set-check"><div class="set-head"><span class="set-ic c-orange">{{ icon('play') }}</span><div><h2 id="set-check">How a new check starts</h2><p class="small-note">Each new workplace and each new check begins with these. You can still change them on the check's own steps.</p></div></div>
+<form method="post" action="/settings" class="set-form">
+<label class="field">Engine<select name="default_engine" id="default_engine">{% set ns = namespace(group='') %}{% for value, label, group in engine_choices %}{% if group != ns.group %}{% if ns.group %}</optgroup>{% endif %}<optgroup label="{{ group }}">{% set ns.group = group %}{% endif %}<option value="{{ value }}"{% if value == default_engine %} selected{% endif %}>{{ label }}</option>{% endfor %}</optgroup></select></label>
+<p class="small-note">The engine is the language model that reads your messages. Prices are shown on the engine step before anything runs.</p>
+<fieldset class="group"><legend class="field-legend">How strict the check is</legend><div class="option-grid one">{% for key, label, help in sens_options %}<label class="option"><input type="radio" name="default_sensitivity" value="{{ key }}"{% if default_sensitivity == key %} checked{% endif %}><span><b>{{ label }}</b><small>{{ help }}</small></span></label>{% endfor %}</div></fieldset>
+<label class="toggle"><input type="checkbox" name="default_incognito" value="1"{% if default_incognito %} checked{% endif %}><span><strong>Hide names by default</strong><br><small>Incognito removes the name at the start of each chat line, @mentions and email addresses before anything reads them.</small></span></label>
+<div class="actions"><span></span><button class="btn primary">Save settings</button></div></form></section>
+
+<section class="panel set-card" aria-labelledby="set-look"><div class="set-head"><span class="set-ic c-violet">{{ icon('moon') }}</span><div><h2 id="set-look">Appearance</h2><p class="small-note">Light, dark, or the same as your computer. This is remembered in this browser.</p></div></div>
+<div class="option-grid three" role="radiogroup" aria-label="Theme"><label class="option"><input type="radio" name="theme-choice" value="system"><span>Same as my computer</span></label><label class="option"><input type="radio" name="theme-choice" value="light"><span>Light</span></label><label class="option"><input type="radio" name="theme-choice" value="dark"><span>Dark</span></label></div></section>
+
+<section class="panel set-card" aria-labelledby="set-claude"><div class="set-head"><span class="set-ic c-teal">{{ icon('cpu') }}</span><div><h2 id="set-claude">Your Claude login</h2>
+<p>{% if hosted and not login_offered %}This app runs online, where your own Claude login cannot be used, because it lives on your computer. Use the Felixa engine, the word rules or an API key.{% elif not login_offered %}Your Claude login is switched off for this app.{% elif login_ready %}<strong class="ok-word">Ready.</strong> Claude Code is installed, so the Claude engines that use your login can run. They count against your own Claude usage.{% else %}<strong class="warn-word">Claude Code was not found.</strong> Install it from claude.com/claude-code, run <code>claude</code> once and sign in, then reload this page.{% endif %}</p>
+<p class="small-note">To try it, open a check's Engine step and press <em>Test my Claude login</em>.</p></div></div></section>
+
+<section class="panel set-card" aria-labelledby="set-about"><div class="set-head"><span class="set-ic c-blue">{{ icon('layers') }}</span><div><h2 id="set-about">About this app</h2></div></div>
+<dl class="set-facts"><div><dt>Version</dt><dd>{{ version }}</dd></div><div><dt>Workplaces</dt><dd>{{ workplace_count }}</dd></div><div><dt>Your data is kept in</dt><dd><code>{{ data_folder }}</code></dd></div><div><dt>Engine on this computer</dt><dd>{{ 'On' if local_enabled else 'Off, Claude only' }}</dd></div></dl>
+<p class="small-note">On a Mac, <strong>Felixa</strong> checks GitHub for a newer version every time it is opened, and <strong>Felixa Always On</strong> checks every hour. Updates never touch your workplaces or messages.</p></section>
+
+<section class="danger-panel" id="danger" aria-labelledby="danger-title"><div class="danger-head"><span class="danger-ic">{{ icon('warning') }}</span><div><h2 id="danger-title">Danger zone</h2><p>This is permanent. Download the PDFs or CSVs you need first.</p></div></div>
+<div class="danger-row"><div class="dr-text"><h3>Delete all workplaces</h3><p>Erases every workplace, its messages, results and the numbers of earlier checks. Your settings stay.</p></div>
+<details class="delete-confirm"><summary class="btn danger-outline">{{ icon('trash') }} Delete everything…</summary>
+<form method="post" action="/settings/delete-all"><p>This deletes {{ workplace_count }} workplace{{ '' if workplace_count == 1 else 's' }}. It cannot be undone. Type <strong>delete everything</strong> to confirm.</p><input class="confirm-box" type="text" name="confirm" id="confirm-all" autocomplete="off" aria-label="Type delete everything to confirm"><button class="btn danger">Yes, delete everything</button></form></details></div></section>
+</div></div>{% endblock %}

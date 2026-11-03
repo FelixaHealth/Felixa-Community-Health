@@ -109,3 +109,15 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   };
   window.addEventListener('hashchange', route); route();
 })();
+
+// Settings: the theme choice (system, light or dark), kept in this browser.
+(() => {
+  const radios = [...document.querySelectorAll('input[name="theme-choice"]')]; if (!radios.length) return;
+  const root = document.documentElement;
+  let saved = ''; try { saved = localStorage.getItem('felixa-theme') || ''; } catch (e) { saved = ''; }
+  const now = saved === 'light' || saved === 'dark' ? saved : 'system';
+  radios.forEach((r) => { r.checked = r.value === now; r.addEventListener('change', () => {
+    try { if (r.value === 'system') localStorage.removeItem('felixa-theme'); else localStorage.setItem('felixa-theme', r.value); } catch (e) {}
+    if (r.value === 'system') delete root.dataset.theme; else root.dataset.theme = r.value;
+  }); });
+})();

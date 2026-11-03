@@ -566,3 +566,18 @@ a.family-tile.ft-good{border-top-color:var(--green)}a.family-tile.ft-warn{border
 .danger-row .btn .ic{width:13px;height:13px;margin-right:6px}
 .danger-row details p{font-size:12.5px}
 .dash-head{margin-bottom:20px}
+
+/* Settings page */
+.settings{max-width:900px;margin:0 auto}
+.set-card{display:grid;gap:14px}
+.set-head{display:flex;gap:14px;align-items:flex-start}.set-head h2{margin:0 0 4px}.set-head p{margin:2px 0}
+.set-ic{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:14px}.set-ic .ic{width:22px;height:22px}
+.set-ic.c-orange{background:var(--soft);color:var(--accent)}.set-ic.c-violet{background:var(--violet-s);color:var(--violet)}.set-ic.c-teal{background:var(--teal-s);color:var(--teal)}.set-ic.c-blue{background:var(--blue-s);color:var(--blue)}
+.set-form{display:grid;gap:12px}.set-form select{max-width:560px}
+.option-grid.three{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.ok-word{color:var(--green)}.warn-word{color:var(--red)}
+.set-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0}
+.set-facts div{background:var(--tile);border-radius:12px;padding:10px 14px}.set-facts dt{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.set-facts dd{margin:2px 0 0;font-weight:650;overflow-wrap:anywhere}
+.confirm-box{display:block;width:100%;max-width:320px;margin:8px 0;padding:8px 12px;border:1px solid var(--red-line);border-radius:8px;background:var(--field);color:var(--ink);font:inherit}
+.navlink.nl-gear .ic{color:var(--teal)}
+.set-form .actions{margin:6px 0 0;padding:0;border:0;background:none}
