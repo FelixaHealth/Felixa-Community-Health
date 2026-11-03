@@ -120,3 +120,5 @@ Keep the folder where it is and double-click **Felixa** (`Felixa.app`). No Termi
 **On your phone.** Connect the phone to the same Wi-Fi as the Mac, double-click **Felixa on Phone**, and type the address it shows into the phone's browser. Anyone on that Wi-Fi can open the app while it is shared, so use it only on a network you trust. Double-click **Felixa** to go back to Mac-only.
 
 **Updates.** Each time you double-click **Felixa** it checks GitHub for a newer version and installs it first (a few seconds). Your workplaces and messages are kept in `~/Library/Application Support/Felixa` and are not touched. If the app is running, it restarts with the new version. To skip the check, start it with `FELIXA_NO_UPDATE=1`.
+
+**Always ready in the browser.** Double-click **Felixa Always On** once. From then on Felixa starts by itself when you log in to the Mac and checks for updates every hour, so **http://127.0.0.1:5050** just works in your browser (bookmark it). Open **Felixa Always On** again to turn it off. Keep the Felixa folder where it is, because the login item points to it.

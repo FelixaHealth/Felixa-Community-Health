@@ -1,0 +1,39 @@
+#!/bin/bash
+# Felixa Always On: starts Felixa by itself when you log in to the Mac and checks for updates every hour, so http://127.0.0.1:5050 is always ready in your browser.
+# Open it again to turn this off. It does nothing else.
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+LABEL="com.felixa.community-health"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+UID_NOW="$(id -u)"
+say() { osascript -e "display dialog \"$1\" buttons {\"OK\"} default button 1 with title \"Felixa Always On\"" >/dev/null 2>&1; }
+
+if [ -f "$PLIST" ]; then
+  ANSWER="$(osascript -e 'display dialog "Felixa starts by itself when you log in, and keeps itself up to date." & return & return & "Turn this off?" buttons {"Keep it on", "Turn off"} default button "Keep it on" with title "Felixa Always On"' 2>/dev/null)"
+  case "$ANSWER" in
+    *"Turn off"*)
+      launchctl bootout "gui/$UID_NOW/$LABEL" 2>/dev/null
+      rm -f "$PLIST"
+      "$ROOT/Stop Felixa.app/Contents/MacOS/StopFelixa" >/dev/null 2>&1
+      say "Felixa no longer starts by itself. Open Felixa when you want it." ;;
+  esac
+  exit 0
+fi
+
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/Felixa"
+cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>$LABEL</string>
+<key>ProgramArguments</key><array><string>$ROOT/Felixa.app/Contents/MacOS/Felixa</string></array>
+<key>EnvironmentVariables</key><dict><key>FELIXA_NO_BROWSER</key><string>1</string></dict>
+<key>RunAtLoad</key><true/>
+<key>StartInterval</key><integer>3600</integer>
+<key>StandardOutPath</key><string>$HOME/Library/Logs/Felixa/launchd.log</string>
+<key>StandardErrorPath</key><string>$HOME/Library/Logs/Felixa/launchd.log</string>
+</dict></plist>
+PL
+launchctl bootout "gui/$UID_NOW/$LABEL" 2>/dev/null
+launchctl bootstrap "gui/$UID_NOW" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null
+say "Felixa now starts by itself when you log in and checks for updates every hour. Give it a minute the first time, then open http://127.0.0.1:5050 in your browser. Keep the Felixa folder where it is."
+exit 0

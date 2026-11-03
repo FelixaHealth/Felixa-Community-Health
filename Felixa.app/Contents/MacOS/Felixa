@@ -16,6 +16,7 @@ PY_BINS=""
 for d in /Library/Frameworks/Python.framework/Versions/*/bin; do [ -d "$d" ] && PY_BINS="$d:$PY_BINS"; done
 export PATH="$HOME/.local/bin:$PY_BINS/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+browse() { [ -n "$FELIXA_NO_BROWSER" ] || open "$1"; }      # "Felixa Always On" starts the app at login without opening a window
 notify() { command -v osascript >/dev/null 2>&1 && osascript -e "display notification \"$1\" with title \"Felixa\"" >/dev/null 2>&1; echo "$(date '+%F %T') $1" >>"$LOG"; }
 stop_with() {
   echo "$(date '+%F %T') STOPPED: $1" >>"$LOG"
@@ -63,7 +64,7 @@ fi
 # Already running: open the browser and finish. (A private open after sharing restarts it for this Mac only.)
 if [ -z "$FELIXA_SHARE" ] && [ -f "$STATE/shared" ] && [ -f "$STATE/pid" ]; then kill "$(cat "$STATE/pid")" 2>/dev/null; sleep 1; rm -f "$STATE/pid" "$STATE/port" "$STATE/shared"; fi
 if [ -f "$STATE/port" ] && curl -fs "http://127.0.0.1:$(cat "$STATE/port")/health" >/dev/null 2>&1; then
-  open "http://127.0.0.1:$(cat "$STATE/port")"
+  browse "http://127.0.0.1:$(cat "$STATE/port")"
   exit 0
 fi
 
@@ -100,7 +101,7 @@ if [ -n "$FELIXA_SHARE" ]; then touch "$STATE/shared"; else rm -f "$STATE/shared
 
 for _ in $(seq 1 120); do
   if curl -fs "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
-    open "http://127.0.0.1:$PORT"
+    browse "http://127.0.0.1:$PORT"
     if [ -n "$FELIXA_SHARE" ]; then
       URL="http://$LAN_IP:$PORT"
       echo "$(date '+%F %T') shared at $URL" >>"$LOG"
