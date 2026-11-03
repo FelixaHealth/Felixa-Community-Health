@@ -5,6 +5,11 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 STATE="$HOME/Library/Application Support/Felixa"
 LOGDIR="$HOME/Library/Logs/Felixa"
 LOG="$LOGDIR/felixa.log"
+# Everything the app writes (its Python environment, your workplaces and messages) lives here, not in the downloaded folder: macOS opens a
+# freshly downloaded app from a read-only copy, where nothing can be written.
+VENV="$STATE/venv"
+export FELIXA_DATA_DIR="$STATE/data"
+export PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$STATE" "$LOGDIR"
 # A program started by double-click gets a short PATH: add where Claude Code, Homebrew and python.org put things.
 PY_BINS=""
@@ -14,7 +19,8 @@ export PATH="$HOME/.local/bin:$PY_BINS/opt/homebrew/bin:/usr/local/bin:$PATH"
 notify() { command -v osascript >/dev/null 2>&1 && osascript -e "display notification \"$1\" with title \"Felixa\"" >/dev/null 2>&1; echo "$(date '+%F %T') $1" >>"$LOG"; }
 stop_with() {
   echo "$(date '+%F %T') STOPPED: $1" >>"$LOG"
-  command -v osascript >/dev/null 2>&1 && osascript -e "display dialog \"$1\" & return & return & \"Details: $LOG\" buttons {\"OK\"} default button 1 with icon caution with title \"Felixa\"" >/dev/null 2>&1
+  LAST="$(tail -n 4 "$LOG" 2>/dev/null | tr -d '"\\' | cut -c1-160 | tr '\n' ' ')"
+  command -v osascript >/dev/null 2>&1 && osascript -e "display dialog \"$1\" & return & return & \"$LAST\" & return & return & \"Details: $LOG\" buttons {\"OK\"} default button 1 with icon caution with title \"Felixa\"" >/dev/null 2>&1
   exit 1
 }
 
@@ -35,11 +41,11 @@ done
 
 # First time (or after an update): set the app up. The browser opens when it is ready.
 WANT="$(shasum requirements.txt 2>/dev/null | cut -d' ' -f1)"
-if [ ! -x ".venv/bin/python" ] || [ "$(cat "$STATE/requirements.sha" 2>/dev/null)" != "$WANT" ]; then
+if [ ! -x "$VENV/bin/python" ] || [ "$(cat "$STATE/requirements.sha" 2>/dev/null)" != "$WANT" ]; then
   notify "Setting Felixa up for the first time. This takes a few minutes. Your browser opens when it is ready."
-  if [ -d ".venv" ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then rm -rf .venv; fi
-  [ -x ".venv/bin/python" ] || "$PY" -m venv .venv >>"$LOG" 2>&1 || stop_with "Could not create the Python environment."
-  .venv/bin/python -m pip install -q -r requirements.txt >>"$LOG" 2>&1 || stop_with "Could not install what Felixa needs. Check your internet connection and open Felixa again."
+  if [ -d "$VENV" ] && ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then rm -rf "$VENV"; fi
+  [ -x "$VENV/bin/python" ] || "$PY" -m venv "$VENV" >>"$LOG" 2>&1 || stop_with "Could not create the Python environment."
+  "$VENV/bin/python" -m pip install -q -r requirements.txt >>"$LOG" 2>&1 || stop_with "Could not install what Felixa needs. Check your internet connection and open Felixa again."
   echo "$WANT" >"$STATE/requirements.sha"
 fi
 
@@ -48,9 +54,9 @@ command -v claude >/dev/null 2>&1 || notify "Claude Code was not found, so Your 
 if [ -f ".env" ]; then set -a; . ./.env; set +a; fi
 export FELIXA_NO_LOCAL_MODEL=1
 unset ANTHROPIC_API_KEY FELIXA_ANTHROPIC_API_KEY
-PORT="$(.venv/bin/python pick_port.py 2>>"$LOG")" || stop_with "No free port was found."
+PORT="$("$VENV/bin/python" pick_port.py 2>>"$LOG")" || stop_with "No free port was found."
 export PORT
-nohup .venv/bin/python app.py >>"$LOG" 2>&1 &
+nohup "$VENV/bin/python" app.py >>"$LOG" 2>&1 &
 echo $! >"$STATE/pid"
 echo "$PORT" >"$STATE/port"
 
