@@ -44,7 +44,7 @@
   // Radios of one group share a name; the group's Other box must also react when another radio is picked.
   document.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', refresh));
   const offer = document.getElementById('discord-offer');
-  if (offer) document.querySelectorAll('input[name=channel]').forEach(r => r.addEventListener('change', () => { offer.hidden = !r.checked || r.value !== 'Discord'; }));
+  if (offer) { const d = document.querySelector('input[name=channel][value=Discord]'); if (d) d.addEventListener('change', () => { offer.hidden = !d.checked; }); }
   refresh();
 })();
 

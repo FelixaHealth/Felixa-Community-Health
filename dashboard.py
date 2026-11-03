@@ -71,13 +71,18 @@ def _day(text):
         return None
 
 
+def _platforms(text):
+    """The platforms of a workplace, from its comma list."""
+    return [p.strip() for p in str(text or '').split(',') if p.strip()]
+
+
 def read_filters(args, rows, today=None) -> dict:
     """The filters as the page was asked for them, each checked against what exists: a workplace that is gone, or a platform nobody uses, falls back to All."""
     today = today or _dt.date.today()
     workplaces = sorted({(r['aid'], r['workplace']) for r in rows}, key=lambda x: (x[1].lower(), x[0]))
     ids = {str(a) for a, _ in workplaces}
     wp = str(args.get('workplace') or '')
-    platforms = sorted({r['platform'] for r in rows if r['platform']})
+    platforms = sorted({p for r in rows for p in _platforms(r['platform'])})
     kinds = sorted({r['kind'] for r in rows if r['kind']})
     platform, kind = str(args.get('platform') or ''), str(args.get('kind') or '')
     span = str(args.get('range') or 'all')
@@ -100,7 +105,7 @@ def apply(rows, f) -> list:
     for r in rows:
         if f['workplace'] and str(r['aid']) != f['workplace']:
             continue
-        if f['platform'] and r['platform'] != f['platform']:
+        if f['platform'] and f['platform'] not in _platforms(r['platform']):
             continue
         if f['kind'] and r['kind'] != f['kind']:
             continue

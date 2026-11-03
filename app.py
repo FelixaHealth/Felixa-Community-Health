@@ -26,7 +26,7 @@ from urllib.parse import quote, unquote
 
 from fastapi.exceptions import RequestValidationError
 from fastapi import Depends, FastAPI, File, Form, Path as PathParam, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -204,13 +204,14 @@ def login_page(error=False, wait=0):
     message = f'<p role="alert" style="color:#a32121">{notice}</p>' if notice else ''
     return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in | Felixa Community Health</title>
-    <style>body{margin:0;background:#f3f5f8;color:#172b4d;font:17px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
-    main{box-sizing:border-box;background:white;border-radius:20px;padding:40px;width:min(440px,92vw);box-shadow:0 12px 50px #152b4d12}
-    h1{letter-spacing:.14em;margin:0 0 8px}p{line-height:1.5;color:#556274}label{display:block;margin:22px 0 8px}
-    input,button{box-sizing:border-box;width:100%;padding:13px;font:inherit;border-radius:8px;border:1px solid #c8d0dc}
-    button{margin-top:26px;background:#193761;color:white;border:0;cursor:pointer}input:focus{outline:2px solid #527eb7}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <style>body{margin:0;background:#fbf6ec;color:#2a2118;font:17px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+    main{box-sizing:border-box;background:white;border-radius:20px;padding:40px;width:min(440px,92vw);box-shadow:0 12px 50px #7a481612;border-top:4px solid #F27435}
+    h1{font-size:24px;margin:0 0 8px}.logo{display:block;height:64px;width:auto;margin:0 0 18px}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}p{line-height:1.5;color:#6a5b4b}label{display:block;margin:22px 0 8px}
+    input,button{box-sizing:border-box;width:100%;padding:13px;font:inherit;border-radius:8px;border:1px solid #d9c9b3}
+    button{margin-top:26px;background:#a8420a;color:white;border:0;cursor:pointer;font-weight:650}input:focus{outline:2px solid #c2540f}
     #plain-http{background:#fff4e0;color:#6b4300;padding:12px 16px;border-radius:8px;font-size:15px}</style></head>
-    <body><main><h1>Felixa Community Health</h1><p>Sign in to your workplace.</p>
+    <body><main><img class="logo" src="/logo.png" alt="Felixa Community Health" width="179" height="64"><h1 class="sr">Sign in</h1><p>Sign in to your workplace.</p>
     <p id="plain-http" role="alert" hidden>Sign-in needs a secure connection. This page is open over plain http, so your browser would not keep
     your sign-in and you would land back here. Open the app over https, or on the computer that runs it at http://127.0.0.1 (same port).</p>""" + message + """
     <form method="post" action="/login"><label for="username">Username</label>
@@ -378,11 +379,16 @@ class BodyLimit:
 app.add_middleware(BodyLimit)
 
 
+PUBLIC_ICONS = {'/favicon.ico': 'favicon.ico', '/favicon.svg': 'favicon.svg', '/apple-touch-icon.png': 'apple-touch-icon.png', '/logo.png': 'logo_wide.png'}
+
+
 @app.middleware('http')
 async def protect_online_workspace(request: Request, call_next):
     path = request.url.path
     if path == '/health':
         return harden(await call_next(request), path, request)
+    if path in PUBLIC_ICONS:                                            # the tab icon and the logo must load on the sign-in page too
+        return harden(FileResponse(BASE_DIR / 'static' / PUBLIC_ICONS[path], headers={'Cache-Control': 'public, max-age=86400'}), '/static/', request)
     if cross_site(request):
         return harden(HTMLResponse('Invalid request origin.', status_code=403), path, request)
     password = os.getenv('FELIXA_PASSWORD', '')
@@ -513,12 +519,13 @@ def setup_rows(a):
 def setup_context(a, step):
     env, env_other = workplace.split_choice(a['subject_type'], ENV_NAMES)
     area, area_other = workplace.split_choice(a['person_role'], workplace.AREAS)
-    channel, channel_other = workplace.split_choice(a['channel'], workplace.CHANNELS)
+    channels_on, channel_other = workplace.split_channels(a['channel'])
+    channels_on = channels_on + ([workplace.OTHER] if channel_other else [])
     role, role_other = workplace.split_choice(a['user_role'], workplace.USER_ROLES)
     goals = [g for g in json.loads(a['goals_json'] or '[]') if g]
     return {'a': a, 'step': step, 'steps': workplace.SETUP_STEPS, 'last': SETUP_LAST, 'environments': workplace.ENVIRONMENTS,
             'areas': workplace.AREAS, 'channels': workplace.CHANNELS, 'discord_url': workplace.DISCORD_BOT_URL, 'roles': workplace.USER_ROLES, 'goal_options': workplace.GOAL_OPTIONS,
-            'env': env, 'env_other': env_other, 'area': area, 'area_other': area_other, 'channel': channel, 'channel_other': channel_other,
+            'env': env, 'env_other': env_other, 'area': area, 'area_other': area_other, 'channels_on': channels_on, 'channel_other': channel_other,
             'role': role, 'role_other': role_other, 'goals': goals, 'goal_other': a['goal_text'] or '', 'time_zones': workplace.time_zones(),
             'members_text': a['members'] or '',
             'summary_title': 'Your workplace', 'summary_rows': setup_rows(a),
@@ -587,7 +594,7 @@ async def step3(request: Request, aid: AnalysisId):
 async def step4(request: Request, aid: AnalysisId):
     if not store.get_analysis(aid):
         return not_found()
-    value, error = workplace.pick(await request.form(), 'channel', workplace.CHANNELS, 'where people talk')
+    value, error = workplace.pick_channels(await request.form())
     return setup_saved(aid, 4, error, channel=value)
 
 
@@ -755,7 +762,7 @@ def read_setup(form):
     members, e_members = workplace.read_members(form)
     zone, e_zone = workplace.read_time_zone(form)
     area, e_area = workplace.pick(form, 'area', workplace.AREAS, 'the area it works in')
-    channel, e_channel = workplace.pick(form, 'channel', workplace.CHANNELS, 'where people talk')
+    channel, e_channel = workplace.pick_channels(form)
     user = ' '.join(str(form.get('user_name', '')).split())[:120]
     role, e_role = workplace.pick(form, 'user_role', workplace.USER_ROLES, 'your role')
     goals, other, e_goals = workplace.read_goals(form)
@@ -882,7 +889,7 @@ def check_context(a, step):
            'dates': (label(stamps[0]), label(stamps[-1])) if stamps else None, 'period_form': period_form(a), 'presets': [(k, l) for k, l, _d in PRESETS], 'period_text': report.period_text(period),
            'sens_options': [(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
            'sensitivity': a['vibe_sensitivity'] or 'medium', 'extensions': ', '.join(config.UPLOAD_EXTENSIONS),
-           'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': a['channel'] == 'Discord', 'channel_tip': workplace.CHANNEL_TIPS.get(a['channel'] or ''),
+           'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': 'Discord' in workplace.split_channels(a['channel'])[0], 'channel_tips': workplace.channel_tips(a['channel']),
            'rail': wizard_rail(aid, workplace.CHECK_STEPS, f'/analysis/{aid}/check', step,
                                foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{aid}/workspace'}),
            'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}

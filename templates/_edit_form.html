@@ -1,5 +1,5 @@
 {# The workplace form, in place on the workplace page. Needs setup_context(...) values, `a`, `busy`, `errors`. #}
-{% from "_fields.html" import choice, choice_grid, members_field, zone_field with context %}
+{% from "_fields.html" import choice, choice_grid, channel_grid, members_field, zone_field with context %}
 <div class="edit-inline">
 <p class="lead">Change any detail and save. Earlier checks keep the numbers they were made with.</p>
 {% if errors %}<div class="notice warn" role="alert"><strong>Please fix this:</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
@@ -10,7 +10,7 @@
 <label class="field">Name of the workplace<input name="workplace_name" value="{{ fv.person_name or '' }}" required maxlength="200"></label>
 {{ members_field(members_text) }}{{ zone_field(fv.time_zone or '', time_zones) }}
 {{ choice('area', areas, area, area_other, 'Area', 'Choose an area') }}
-{{ choice_grid('channel', channels, channel, channel_other, 'Where people talk') }}
+{{ channel_grid(channels, channels_on, channel_other, 'Where people talk') }}
 <h2 class="mini-h">About you</h2>
 <label class="field">Your name<input name="user_name" value="{{ fv.user_name or '' }}" required maxlength="120"></label>
 {{ choice('user_role', roles, role, role_other, 'Your role', 'Choose your role') }}

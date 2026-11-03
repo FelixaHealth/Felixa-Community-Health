@@ -1,12 +1,13 @@
 {% from "_icons.html" import icon %}<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ product }}{% endblock %}</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#F27435">
 <script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
 </head><body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
-<a class="brand" href="/"><img class="brand-logo" src="/static/logo_wide.png" alt="Felixa Community Health" width="142" height="52"></a>
+<a class="brand" href="/"><img class="brand-logo" src="/static/logo_wide.png" alt="Felixa Community Health" width="146" height="52"></a>
 <nav class="topnav" aria-label="Site">
 <a class="navlink{% if request.url.path.startswith('/dashboard') %} on{% endif %}" href="/dashboard"{% if request.url.path.startswith('/dashboard') %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>
 {% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label><span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>

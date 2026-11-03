@@ -4012,7 +4012,7 @@ class Workplaces(AppCase):
         aid = self.new_analysis()
         page = self.client.get(f'/analysis/{aid}/step/4').text
         for place in ('Discord', 'Google Meet', 'Zoom', 'Messages (SMS or iMessage)', 'WhatsApp', 'Microsoft Teams', 'Social media comments', 'Reddit', 'YouTube', 'Twitch', 'Other'):
-            self.assertIn(f'<input type="radio" name="channel" value="{place}"', page, place)               # one tap each, no drop-down to open
+            self.assertIn(f'<input type="checkbox" name="channel" value="{place}"', page, place)            # one tap each, several allowed
         self.assertNotIn('<select name="channel"', page)
         import workplace
         self.assertEqual(workplace.CHANNELS[:3], ['Discord', 'Slack', 'Microsoft Teams'], 'the common ones first')
@@ -4028,6 +4028,44 @@ class Workplaces(AppCase):
         for place in ('Google Meet', 'Messages (SMS or iMessage)'):
             r = self.post(aid, 'step/4', channel=place)
             self.assertEqual((r.headers['location'], self.store.get_analysis(aid)['channel']), (f'/analysis/{aid}/step/5', place))
+
+    def test_the_logo_is_the_tab_icon_and_loads_before_sign_in(self):
+        page = self.client.get('/').text
+        for needle in ('href="/favicon.svg"', 'href="/favicon.ico"', 'href="/apple-touch-icon.png"', 'name="theme-color"'):
+            self.assertIn(needle, page, needle)
+        for path, kind in (('/favicon.svg', 'image/svg+xml'), ('/favicon.ico', 'image/'), ('/apple-touch-icon.png', 'image/png'), ('/logo.png', 'image/png')):
+            r = self.client.get(path)
+            self.assertEqual(r.status_code, 200, path)
+            self.assertIn(kind, r.headers['content-type'], path)
+        with mock.patch.dict(os.environ, {'FELIXA_PASSWORD': 'a-long-test-password'}):
+            for path in ('/favicon.svg', '/favicon.ico', '/apple-touch-icon.png', '/logo.png'):
+                self.assertEqual(self.client.get(path).status_code, 200, path + ' needs no sign-in')
+            login = self.client.get('/login').text
+            self.assertIn('href="/favicon.svg"', login)
+            self.assertIn('src="/logo.png"', login)
+            self.assertEqual(self.client.get('/static/style.css', follow_redirects=False).status_code, 303, 'the rest of /static still needs the sign-in')
+
+    def test_several_places_can_be_chosen_and_each_keeps_its_tip_and_the_discord_offer(self):
+        import workplace
+        aid = self.new_analysis()
+        r = self.client.post(f'/analysis/{aid}/step/4', data={'channel': ['Slack', 'Discord', 'Reddit', 'Other'], 'channel_other': 'Mastodon, Bluesky'})
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/step/5')
+        self.assertEqual(self.store.get_analysis(aid)['channel'], 'Discord, Slack, Reddit, Mastodon Bluesky')
+        page = self.client.get(f'/analysis/{aid}/step/4').text
+        for place in ('Discord', 'Slack', 'Reddit', 'Other'):
+            self.assertRegex(page, rf'name="channel" value="{place}"[^>]*checked', place)
+        self.assertNotRegex(page, r'name="channel" value="Zoom"[^>]*checked')
+        self.assertIn('value="Mastodon Bluesky"', page)
+        self.assertNotRegex(page, r'id="discord-offer"\s+hidden')
+        check = self.client.get(f'/analysis/{aid}/check/1').text
+        self.assertIn('Adding Reddit messages.', check)
+        self.assertEqual(workplace.split_channels('Slack, Reddit, Mastodon'), (['Slack', 'Reddit'], 'Mastodon'))
+        self.assertEqual(workplace.split_channels('Discord'), (['Discord'], ''), 'an old single value still reads')
+        before = self.store.get_analysis(aid)['channel']
+        self.assertIn('at least one place', flash(self.client.post(f'/analysis/{aid}/step/4', data={})))
+        self.assertEqual(self.store.get_analysis(aid)['channel'], before)
+        import dashboard
+        self.assertEqual(dashboard._platforms('Discord, Slack'), ['Discord', 'Slack'])
 
     def test_any_kind_of_file_can_be_added_and_the_page_says_so(self):
         from openpyxl import Workbook

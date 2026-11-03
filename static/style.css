@@ -425,3 +425,6 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .rail-title{margin:0 0 10px 14px;font-size:12px;line-height:1.2;font-weight:650;font-family:inherit;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
 .dash-sub{font-family:var(--serif);font-size:24px;margin:28px 0 12px;scroll-margin-top:16px}
 @media(max-width:860px){.rail-title{margin-left:4px}.wp-pick select{max-width:150px}}
+/* the edit form opens from the Edit button at the top; the panel with its own button stays out of sight until then */
+.edit-fold>summary{display:none}
+.inline-edit-panel:not(:has(details[open])){display:none}

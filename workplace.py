@@ -20,6 +20,11 @@ AREAS = ['Gaming', 'Cybersecurity', 'IT and software', 'Customer service', 'Educ
 CHANNELS = ['Discord', 'Slack', 'Microsoft Teams', 'WhatsApp', 'Telegram', 'Reddit', 'YouTube', 'Twitch', 'Google Chat', 'Zoom', 'Google Meet',
             'Messages (SMS or iMessage)', 'Facebook Messenger', 'Signal', 'Email', 'Forum or website', 'Social media comments', 'Other']
 # Where the messages of a platform that has no export button come from. Shown on step 1 of a check when the workplace talks there.
+def channel_tips(value):
+    """The export tips of every platform in the saved text, as (platform, tip) pairs."""
+    return [(c, CHANNEL_TIPS[c]) for c in split_channels(value)[0] if c in CHANNEL_TIPS]
+
+
 CHANNEL_TIPS = {
     'Reddit': 'Reddit has no export button for a thread. Save the comments as a CSV or text file with a Reddit export tool or your own data request, then add the file. '
               'A public thread link can also work, but Reddit loads most comments after the page opens, so the link may bring only the post.',
@@ -67,6 +72,27 @@ def split_choice(value, options):
     if not value:
         return '', ''
     return (value, '') if value in options and value != OTHER else (OTHER, value)
+
+
+def split_channels(value):
+    """The saved 'where people talk' text as (the listed platforms in list order, the typed Other text). The text is a comma list; an old single value works too."""
+    parts = [p.strip() for p in str(value or '').split(',') if p.strip()]
+    known = [c for c in CHANNELS if c != OTHER and c in parts]
+    typed = ', '.join(p for p in parts if p not in CHANNELS)
+    return known, typed
+
+
+def pick_channels(form):
+    """Reads the platform checkboxes and the Other box. Returns (saved text, error). Any number may be ticked; Other, when ticked, needs text."""
+    chosen = [c for c in form.getlist('channel') if c in CHANNELS]
+    typed = ' '.join(str(form.get('channel_other', '')).replace(',', ' ').split())[:MAX_TEXT]
+    wants_other = OTHER in chosen
+    known = [c for c in CHANNELS if c != OTHER and c in chosen]
+    if wants_other and not typed:
+        return '', 'You ticked Other: tell us where people talk.'
+    if not known and not wants_other:
+        return '', 'Choose at least one place where people talk.'
+    return ', '.join(known + ([typed] if wants_other else [])), ''
 
 
 MEMBERS_MAX = 100_000_000
