@@ -581,3 +581,4 @@ a.family-tile.ft-good{border-top-color:var(--green)}a.family-tile.ft-warn{border
 .confirm-box{display:block;width:100%;max-width:320px;margin:8px 0;padding:8px 12px;border:1px solid var(--red-line);border-radius:8px;background:var(--field);color:var(--ink);font:inherit}
 .navlink.nl-gear .ic{color:var(--teal)}
 .set-form .actions{margin:6px 0 0;padding:0;border:0;background:none}
+.est-note{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:var(--blue-s);color:var(--ink);font-size:14.5px}

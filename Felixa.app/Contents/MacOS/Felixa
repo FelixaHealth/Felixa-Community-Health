@@ -116,7 +116,6 @@ fi
 command -v claude >/dev/null 2>&1 || notify "Claude Code was not found, so Your Claude login will not work. Install it from claude.com/claude-code and sign in once."
 
 if [ -f ".env" ]; then set -a; . ./.env; set +a; fi
-export FELIXA_NO_LOCAL_MODEL=1
 unset ANTHROPIC_API_KEY FELIXA_ANTHROPIC_API_KEY
 PORT="$("$VENV/bin/python" pick_port.py 2>>"$LOG")" || stop_with "No free port was found."
 export PORT

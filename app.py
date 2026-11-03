@@ -1006,7 +1006,10 @@ def check_context(a, step):
     if step == CHECK_LAST:
         local = config.local_model_enabled()
         models = local_models() if local else []
-        ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
+        example = not in_scope                                                              # no messages yet: show the time and price of a typical check
+        est_n = in_scope or (volume or workplace.DEFAULT_VOLUME)
+        ctx['estimate_example'], ctx['estimate_n'] = example, est_n
+        ctx['engines'] = workplace.engine_options(models, config.model_name(), est_n, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
                                                   cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available(), cloud.OPENAI_MODELS, cloud.openai_available(), rules=True, avg_chars=avg_chars)
         if not local:
             ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
@@ -1033,7 +1036,7 @@ def check_context(a, step):
         ctx['login_offered'] = cloud.login_offered()
         ctx['login_ready'] = cloud.login_available()
         ctx['cloud_ok'] = bool(a['cloud_ok'])
-        ctx['summary_rows'] = ctx['summary_rows'][:-2] + [('target', 'Price', price_label(ctx['engine'], in_scope, a['check_volume'], max(1, len(evidence)), avg_chars)), ('cpu', 'Engine', engine_label(ctx['engine']))]          # what is selected now is what will run
+        ctx['summary_rows'] = ctx['summary_rows'][:-2] + [('target', 'Price', price_label(ctx['engine'], in_scope or ctx['estimate_n'], a['check_volume'], max(1, len(evidence)), avg_chars)), ('cpu', 'Engine', engine_label(ctx['engine']))]          # what is selected now is what will run
     return ctx
 
 

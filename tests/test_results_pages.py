@@ -256,3 +256,25 @@ class Questions(AppCase):
         import report
         aid = self.new_analysis(name='Nothing yet')
         self.assertEqual(report.build(aid)['answers'], [])
+
+
+class AlwaysEstimated(AppCase):
+    def test_time_and_price_show_even_before_any_message_is_added_and_follow_the_volume(self):
+        aid = self.new_analysis(name='No messages yet')
+        page = self.client.get(f'/analysis/{aid}/check/6').text
+        self.assertIn('You have not added messages yet', page)
+        self.assertIn('<strong>300 messages</strong>', page)
+        self.assertGreaterEqual(page.count('class="cost'), 4)
+        self.assertNotIn('Add messages to see an estimate', page)
+        self.assertIn('model calls for 300 messages', page)
+        self.assertIn('qwen2.5:7b', page, 'the Felixa engine on this computer (Ollama) is offered')
+
+    def test_the_price_follows_the_volume_chosen(self):
+        aid = self.with_chat(name='Volume')
+        self.store.update_analysis(aid, check_volume=10)
+        small = self.client.get(f'/analysis/{aid}/check/6').text
+        self.store.update_analysis(aid, check_volume=0)
+        big = self.client.get(f'/analysis/{aid}/check/6').text
+        import re as _re
+        calls = lambda t: int(_re.search(r'([\d,]+) model calls', t).group(1).replace(',', ''))      # noqa: E731
+        self.assertLess(calls(small), calls(big))

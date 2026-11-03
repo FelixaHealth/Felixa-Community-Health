@@ -4365,7 +4365,7 @@ class Workplaces(AppCase):
         patched.start()
         self.addCleanup(patched.stop)
         page = self.client.get(f'/analysis/{aid}/check/6').text
-        self.assertIn('The model server is not answering', page)
+        self.assertIn('Ollama is not running on this computer', page)
         self.assertNotRegex(page, r'<button class="btn primary" disabled>Run check')               # the word rules still run, so there is always something to run
         self.assertIn('Word rules (no AI)', page)
 

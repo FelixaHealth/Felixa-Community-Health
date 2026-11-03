@@ -56,7 +56,7 @@ class MacApps(unittest.TestCase):
 
     def test_the_launcher_names_what_it_needs_and_does_not_open_a_terminal(self):
         text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
-        for needle in ('Application Support/Felixa', 'FELIXA_DATA_DIR', '.local/bin', 'Python.framework', 'FELIXA_NO_LOCAL_MODEL=1', '/health', 'nohup', 'display dialog'):
+        for needle in ('Application Support/Felixa', 'FELIXA_DATA_DIR', '.local/bin', 'Python.framework', '/health', 'nohup', 'display dialog'):
             self.assertIn(needle, text, needle)
         self.assertNotIn('Terminal', text.replace('No Terminal window', ''))
 
