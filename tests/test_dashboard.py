@@ -126,17 +126,13 @@ class Dashboard(DashboardCase):
 
 
 class SideBar(DashboardCase):
-    def test_the_dashboard_is_in_the_side_bar_of_every_page_with_the_current_one_marked(self):
+    def test_the_dashboard_is_in_the_top_bar_of_every_page_with_the_current_one_marked(self):
         aid = self.new_analysis(name='Nav Test')
         for path in (f'/analysis/{aid}/workspace', f'/analysis/{aid}/check/1', '/dashboard'):
-            page = self.client.get(path).text
-            self.assertIn('href="/dashboard"', page, path)
-        nav = self.client.get('/dashboard').text.split('aria-label="Navigation"', 1)[1].split('</nav>', 1)[0]
-        self.assertIn('aria-current="page"', nav)
-        self.assertIn('Results dashboard', nav)
-        nav = self.client.get(f'/analysis/{aid}/workspace').text.split('aria-label="Navigation"', 1)[1].split('</nav>', 1)[0]
-        self.assertEqual(nav.count('aria-current="page"'), 1)
-        self.assertIn('Overview', nav.split('aria-current="page"', 1)[1].split('</a>', 1)[0])
+            self.assertIn('href="/dashboard"', self.client.get(path).text.split('</header>', 1)[0], path)
+        top = self.client.get('/dashboard').text.split('</header>', 1)[0]
+        self.assertIn('aria-current="page"', top.split('href="/dashboard"', 1)[1].split('</a>', 1)[0])
+        self.assertNotIn('aria-current="page"', self.client.get(f'/analysis/{aid}/workspace').text.split('</header>', 1)[0])
 
 
 class ProgressData(unittest.TestCase):

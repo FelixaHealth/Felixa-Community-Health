@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Results dashboard{% endblock %}
 {% block content %}
-<div class="shell two">{% include "_rail.html" %}<div class="stage vc">
+<div class="shell"><div class="stage vc">
 {{ assets|safe }}
 <section class="dash-head"><div class="eyebrow">Results</div><h1>Results dashboard</h1>
 <p class="lead">Every check of every workplace in one place. Choose a workplace, a kind of community, a platform or a period to switch the view.</p></section>
@@ -23,7 +23,8 @@
 {% if figs.behaviour %}<section class="dash-card"><h2>How people spoke</h2><p class="small-note">Messages per 100 that were openly hostile, caring, sarcastic or heated{% if not f.workplace and not detail %}, averaged across the workplaces in this view{% endif %}.</p><ul class="dash-legend">{% for key, label, role in behaviour_keys %}<li><i class="{{ role }}"></i>{{ label }}</li>{% endfor %}</ul>{{ figs.behaviour|safe }}</section>{% endif %}
 {% if figs.members %}<section class="dash-card"><h2>Members over time</h2><p class="small-note">The number of members each check was made with.</p>{{ figs.members|safe }}</section>{% endif %}
 </div>
-<div class="dash-grid dash-narrow" style="margin-top:18px">
+<h2 class="dash-sub" id="compare">Compare your workplaces</h2>
+<div class="dash-grid dash-narrow">
 {% if figs.compare_health %}<section class="dash-card"><h2>Latest health score</h2><p class="small-note">Latest check of each workplace.</p>{{ figs.compare_health|safe }}</section>{% endif %}
 {% if figs.compare_vibe %}<section class="dash-card"><h2>Latest Vibe Check</h2><p class="small-note">Latest check of each workplace, out of 10.</p>{{ figs.compare_vibe|safe }}</section>{% endif %}
 {% if figs.compare_conflict %}<section class="dash-card"><h2>Openly hostile, per 100 messages</h2><p class="small-note">Latest check of each workplace. Lower is calmer.</p>{{ figs.compare_conflict|safe }}</section>{% endif %}

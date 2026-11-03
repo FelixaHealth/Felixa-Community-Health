@@ -417,3 +417,11 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 .dash-stack{display:grid;gap:18px}.dash-narrow .vc-wide{display:none!important}.dash-narrow .vc-narrow{display:block!important}
 .dash-card .table-wrap{overflow-x:auto}.dash-card table{min-width:640px}
 .delete-confirm{margin:0}.delete-confirm[open]{flex:1 1 100%}.delete-confirm summary{font-size:inherit;width:fit-content}.delete-confirm form{margin-top:12px}
+
+/* top bar: results dashboard and the workplace picker; side bar: only New analytics and its steps */
+.navlink.on{background:var(--soft)}
+.wp-pick select{min-height:40px;max-width:260px;border:1px solid var(--line2);border-radius:999px;padding:8px 36px 8px 16px;background:var(--field);color:var(--ink);font-size:15px;font-weight:650;cursor:pointer}
+.wp-pick select:focus-visible{outline:3px solid #b3440c;outline-offset:2px}
+.rail-title{margin:0 0 10px 14px;font-size:12px;line-height:1.2;font-weight:650;font-family:inherit;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.dash-sub{font-family:var(--serif);font-size:24px;margin:28px 0 12px;scroll-margin-top:16px}
+@media(max-width:860px){.rail-title{margin-left:4px}.wp-pick select{max-width:150px}}

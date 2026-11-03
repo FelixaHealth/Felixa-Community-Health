@@ -89,4 +89,5 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
 })();
 
 // Dashboard: choosing a workplace, a kind or a platform applies at once.
+(() => { document.querySelectorAll('select[data-nav]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit())); })();
 (() => { document.querySelectorAll('#dash-form select[data-auto]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit())); })();

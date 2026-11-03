@@ -4154,7 +4154,7 @@ class Workplaces(AppCase):
         """The side-tab item used to link to a spot on the page the person was already on, so clicking it seemed to do nothing."""
         empty = self.new_analysis(name='Fresh One')
         page = self.client.get(f'/analysis/{empty}/workspace').text
-        self.assertIn(f'<span>New analytics</span>', page)
+        self.assertIn('<h2 class="rail-title">New analytics</h2>', page)
         self.assertIn(f'href="/analysis/{empty}/check/1"', page, 'nothing to replace: it starts at step 1')
         self.assertEqual(self.client.get(f'/analysis/{empty}/check/1').status_code, 200)
         full = self.with_chat(name='Has Messages')
@@ -4878,27 +4878,37 @@ class WorkplaceManagement(AppCase):
         self.assertIn('It cannot be undone.', page)
         self.assertIn(f'action="/analysis/{aid}/delete"', page)
 
-    def test_the_side_tab_lists_the_workplaces_with_the_current_one_marked(self):
+    def test_the_top_bar_picks_the_workplace_and_the_side_bar_is_only_new_analytics(self):
         first = self.new_analysis(name='Side Tab One')
         second = self.new_analysis(name='Side Tab Two')
         draft = int(self.client.get('/new').headers['location'].split('/')[2])
         self.client.post(f'/analysis/{draft}/step/2', data={'workplace_name': 'Never Finished'})
-        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3'):
+        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3', '/dashboard'):
             page = self.client.get(path).text
-            self.assertIn('aria-label="Workplaces"', page, path)
-            self.assertIn(f'<a href="/analysis/{first}/workspace" aria-current="page" class="on">Side Tab One</a>', page, path)
-            self.assertIn(f'<a href="/analysis/{second}/workspace">Side Tab Two</a>', page, path)
-            self.assertIn('New workplace', page, path)
-            self.assertNotIn('Never Finished', page, 'a workplace that was never set up is not listed')
-        for step in range(1, 7):                                                                    # the side bar is on every page, setup steps included
-            self.assertIn('aria-label="Workplaces"', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
+            top = page.split('</header>', 1)[0]
+            self.assertIn('href="/dashboard"', top, path)
+            self.assertIn('Results dashboard', top, path)
+            self.assertIn('Compare all workplaces', top, path)
+            self.assertIn(f'<option value="{second}">Side Tab Two</option>', top, path)
+            self.assertNotIn('Never Finished', top, 'a workplace that was never set up is not listed')
+            self.assertNotIn('rail-wps', page, path)
+        self.assertIn(f'<option value="{first}" selected>Side Tab One</option>', self.client.get(f'/analysis/{first}/workspace').text)
         page = self.client.get(f'/analysis/{first}/workspace').text
-        for label in ('Results dashboard', 'Overview', 'New analytics', 'Edit workplace'):
-            self.assertIn(f'<span>{label}</span>', page, label)
-        self.assertIn(f'href="/analysis/{first}/workspace#edit"', page, 'Edit workplace opens the form on the workplace page, not a new page')
-        self.assertIn('href="/dashboard"', page)
-        self.assertIn('aria-current="page"', self.client.get('/dashboard').text.split('aria-label="Navigation"', 1)[1].split('</nav>', 1)[0], 'the dashboard item is marked on the dashboard')
-        self.assertNotIn(f'href="/analysis/{first}/step/1"', self.client.get(f'/analysis/{first}/workspace').text)
+        side = page.split('aria-label="New analytics steps"', 1)[1].split('</nav>', 1)[0]
+        for label in ('Upload', 'Volume', 'Incognito', 'Time frame', 'Sensitivity', 'Engine'):
+            self.assertIn(f'<span>{label}</span>', side, label)
+        for gone in ('Overview', 'Edit workplace', 'Results dashboard', 'Workplaces'):
+            self.assertNotIn(gone, side, gone)
+        self.assertNotIn(f'href="/analysis/{first}/step/1"', page)
+        for step in range(1, 7):                                                                    # setting up keeps its own steps
+            self.assertIn('Set up your workplace', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
+        self.assertNotIn('aria-label="New analytics steps"', self.client.get('/dashboard').text, 'the dashboard has no side bar')
+
+    def test_the_picker_without_javascript_goes_to_the_workplace_or_the_comparison(self):
+        aid = self.new_analysis(name='Go There')
+        self.assertEqual(self.client.get(f'/go?to={aid}').headers['location'], f'/analysis/{aid}/workspace')
+        for to in ('compare', '999999', 'x', ''):
+            self.assertEqual(self.client.get(f'/go?to={to}').headers['location'], '/dashboard#compare', to)
 
     def test_members_are_set_while_checking_and_each_check_keeps_its_own_number(self):
         aid = self.with_chat()

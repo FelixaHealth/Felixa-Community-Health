@@ -425,13 +425,21 @@ def redirect(url, msg=None):
     return response
 
 
+def check_steps_rail(a):
+    """The side bar of a workplace page: New analytics and its steps, always open. The first step asks before it replaces the messages already loaded."""
+    aid = a['id']
+    first = f'/analysis/{aid}/check/1' if not store.count_units(aid) else f'/analysis/{aid}/workspace#new'
+    steps = [{'num': n, 'label': label, 'href': first if n == 1 else f'/analysis/{aid}/check/{n}', 'state': 'todo'} for n, label in workplace.CHECK_STEPS]
+    return {'steps': steps, 'foot': None, 'setup': False}
+
+
 def render(request, name, **context):
     flash = request.cookies.get('flash')
     row = context.get('a')
-    nav = side_nav(row, request.url.path) if row is not None and row['status'] != 'draft' else [{'icon': 'chart', 'label': 'Results dashboard', 'href': '/dashboard',
-                                                                                           'state': 'on' if request.url.path.startswith('/dashboard') else 'todo'}]
+    if 'rail' not in context:
+        context['rail'] = check_steps_rail(row) if row is not None and row['status'] != 'draft' else {'steps': [], 'foot': None, 'setup': False}
     response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
-                                                                              'side_workplaces': store.workplace_names(), 'side_nav': nav, **context})
+                                                                              'top_workplaces': store.workplace_names(), **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -715,17 +723,12 @@ def wizard_rail(aid, steps, base, current, foot=None):
     return {'steps': items, 'foot': foot, 'setup': base.endswith('/step')}      # the steps of setting a workplace up (once) do not carry the list of workplaces
 
 
-def side_nav(a, path):
-    """The side bar's way around one workplace, on every page of it: the dashboard of all results, this workplace's overview, a new analytics run, and editing in place.
-    The item for the page being looked at is marked."""
-    aid = a['id']
-    empty = not store.count_units(aid)        # nothing to replace: start straight at step 1; otherwise the page asks before it replaces the messages and the report
-    on = ('dashboard' if path.startswith('/dashboard') else 'edit' if path.endswith('/edit') else 'new' if '/check/' in path else
-          'report' if '/report' in path else 'overview' if path.endswith('/workspace') else '')
-    items = [('chart', 'Results dashboard', '/dashboard', 'dashboard'), ('eye', 'Overview', f'/analysis/{aid}/workspace', 'overview'),
-             ('plus', 'New analytics', f'/analysis/{aid}/check/1' if empty else f'/analysis/{aid}/workspace#new', 'new'),
-             ('target', 'Edit workplace', f'/analysis/{aid}/workspace#edit', 'edit')]
-    return [{'icon': ic, 'label': label, 'href': href, 'state': 'on' if key == on else 'todo'} for ic, label, href, key in items]
+@app.get('/go')
+def go(to: str = ''):
+    """The workplace picker of the top bar without JavaScript: a workplace id opens its page, anything else opens the comparison of all of them."""
+    if to.isdigit() and any(str(w['id']) == to for w in store.workplace_names()):
+        return RedirectResponse(f'/analysis/{int(to)}/workspace', status_code=303)
+    return RedirectResponse('/dashboard#compare', status_code=303)
 
 
 @app.get('/dashboard', response_class=HTMLResponse)
@@ -733,7 +736,7 @@ def results_dashboard(request: Request):
     ctx = dashboard.build(request.query_params)
     ctx['behaviour_keys'] = dashboard.BEHAVIOUR
     ctx['assets'] = vibe_check.assets_html()
-    ctx['rail'] = {'steps': [], 'foot': None}
+    ctx['rail'] = {'steps': [], 'foot': None, 'setup': False}
     ctx['detail_ctx'] = None
     detail = ctx['detail']
     if detail:                                                       # one workplace: its latest alerts, badges and signal profile come from its own report
@@ -830,7 +833,7 @@ def workspace_page(request, aid, shown=None, **extra):
     form.pop('summary_title', None)
     form.pop('a', None)
     return render(request, 'workspace.html', **ctx, **form, local_model_ready=local_model_ready(), job=job, job_progress=progress_of(job, bool(a['incognito'])), model=config.model_name(),
-                  local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(), rail={'steps': [], 'foot': None},
+                  local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(),
                   summary_title='Your workplace', summary_rows=setup_rows(a), **extra)
 
 

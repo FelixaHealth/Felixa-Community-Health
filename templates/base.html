@@ -8,8 +8,13 @@
 <header class="topbar">
 <a class="brand" href="/"><img class="brand-logo" src="/static/logo_wide.png" alt="Felixa Community Health" width="142" height="52"></a>
 <nav class="topnav" aria-label="Site">
-<button class="navlink" type="button" data-help-open>{{ icon('help') }}<span>How to read this</span></button>
+<a class="navlink{% if request.url.path.startswith('/dashboard') %} on{% endif %}" href="/dashboard"{% if request.url.path.startswith('/dashboard') %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>
+{% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label><span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>
+{% if a is not defined or not a %}<option value="" disabled selected>Choose a workplace…</option>{% endif %}
+{% for w in top_workplaces %}<option value="{{ w.id }}"{% if a is defined and a and a.id == w.id %} selected{% endif %}>{{ w.name }}</option>{% endfor %}
+<option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>{% endif %}
 <a class="navlink" href="/new">{{ icon('plus') }}<span>New workplace</span></a>
+<button class="navlink" type="button" data-help-open>{{ icon('help') }}<span>How to read this</span></button>
 <button class="navlink" type="button" id="theme-toggle" aria-pressed="false">{{ icon('moon') }}<span>Theme</span></button>
 </nav>
 </header>
