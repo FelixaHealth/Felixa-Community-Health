@@ -13,3 +13,4 @@ demo/
 *.md
 !README.md
 .github/
+*.app
