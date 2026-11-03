@@ -96,5 +96,14 @@ def anthropic_key() -> str:
     return (os.getenv('FELIXA_ANTHROPIC_API_KEY') or os.getenv('ANTHROPIC_API_KEY') or '').strip()
 
 
+def openai_key() -> str:
+    """The OpenAI API key the server uses for the OpenAI engines, or '' when there is none. Read from the environment only; never stored, logged or shown."""
+    return (os.getenv('FELIXA_OPENAI_API_KEY') or os.getenv('OPENAI_API_KEY') or '').strip()
+
+
+def openai_url() -> str:
+    return os.getenv('FELIXA_OPENAI_URL', 'https://api.openai.com').rstrip('/')
+
+
 def anthropic_url() -> str:
     return os.getenv('FELIXA_ANTHROPIC_URL', 'https://api.anthropic.com').rstrip('/')

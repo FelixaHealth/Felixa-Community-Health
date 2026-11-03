@@ -4247,7 +4247,7 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/check/6').text
         for needle in ('qwen2.5:7b', 'llama3.2:3b', 'Default', 'model calls for 76 messages', '3.2B parameters', 'About', 'Cost: none'):
             self.assertIn(needle, page)
-        self.assertEqual(page.count('name="engine"'), 5)                                 # two local models and the three of your Claude login: no key, so no key section
+        self.assertEqual(page.count('name="engine"'), 11)                                # two local models, the three of your Claude login, the word rules, and in the fold the three Claude and two GPT models (off: no keys)
         self.fake.models_used.clear()
         job = self.run_job(aid, path='check/6', engine='llama3.2:3b')
         self.assertEqual(job['status'], 'complete', job)
@@ -4288,7 +4288,8 @@ class Workplaces(AppCase):
         self.addCleanup(patched.stop)
         page = self.client.get(f'/analysis/{aid}/check/6').text
         self.assertIn('The model server is not answering', page)
-        self.assertRegex(page, r'<button class="btn primary" disabled>Run check')
+        self.assertNotRegex(page, r'<button class="btn primary" disabled>Run check')               # the word rules still run, so there is always something to run
+        self.assertIn('Word rules (no AI)', page)
 
     # ---- Claude as a cloud engine -----------------------------------------------------------
     def claude_env(self, key='test-claude-key'):
@@ -4320,7 +4321,7 @@ class Workplaces(AppCase):
         self.addCleanup(patched.stop)
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/check/6').text
-        for needle in ('Claude, in the cloud', 'Free while testing', 'Claude Haiku 5.5', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'FELIXA_ANTHROPIC_API_KEY',
+        for needle in ('Anthropic API', 'Claude Haiku 5.5', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'FELIXA_ANTHROPIC_API_KEY',
                        'needs a key on the server', 'your messages leave this computer'):
             self.assertIn(needle, page)
         self.assertEqual(len(re.findall(r'name="engine" value="claude:[\w.-]+"\s*disabled', page)), 3)
@@ -4336,10 +4337,11 @@ class Workplaces(AppCase):
         self.fake_claude()
         os.environ.pop('FELIXA_ANTHROPIC_API_KEY', None)
         page = self.client.get(f'/analysis/{aid}/check/6').text
-        self.assertNotIn('Claude, in the cloud', page)
-        self.assertNotIn('FELIXA_ANTHROPIC_API_KEY', page)
-        self.assertNotIn('Claude is not set up on this server yet', page)
         self.assertIn('Your Claude login', page)
+        fold = page.split('<details class="other-engines"', 1)[1]
+        self.assertIn('Word rules', fold)
+        self.assertIn('Claude is not set up on this server yet', fold)                                # the key sections are in the fold, with their notice
+        self.assertNotIn('Claude is not set up on this server yet', page.split('<details class="other-engines"', 1)[0])
         with self.claude_env():                                                                       # with a key, both are offered
             both = self.client.get(f'/analysis/{aid}/check/6').text
             self.assertIn('Other engines', both)
@@ -4349,7 +4351,7 @@ class Workplaces(AppCase):
         with mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1'}):                            # the one-click start: only your login, chosen from the start
             only = self.client.get(f'/analysis/{aid}/check/6').text
             self.assertRegex(only, r'name="engine" value="claudecode:haiku" checked')
-            self.assertEqual(only.count('name="engine"'), 3)
+            self.assertEqual(only.count('name="engine"'), 9)                                          # your login (3), the word rules (1), the key sections in the fold (3 + 2)
             self.assertIn('Claude Haiku (your Claude login)', only)
 
     def test_claude_needs_the_box_ticked_and_a_known_model_before_anything_is_sent(self):
@@ -4357,7 +4359,7 @@ class Workplaces(AppCase):
         with self.claude_env():
             page = self.client.get(f'/analysis/{aid}/check/6').text
             self.assertEqual(len(re.findall(r'name="engine" value="claude:[\w.-]+"\s*disabled', page)), 0)
-            self.assertNotIn('not set up on this server yet', page)
+            self.assertNotIn('Claude is not set up on this server yet', page)
             self.assertTrue(self.client.get('/health').json()['claude_ready'])
             self.fake.claude_requests.clear()
             for data, said in (({'engine': 'claude:claude-haiku-5-5'}, 'Tick the box'), ({'engine': 'claude:claude-haiku-5-5', 'cloud_ok': '0'}, 'Tick the box'),
@@ -4470,8 +4472,8 @@ class Workplaces(AppCase):
             self.assertNotIn('On this computer', page)
             self.assertNotIn('The model server is not answering', page)
             self.assertNotIn('ollama pull', page)
-            self.assertIn('Claude reads them in the cloud', page)
-            self.assertEqual(page.count('name="engine"'), 3)
+            self.assertIn('Pick Claude, GPT or word rules', page)
+            self.assertEqual(page.count('name="engine"'), 6)                                              # the three Claude models, two GPT models and the word rules
             self.assertRegex(page, r'name="engine" value="claude:claude-haiku-5-5" checked')            # the first Claude is the one chosen at the start
             self.assertNotRegex(page, r'<button class="btn primary" disabled>Run check')
             self.assertIn('Claude Haiku 5.5 (cloud)', page)
@@ -4513,7 +4515,9 @@ class Workplaces(AppCase):
             self.assertIn('Claude Code is not available here', flash(r))
             self.assertIsNone(self.store.latest_job(aid))
         with mock.patch.dict(os.environ, {'FELIXA_CLAUDE_LOGIN': '0'}):
-            self.assertNotIn('Your Claude login', self.client.get(f'/analysis/{aid}/check/6').text)
+            off = self.client.get(f'/analysis/{aid}/check/6').text
+            self.assertNotIn('Your Claude login <em', off)                                              # no choice to make here ...
+            self.assertIn('Not available on this server', off)                                         # ... and a sentence says where it does work
 
     def test_a_check_through_the_login_runs_claude_code_with_no_tools_no_key_and_an_empty_folder(self):
         aid = self.new_analysis()

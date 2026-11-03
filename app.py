@@ -38,6 +38,7 @@ import dashboard
 import measures
 import pipeline
 import report
+import rules
 import report_export
 import store
 import cloud
@@ -823,7 +824,11 @@ def check_rows(a, units_n):
             ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
             ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
             ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
-            ('cpu', 'Engine', cloud.label(a['engine']) if a['engine'] else '')]
+            ('cpu', 'Engine', engine_label(a['engine']) if a['engine'] else '')]
+
+
+def engine_label(engine) -> str:
+    return 'Word rules (no AI)' if rules.is_rules(engine) else cloud.label(engine)
 
 
 def check_context(a, step):
@@ -850,7 +855,7 @@ def check_context(a, step):
         local = config.local_model_enabled()
         models = local_models() if local else []
         ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
-                                                  cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available())
+                                                  cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available(), cloud.OPENAI_MODELS, cloud.openai_available(), rules=True)
         if not local:
             ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
         ctx['local_enabled'] = local
@@ -867,10 +872,11 @@ def check_context(a, step):
             ctx['engine'] = config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0]
         ctx['model_server_up'] = bool(models) if local else True
         ctx['cloud_ready'] = cloud.available()
+        ctx['openai_ready'] = cloud.openai_available()
         ctx['login_offered'] = cloud.login_offered()
         ctx['login_ready'] = cloud.login_available()
         ctx['cloud_ok'] = bool(a['cloud_ok'])
-        ctx['summary_rows'] = ctx['summary_rows'][:-1] + [('cpu', 'Engine', cloud.label(ctx['engine']))]          # what is selected now is what will run
+        ctx['summary_rows'] = ctx['summary_rows'][:-1] + [('cpu', 'Engine', engine_label(ctx['engine']))]          # what is selected now is what will run
     return ctx
 
 
@@ -1041,14 +1047,16 @@ async def check_run(request: Request, aid: AnalysisId):
     form = await request.form()
     engine = str(form.get('engine', '')).strip()
     sent = False
-    if cloud.is_cloud(engine):
+    if rules.is_rules(engine):
+        pass                                                                       # word lists: no model to download, nothing to send
+    elif cloud.is_cloud(engine):
         if not cloud.known(engine):
             return redirect(f'/analysis/{aid}/check/6', 'Choose an engine from the list.')
         if not cloud.available(engine):
             return redirect(f'/analysis/{aid}/check/6', 'Claude Code is not available here. Install it and sign in, or choose another engine.' if cloud.is_login(engine)
-                            else 'Claude is not set up on this server. Choose another engine.')
+                            else f'{cloud.provider(engine)} is not set up on this server. Choose another engine.')
         if form.get('cloud_ok') != '1':
-            return redirect(f'/analysis/{aid}/check/6', 'Tick the box to confirm that your messages may be sent to Anthropic to be read.')
+            return redirect(f'/analysis/{aid}/check/6', f'Tick the box to confirm that your messages may be sent to {cloud.provider(engine)} to be read.')
         sent = True
     else:
         if not config.local_model_enabled():
@@ -1248,9 +1256,11 @@ def start_job(aid, kind):
     if period and not period['kept']:
         return redirect(destination, f'All {period["total"]:,} communication units are dated outside the review period '
                                      f'({report.period_span(period)}). Change the time frame in the New check, or choose all dates.')
-    if cloud.is_cloud(a['engine']):
+    if rules.is_rules(a['engine']):
+        pass                                                                                   # word lists need nothing to be ready
+    elif cloud.is_cloud(a['engine']):
         if not cloud.available(a['engine']):
-            return redirect(destination, 'That Claude engine is not available here, so it cannot run. Choose another engine.')
+            return redirect(destination, 'That engine is not available here, so it cannot run. Choose another engine.')
     elif not local_model_ready(a['engine']):
         return redirect(destination, 'The model is still preparing. Please retry shortly.')
     with JOB_LOCK:

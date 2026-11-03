@@ -48,18 +48,37 @@ def is_login(engine) -> bool:
     return str(engine or '').startswith(LOGIN_PREFIX)
 
 
+OPENAI_PREFIX = 'openai:'
+# (model id, name, one line, typical seconds for one call)
+OPENAI_MODELS = [('gpt-4o-mini', 'GPT-4o mini', 'Fastest and lightest', 3.0),
+                 ('gpt-4o', 'GPT-4o', 'Balanced speed and care', 6.0)]
+REFUSED_OPENAI = ("OpenAI could not finish. The server's OpenAI key may be missing, wrong or out of credit, or OpenAI may be busy. "
+                  'Please retry, or choose another engine.')
+
+
+def is_openai(engine) -> bool:
+    return str(engine or '').startswith(OPENAI_PREFIX)
+
+
 def is_cloud(engine) -> bool:
-    """Any Claude engine: the person's messages go to Anthropic, so they must have ticked the box."""
-    return is_api(engine) or is_login(engine)
+    """Any engine run by another company (Claude, with a key or a login, or OpenAI): the person's messages go there, so they must have ticked the box."""
+    return is_api(engine) or is_login(engine) or is_openai(engine)
+
+
+def provider(engine) -> str:
+    """The company that reads the messages of a cloud engine."""
+    return 'OpenAI' if is_openai(engine) else 'Anthropic'
 
 
 def model_of(engine) -> str:
-    return str(engine)[len(LOGIN_PREFIX):] if is_login(engine) else str(engine)[len(PREFIX):]
+    return (str(engine)[len(LOGIN_PREFIX):] if is_login(engine) else str(engine)[len(OPENAI_PREFIX):] if is_openai(engine) else str(engine)[len(PREFIX):])
 
 
 def known(engine) -> bool:
     if is_login(engine):
         return model_of(engine) in {m[0] for m in LOGIN_MODELS}
+    if is_openai(engine):
+        return model_of(engine) in {m[0] for m in OPENAI_MODELS}
     return is_api(engine) and model_of(engine) in {m[0] for m in CLAUDE_MODELS}
 
 
@@ -80,13 +99,21 @@ def login_available() -> bool:
     return login_offered() and bool(cli_path())
 
 
+def openai_available() -> bool:
+    return bool(config.openai_key())
+
+
 def available(engine=None) -> bool:
-    """With no engine, whether the server has an API key. With one, whether that engine can run now."""
+    """With no engine, whether the server has a Claude API key. With one, whether that engine can run now."""
+    if is_openai(engine):
+        return openai_available()
     return login_available() if is_login(engine) else bool(config.anthropic_key())
 
 
 def label(engine) -> str:
     """What a person reads for an engine: 'Claude Haiku 5.5 (cloud)', or the local model's own name."""
+    if is_openai(engine):
+        return next((f'{name} (OpenAI)' for model, name, _about, _secs in OPENAI_MODELS if model == model_of(engine)), str(engine))
     if is_login(engine):
         return next((f'{name} (your Claude login)' for model, name, _about, _secs in LOGIN_MODELS if model == model_of(engine)), str(engine))
     if is_api(engine):
@@ -208,6 +235,38 @@ def login_test(alias='haiku'):
     return (True, 'Claude Code answered. Your Claude login works.') if text is not None else (False, reason)
 
 
+def openai_call(engine):
+    """A model function like `api_call`, for the OpenAI chat completions API. Raises ClaudeUnavailable (whose message is safe to show: it names no key and no
+    message) when OpenAI cannot be reached or refuses the key, and RuntimeError when an answer was cut short."""
+    model = model_of(engine)
+
+    def call(instructions, input_text, schema=None, **_ignored):
+        key = config.openai_key()
+        if not key:
+            raise ClaudeUnavailable(REFUSED_OPENAI)
+        system = instructions + ('\n\nAnswer with JSON only, matching this JSON Schema exactly:\n' + json.dumps(schema) if schema is not None else '\n\nAnswer with JSON only.')
+        payload = {'model': model, 'max_completion_tokens': MAX_TOKENS, 'response_format': {'type': 'json_object'},
+                   'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': input_text}]}
+        request = urllib.request.Request(config.openai_url() + '/v1/chat/completions', data=json.dumps(payload).encode(),
+                                         headers={'content-type': 'application/json', 'authorization': 'Bearer ' + key})
+        try:
+            with urllib.request.urlopen(request, timeout=config.model_timeout()) as response:
+                result = json.load(response)
+        except urllib.error.HTTPError as e:
+            log.warning('OpenAI answered %s', e.code)                                  # the status only: never the key, never the messages
+            raise ClaudeUnavailable(REFUSED_OPENAI) from None
+        except Exception as e:
+            log.warning('OpenAI could not be reached: %s', type(e).__name__)
+            raise ClaudeUnavailable(REFUSED_OPENAI) from None
+        choice = (result.get('choices') or [{}])[0]
+        if choice.get('finish_reason') == 'length':
+            raise RuntimeError('The response reached its limit. Try a smaller set of communication.')
+        return (choice.get('message') or {}).get('content') or '', result.get('model') or model
+    return call
+
+
 def claude_call(engine):
-    """The model function for any Claude engine."""
+    """The model function for any cloud engine (the name is older than OpenAI)."""
+    if is_openai(engine):
+        return openai_call(engine)
     return login_call(engine) if is_login(engine) else api_call(engine)

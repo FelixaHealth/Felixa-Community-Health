@@ -171,7 +171,7 @@ def tier(name):
     return 'Best' if 'opus' in name else 'Balanced' if 'sonnet' in name else 'Fastest'
 
 
-def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False, login_models=(), login_ready=False):
+def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False, login_models=(), login_ready=False, openai_models=(), openai_ready=False, rules=False):
     """The engines to choose from, each with its estimate. `models` are what the local model server has downloaded: [{'name', 'details'}].
     The configured default comes first and is marked, whether or not it is downloaded yet. `cloud_models` are (id, name, about, seconds a
     call takes); they follow the local ones, and are marked not ready when the server has no key for them."""
@@ -198,4 +198,11 @@ def engine_options(models, default, messages, volume, sources=1, cloud_models=()
         out.append({'name': 'claudecode:' + alias, 'label': label, 'kind': 'login', 'default': False, 'installed': login_ready, 'billions': None,
                     'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds),
                     'tag': tier(alias), 'price': 'Uses your Claude plan, no key'})
+    if rules:
+        out.append({'name': 'rules:words', 'label': 'Word rules (no AI)', 'kind': 'rules', 'default': False, 'installed': True, 'billions': None,
+                    'size': 'Word lists, no language model', 'estimate': estimate(messages, volume, None, sources, per_call=0.02), 'tag': 'Fastest', 'price': 'Free, nothing leaves this computer'})
+    for model, label, about, seconds in openai_models:
+        out.append({'name': 'openai:' + model, 'label': label, 'kind': 'openai', 'default': False, 'installed': openai_ready, 'billions': None,
+                    'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds),
+                    'tag': 'Fastest' if 'mini' in model else 'Balanced', 'price': 'Uses your OpenAI key'})
     return out

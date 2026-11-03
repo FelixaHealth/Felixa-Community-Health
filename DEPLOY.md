@@ -10,7 +10,7 @@ A model of its own needs a big, costly machine and is slow on a server's process
 2. Add a volume to the service, mounted at `/data`. The database lives there. 1 GB is plenty.
 3. Under Variables, add:
    - `FELIXA_NO_LOCAL_MODEL` = `1` (no model server, no download)
-   - `FELIXA_ANTHROPIC_API_KEY` = your Claude API key (from console.anthropic.com)
+   - `FELIXA_ANTHROPIC_API_KEY` = your Claude API key (from console.anthropic.com). Optional: `FELIXA_OPENAI_API_KEY` for the OpenAI engines
    - `FELIXA_PASSWORD` = a strong password of at least 12 characters (everyone who signs in sees every workplace; the username is `felixa`)
 4. Deploy, then under Settings, Networking, generate a public domain. Open it by its `https://` address and sign in.
 5. Check `https://your-domain/health`: it should show `"ok": true` and `"claude_ready": true`.

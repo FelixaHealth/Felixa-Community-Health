@@ -82,6 +82,8 @@ class FakeOllama:
         self.extra_models = []           # more downloaded models: [{'name': ..., 'details': {'parameter_size': '3B'}}]
         self.models_used = []            # the model each request asked for (Claude's are written 'claude:<model>')
         self.claude_key = 'test-claude-key'
+        self.openai_key = 'test-openai-key'
+        self.openai_requests = []        # the bodies of chat completion requests
         self.claude_requests = []        # the bodies of Messages API requests, so a test can see what was sent
         self._vibe = KeywordStubModel()
         self._lock = threading.Lock()
@@ -125,6 +127,8 @@ class FakeOllama:
                     return outer._generate(self, body)
                 if self.path.startswith('/v1/messages'):
                     return outer._messages(self, body)
+                if self.path.startswith('/v1/chat/completions'):
+                    return outer._chat(self, body)
                 self._send(404, {'error': 'not found'})
 
         self.httpd = ThreadingHTTPServer((host, port), Handler)
@@ -175,6 +179,20 @@ class FakeOllama:
         if state == 'fail':
             return handler._send(500, {'error': 'injected failure'})
         handler._send(200, {'model': body.get('model', self.model), 'response': text, 'done': True, 'done_reason': 'stop'})
+
+    def _chat(self, handler, body):
+        """OpenAI's chat completions API: needs the key `openai_key` as a bearer token, answers in its shape."""
+        if handler.headers.get('authorization') != 'Bearer ' + self.openai_key:
+            return handler._send(401, {'error': {'message': 'Incorrect API key provided', 'type': 'invalid_request_error'}})
+        self.openai_requests.append(body)
+        messages = body.get('messages', [])
+        system = next((m['content'] for m in messages if m.get('role') == 'system'), '')
+        user = next((m['content'] for m in messages if m.get('role') == 'user'), '')
+        state, text = self._answer(system, user, 'openai:' + str(body.get('model')))
+        if state == 'fail':
+            return handler._send(503, {'error': {'message': 'injected failure', 'type': 'server_error'}})
+        handler._send(200, {'id': 'chatcmpl-fake', 'object': 'chat.completion', 'model': body.get('model'),
+                            'choices': [{'index': 0, 'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': text}}]})
 
     def _messages(self, handler, body):
         """Claude's Messages API: needs the key `claude_key`, answers in its shape."""

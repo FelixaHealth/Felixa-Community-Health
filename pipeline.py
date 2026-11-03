@@ -7,6 +7,7 @@ import logging
 
 import analysis
 import cloud
+import rules
 import config
 import measures
 import store
@@ -41,10 +42,13 @@ def engine_call(a):
     """The model call for a check: the engine picked for it (Claude only when the person ticked the box that lets messages leave this computer),
     or the app's default model."""
     name = a['engine'] if a else None
+    if rules.is_rules(name):
+        return rules.rules_call                                       # word lists: no model, nothing leaves this computer
     if cloud.is_cloud(name):
         if not a['cloud_ok']:
             def refuse(*_args, **_kwargs):
-                raise cloud.login_failure('The box that lets your messages go to Anthropic was not ticked.') if cloud.is_login(name) else cloud.ClaudeUnavailable(cloud.REFUSED)
+                said = f'The box that lets your messages go to {cloud.provider(name)} was not ticked.'
+                raise cloud.login_failure(said) if cloud.is_login(name) else cloud.ClaudeUnavailable(cloud.REFUSED_OPENAI if cloud.is_openai(name) else cloud.REFUSED)
             return refuse
         return cloud.claude_call(name)
     return (lambda instructions, text, **kw: local_model_call(instructions, text, model=name, **kw)) if name else local_model_call
