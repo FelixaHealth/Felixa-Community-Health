@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — {{ card.name }} track{% endblock %}
+{% block content %}
+<div class="shell two">{% include "_rail.html" %}<div class="stage">
+{{ assets|safe }}
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/workspace">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/results#tab-track">Results</a><span aria-hidden="true">/</span><span>Track</span><span aria-hidden="true">/</span><span aria-current="page">{{ card.name }}</span></nav>
+<section class="results-head"><div class="rh-main"><div class="eyebrow">Track</div><h1>{{ card.name }}</h1><p class="lead">{{ card.about }}</p></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results#tab-track">{{ icon('back') }} Back to Track</a></div></section>
+<div class="dash-kpis"><div class="dash-kpi"><small>Latest part</small><strong>{{ card.latest }}</strong><span>per 100 messages</span></div>
+<div class="dash-kpi"><small>Highest</small><strong>{{ card.highest }}</strong><span>in {{ card.highest_at }}</span></div>
+{% if card.flagged %}<div class="dash-kpi kpi-red"><small>Red flags</small><strong>{{ card.red }}</strong><span>of {{ card.k }} parts</span></div><div class="dash-kpi kpi-yellow"><small>Yellow flags</small><strong>{{ card.yellow }}</strong><span>of {{ card.k }} parts</span></div>{% endif %}</div>
+<section class="panel vc"><div class="eyebrow">Built up over time</div><h2>{{ card.name }}, part by part</h2>
+{% if card.flagged %}<p class="small-note"><span class="flag-key"><i class="flag red">R</i> Red flag</span> <span class="flag-key"><i class="flag yellow">Y</i> Yellow flag</span> The bar colour deepens as the rate climbs{% if key == 'escalation' %}; the thin line is the recent level each part is measured against{% endif %}.</p>{% else %}<p class="small-note">The bar colour deepens as the rate climbs.</p>{% endif %}
+{{ card.figure|safe }}
+{% for s in card.summary.sentences %}<p>{{ s }}</p>{% endfor %}</section>
+{% if card.flagged %}<section class="panel"><div class="eyebrow">When and how</div><h2>Where it emerged and intensified</h2>
+{% if card.events %}<ol class="track-events">{% for e in card.events %}<li class="te {{ e.level or 'clear' }}"><span class="te-flag">{% if e.level %}<i class="flag {{ e.level }}">{{ 'R' if e.level == 'red' else 'Y' }}</i>{% else %}<i class="flag ok">{{ icon('check') }}</i>{% endif %}</span><div><strong>{{ e.label }}</strong> <em class="te-state st-{{ e.state }}">{{ {'emerged': 'Emerged', 'intensified': 'Intensified', 'holding': 'Holding', 'easing': 'Easing', 'cleared': 'Cleared'}[e.state] }}</em><p>{{ e.text }}</p></div></li>{% endfor %}</ol>
+{% else %}<p>No part of the chat carried a flag.</p>{% endif %}
+<p class="small-note">{% if key == 'escalation' %}Yellow: the rate of heated messages rose 10 points or more above its recent level (the average of up to three parts before), with at least 2 heated messages. Red: a counted heated moment, or a rise of 25 points or more with at least 3 heated messages.{% else %}Yellow: the openly hostile messages reach the Some level for this kind of chat, with at least 2 messages. Red: they reach the Often level, with at least 3 messages.{% endif %} A red flag needs 48 or more messages on the timeline. A flag describes the wording in a part of the chat, never a person.</p></section>{% else %}
+<section class="panel"><div class="eyebrow">About this measure</div><h2>Empathy</h2><p>This page uses the empathy measure this app already keeps: the share of messages that clearly show empathy, part by part. The empathy track of the PBT app is not part of this app yet.</p></section>{% endif %}
+<section class="panel vc"><div class="eyebrow">Together</div><h2>{{ card.name }} next to the other two</h2>
+{{ track_view.compare|safe }}
+<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg cat4"></i>Conflict</li><li><i class="lg cat2"></i>Escalation</li></ul>
+<div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>
+<section class="panel"><div class="eyebrow">The messages</div><h2>Read the messages behind it</h2><p>{% if key == 'empathy' %}<a class="btn" href="/analysis/{{ aid }}/tone/Empathetic">{{ icon('chat') }} Every empathetic message</a>{% elif key == 'conflict' %}<a class="btn" href="/analysis/{{ aid }}/category/Toxic">{{ icon('chat') }} Every toxic-wording message</a>{% else %}<a class="btn" href="/analysis/{{ aid }}/category/Tense">{{ icon('chat') }} Every tense message</a> <a class="btn" href="/analysis/{{ aid }}/category/Toxic">{{ icon('chat') }} Every toxic-wording message</a>{% endif %}</p></section>
+</div></div>{% endblock %}

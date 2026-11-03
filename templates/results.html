@@ -7,6 +7,7 @@
 <div class="head-actions"><a class="btn" href="/analysis/{{ aid }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn" href="/analysis/{{ aid }}/export">{{ icon('layers') }} CSV</a><a class="btn quiet" href="/analysis/{{ aid }}/workspace">{{ icon('back') }} Workplace</a></div></section>
 <nav class="tabs" role="tablist" aria-label="Parts of the results" data-tabs>
 <a class="tab on" role="tab" href="#tab-overview">{{ icon('eye') }}<span>Overview</span></a>
+{% if track_view %}<a class="tab" role="tab" href="#tab-track">{{ icon('target') }}<span>Track</span></a>{% endif %}
 {% if measures %}<a class="tab" role="tab" href="#tab-alerts">{{ icon('warning') }}<span>Alerts</span></a><a class="tab" role="tab" href="#tab-measures">{{ icon('chart') }}<span>Measures over time</span></a><a class="tab" role="tab" href="#tab-badges">{{ icon('spark') }}<span>Badges</span></a>{% endif %}
 {% if metrics %}<a class="tab" role="tab" href="#tab-signals">{{ icon('gauge') }}<span>Signal profile</span></a>{% endif %}
 {% if guidance %}<a class="tab" role="tab" href="#tab-guidance">{{ icon('target') }}<span>Guidance</span></a>{% endif %}
@@ -18,6 +19,7 @@
 <div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>{{ f.blurb }}</small><em>See the messages and graphs →</em></a>{% endfor %}</div></section>{% endif %}
 {% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}
 </div>
+{% if track_view %}<div class="tabpanel" id="tab-track" role="tabpanel">{% include "_track.html" %}</div>{% endif %}
 {% if measures %}<div class="tabpanel" id="tab-alerts" role="tabpanel">{% include "_alerts.html" %}</div>
 <div class="tabpanel" id="tab-measures" role="tabpanel">{% include "_over_time.html" %}</div>
 <div class="tabpanel" id="tab-badges" role="tabpanel">{% include "_badges.html" %}</div>{% endif %}

@@ -1,0 +1,15 @@
+{# The Track tab: Escalation, Conflict and Empathy as they build up over the chat, each opening its own page, and the three together. Needs `track_view`. #}
+{% from "_icons.html" import icon %}
+<section class="panel vc" id="track"><div class="eyebrow">Track</div><h2>How Escalation, Conflict and Empathy build up</h2>
+<p class="small-note">Each diagram follows the chat from its first part to its last. Colours deepen as the rate climbs. <span class="flag-key"><i class="flag red">R</i> Red flag</span> <span class="flag-key"><i class="flag yellow">Y</i> Yellow flag</span> mark the parts of the chat where escalation or conflict emerges or intensifies. Open a measure to see when and how.</p>
+{% if track_view.early %}<p class="small-note"><strong>Early reading.</strong> There are fewer than 48 messages on the timeline, so a part can be flagged yellow but not red yet.</p>{% endif %}
+<div class="track-cards">{% for c in track_view.cards %}<article class="track-card tc-{{ c.key }}"><header><h3><a href="/analysis/{{ aid }}/track/{{ c.key }}">{{ c.name }}</a></h3>
+<div class="track-now"><strong>{{ c.latest }}</strong><span>per 100 messages in the latest part</span></div></header>
+{% if c.flagged %}<p class="flag-line">{% if c.red %}<span class="flag-pill red"><i class="flag red">R</i> {{ c.red }} red</span>{% endif %}{% if c.yellow %}<span class="flag-pill yellow"><i class="flag yellow">Y</i> {{ c.yellow }} yellow</span>{% endif %}{% if not c.red and not c.yellow %}<span class="flag-pill none">No flags</span>{% endif %}<small>of {{ c.k }} parts</small></p>
+{% else %}<p class="flag-line"><span class="flag-pill none">Highest {{ c.highest }} in {{ c.highest_at }}</span></p>{% endif %}
+{{ c.figure|safe }}
+<p class="track-open"><a class="btn" href="/analysis/{{ aid }}/track/{{ c.key }}">{{ icon('arrow') }} See when and how</a></p></article>{% endfor %}</div></section>
+<section class="panel vc" id="track-together"><div class="eyebrow">Together</div><h2>Does empathy change conflict and escalation?</h2>
+{{ track_view.compare|safe }}
+<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg cat4"></i>Conflict</li><li><i class="lg cat2"></i>Escalation</li></ul>
+<div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>

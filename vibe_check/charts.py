@@ -36,6 +36,8 @@ ROLES = {
         'good': '#0ca30c', 'warn': '#fab219', 'serious': '#ec835a', 'crit': '#d03b3b',
         'on-fill': '#ffffff', 'on-neu': '#0b0b0b', 'on-warn': '#0b0b0b',
         'cat1': '#0072B2', 'cat2': '#E69F00', 'cat3': '#009E73', 'cat4': '#D55E00', 'cat5': '#CC79A7', 'cat6': '#56B4E9',      # one colour per workplace on the dashboard (colour-blind safe)
+        'heat1': '#fde9a8', 'heat2': '#fbc65a', 'heat3': '#f59a3b', 'heat4': '#e8643a', 'heat5': '#c92c2c',      # the Track tab: a gradual colour from pale yellow to deep red
+        'calm1': '#d7f0e2', 'calm2': '#a6dcbd', 'calm3': '#68c496', 'calm4': '#2fa56d', 'calm5': '#13804e',      # and from pale to deep green
     },
     'dark': {
         'surface': '#1a1a19', 'ink': '#f0efec', 'ink2': '#c3c2b7', 'muted': '#898781',
@@ -44,6 +46,8 @@ ROLES = {
         'good': '#0ca30c', 'warn': '#fab219', 'serious': '#ec835a', 'crit': '#d03b3b',
         'on-fill': '#ffffff', 'on-neu': '#0b0b0b', 'on-warn': '#0b0b0b',
         'cat1': '#56A8E8', 'cat2': '#F0B429', 'cat3': '#2FC197', 'cat4': '#EF7A3A', 'cat5': '#E39BC4', 'cat6': '#7CC4F0',
+        'heat1': '#6b5a22', 'heat2': '#a8832c', 'heat3': '#e0933a', 'heat4': '#ec6a45', 'heat5': '#f26a6a',
+        'calm1': '#274d3b', 'calm2': '#2f7556', 'calm3': '#3f9a73', 'calm4': '#62c492', 'calm5': '#94e2b8',
     },
 }
 

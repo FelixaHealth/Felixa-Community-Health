@@ -40,6 +40,7 @@ import detail
 import measures
 import pipeline
 import prices
+import track
 import report
 import rules
 import report_export
@@ -1382,10 +1383,42 @@ def report_page(request: Request, aid: AnalysisId):
     return render(request, 'report.html', **ctx)
 
 
+def track_views(ms, only=None):
+    """What the Track tab and its pages draw: for each of Escalation, Conflict and Empathy the headline numbers, the flags and a figure; and the three together."""
+    if not track.available(ms):
+        return None
+    m = ms['m']
+    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w)), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
+    for key in track.KEYS:
+        if only and key != only:
+            continue
+        flags = track.flags_for(m, key)
+        c = track.card(m, key)
+        c['figure'] = vibe_check.figure(lambda w, k=key, f=flags: bei_charts.track_chart(k, track.NAMES[k], m['stretches'], f, width=w))
+        c['events'] = track.events(m, key)
+        c['summary'] = track.summary(m, key)
+        out['cards'].append(c)
+    return out
+
+
 @app.get('/analysis/{aid}/results', response_class=HTMLResponse)
 def results_page(request: Request, aid: AnalysisId):
     """The results on a page of their own, with tabs along the top."""
-    return render(request, 'results.html', **report_context(aid, 'page of results'))
+    ctx = report_context(aid, 'page of results')
+    ctx['track_view'] = track_views(ctx['measures']) if ctx.get('measures') else None
+    return render(request, 'results.html', **ctx)
+
+
+@app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
+def track_page(request: Request, aid: AnalysisId, key: str):
+    """One measure of the Track tab on a page of its own: how it was built up over the chat, its flags, and the three measures together."""
+    if key not in track.KEYS:
+        not_found()
+    ctx = report_context(aid, 'track')
+    view = track_views(ctx['measures'], only=key) if ctx.get('measures') else None
+    if not view:
+        raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
+    return render(request, 'track.html', track_view=view, card=view['cards'][0], key=key, names=track.NAMES, **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):

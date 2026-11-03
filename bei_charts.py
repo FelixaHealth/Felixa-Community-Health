@@ -373,3 +373,116 @@ def health_meter(score, tone, *, width=W):
     for item in row2:
         sc.text(item['x'], base2, item['text'], size=item['size'], fill='ink2', anchor=item['anchor'])
     return sc
+
+
+# ---- the Track tab: a measure built up over the parts of a chat, with flags, and the three measures together ------------------------------------
+TRACK_STEPS = {'escalation': (5, 10, 20, 35), 'conflict': (2, 5, 12, 25), 'empathy': (2, 4, 8, 14)}      # per 100 messages: where the colour moves to the next shade
+TRACK_SCALE = {'escalation': 'heat', 'conflict': 'heat', 'empathy': 'calm'}
+TRACK_LINE = {'escalation': 'cat2', 'conflict': 'cat4', 'empathy': 'cat3'}
+
+
+def track_shade(key, value) -> str:
+    """The role of the bar for a value: the shade moves from 1 (pale) to 5 (deep) as the rate climbs through TRACK_STEPS."""
+    step = sum(1 for edge in TRACK_STEPS[key] if value >= edge)
+    return f'{TRACK_SCALE[key]}{step + 1}'
+
+
+def track_chart(key, name, stretches, flags, *, width=W):
+    """One measure as bars, one per part of the chat, in a colour that deepens as the rate climbs. A red or yellow flag sits on the parts that carry one (the letter
+    R or Y is in the flag, so the colour is not the only sign). For Escalation a thin line follows the recent level each part is measured against. A hover target for every part."""
+    values = [f['value'] for f in flags]
+    n = len(values)
+    if n < 2:
+        return None
+    narrow = width < 600
+    tick_size, _end = _sizes(width)
+    height = 230 if narrow else 220
+    ml, mr, mt, mb = 40, 16, 30, 34
+    pw, ph = width - ml - mr, height - mt - mb
+    ticks = nice_ticks(max(values + [20.0]), 4)
+    top = ticks[-1]
+    step = pw / n
+    bar_w = max(4.0, min(step * 0.72, 56.0))
+    X = lambda i: ml + step * (i + 0.5)                          # noqa: E731
+    Y = lambda v: mt + ph * (1 - min(max(v, 0.0), top) / top)    # noqa: E731
+    red, yellow = sum(1 for f in flags if f['level'] == 'red'), sum(1 for f in flags if f['level'] == 'yellow')
+    desc = (f'{name} in each of {n} parts of the chat, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}. '
+            + ('No part was flagged.' if not (red or yellow) else f'{red} part{"" if red == 1 else "s"} carried a red flag and {yellow} a yellow flag.')
+            if key != 'empathy' else f'{name} in each of {n} parts of the chat, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}.')
+    sc = Scene(width, height, f'{name} built up over time', desc)
+    for t in ticks:
+        sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
+        sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
+    _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
+    for i, f in enumerate(flags):
+        h = max(2.0, Y(0) - Y(f['value']))
+        sc.rect(X(i) - bar_w / 2, Y(0) - h, bar_w, h, track_shade(key, f['value']), r=(3, 3, 0, 0))
+    if key == 'escalation':
+        pts = [(X(i), Y(f['base'])) for i, f in enumerate(flags) if f['base'] is not None]
+        if len(pts) > 1:
+            sc.poly(pts, stroke='ink2', width=1.5)
+    for i, f in enumerate(flags):
+        if f['level']:
+            cy = max(mt - 10, Y(f['value']) - 13)
+            sc.circle(X(i), cy, 9, 'crit' if f['level'] == 'red' else 'warn')
+            sc.text(X(i), cy + 4, 'R' if f['level'] == 'red' else 'Y', size=11, fill='on-fill' if f['level'] == 'red' else 'on-warn', anchor='middle', weight=700)
+    for i, f in enumerate(flags):
+        st = stretches[i]
+        rows = [[SAID_PLAIN[key], f'{f["count"]:,} of {f["n"]:,}', TRACK_SCALE[key] + '3'], ['per 100 messages', f'{_whole(f["value"])}', TRACK_SCALE[key] + '3']]
+        if key == 'escalation' and f['base'] is not None:
+            rows.append(['recent level', f'{_whole(f["base"])} per 100', 'ink2'])
+        if f['level']:
+            rows.append(['flag', 'Red flag' if f['level'] == 'red' else 'Yellow flag', 'crit' if f['level'] == 'red' else 'warn'])
+        sc.hit(max(ml, X(i) - step / 2), mt - 12, min(step, pw), ph + 12, {'t': st['label'], 'r': rows}, X(i))
+    sc.cross(mt, mt + ph)
+    return sc
+
+
+SAID_PLAIN = {'escalation': 'heated messages', 'conflict': 'openly hostile messages', 'empathy': 'caring messages'}
+
+
+def track_compare(stretches, *, width=W):
+    """Escalation, Conflict and Empathy on one scale (messages per 100), one line each, so that a rise in one can be read against the others."""
+    n = len(stretches)
+    if n < 2:
+        return None
+    series = {k: [float(st['rates'][kind]) for st in stretches] for k, kind in (('escalation', 'heated'), ('conflict', 'hostile'), ('empathy', 'care'))}
+    narrow = width < 600
+    tick_size, end_size = _sizes(width)
+    height = 260 if narrow else 250
+    ml, mr, mt, mb = 40, 46, 16, 34
+    pw, ph = width - ml - mr, height - mt - mb
+    ticks = nice_ticks(max(max(v) for v in series.values()) or 20.0, 4)
+    top = ticks[-1]
+    X = lambda i: ml + pw * i / (n - 1)                          # noqa: E731
+    Y = lambda v: mt + ph * (1 - min(max(v, 0.0), top) / top)    # noqa: E731
+    desc = ('Escalation, conflict and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, conflict %d, empathy %d.'
+            % (n, _whole(series['escalation'][-1]), _whole(series['conflict'][-1]), _whole(series['empathy'][-1])))
+    sc = Scene(width, height, 'Escalation, conflict and empathy together', desc)
+    for t in ticks:
+        sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
+        sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
+    _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
+    outer, inner = _marker_radii(n)
+    ends = []
+    for key in ('conflict', 'escalation', 'empathy'):
+        role = TRACK_LINE[key]
+        pts = [(X(i), Y(v)) for i, v in enumerate(series[key])]
+        sc.poly(pts, stroke=role, width=2.5)
+        for x, y in pts:
+            sc.circle(x, y, outer, 'surface')
+            sc.circle(x, y, inner, role)
+        ends.append((pts[-1][1], role, _whole(series[key][-1])))
+    floor = Y(0) - 4                                            # the values at the end of the lines, kept apart and above the axis labels
+    next_y = floor
+    for y, role, val in sorted(ends, reverse=True):
+        y = min(y, next_y)
+        sc.text(width - mr + 8, y + end_size * 0.35, val, size=end_size, fill='ink', weight=600)
+        next_y = y - end_size - 2
+    step = pw / (n - 1)
+    for i, st in enumerate(stretches):
+        rows = [['Escalation', f'{_whole(series["escalation"][i])} per 100', TRACK_LINE['escalation']], ['Conflict', f'{_whole(series["conflict"][i])} per 100', TRACK_LINE['conflict']],
+                ['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']]]
+        sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
+    sc.cross(mt, mt + ph)
+    return sc
