@@ -25,6 +25,32 @@ stop_with() {
   exit 1
 }
 
+# Run from a private copy. A freshly downloaded app is opened by macOS from a locked, temporary location (AppTranslocation) that Python cannot read, and
+# a folder that is moved or deleted would take the app with it. So the first time, Felixa copies itself into its own folder and runs from there; the update
+# below keeps that copy current. The folder you downloaded is only used to get started.
+APP_HOME="$STATE/app"
+BOOT_ZIP="${FELIXA_UPDATE_ZIP:-https://github.com/FelixaHealth/Felixa-Community-Health/archive/refs/heads/main.zip}"
+if [ -z "$FELIXA_BOOTSTRAPPED" ] && [ "$ROOT" != "$APP_HOME" ]; then
+  if [ ! -f "$APP_HOME/.installed" ]; then
+    notify "Installing Felixa. This takes a moment."
+    mkdir -p "$APP_HOME"
+    if ! cp -R "$ROOT/." "$APP_HOME/" 2>>"$LOG" || [ ! -f "$APP_HOME/app.py" ]; then
+      TMPB="$(mktemp -d)"
+      if curl -fsSL --max-time 180 -o "$TMPB/z.zip" "$BOOT_ZIP" 2>>"$LOG" && unzip -q -o "$TMPB/z.zip" -d "$TMPB/n" 2>>"$LOG"; then
+        cp -R "$(ls -d "$TMPB"/n/*/ | head -n 1)." "$APP_HOME/" 2>>"$LOG"
+      fi
+      rm -rf "$TMPB"
+    fi
+    [ -f "$APP_HOME/app.py" ] || stop_with "Could not install Felixa. Check your internet connection and open Felixa again."
+    xattr -dr com.apple.quarantine "$APP_HOME" 2>/dev/null
+    chmod +x "$APP_HOME"/*.app/Contents/MacOS/* 2>/dev/null
+    touch "$APP_HOME/.installed"
+  fi
+  export FELIXA_BOOTSTRAPPED=1
+  exec "$APP_HOME/Felixa.app/Contents/MacOS/Felixa"
+fi
+[ -n "$FELIXA_PREPARE_ONLY" ] && exit 0
+
 # Update: every time Felixa is opened it checks GitHub for a newer version of itself and, if there is one, installs it (your workplaces and messages are kept
 # elsewhere and are not touched), restarts the app if it was running, and carries on. No internet or no change: nothing happens.
 UPDATE_API="${FELIXA_UPDATE_API:-https://api.github.com/repos/FelixaHealth/Felixa-Community-Health/commits/main}"

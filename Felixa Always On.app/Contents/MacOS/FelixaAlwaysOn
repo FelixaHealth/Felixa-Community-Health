@@ -20,12 +20,16 @@ if [ -f "$PLIST" ]; then
 fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/Felixa"
+# Felixa runs from its own copy in Application Support, so the login item keeps working wherever the downloaded folder is. Make sure the copy exists.
+FELIXA_PREPARE_ONLY=1 FELIXA_NO_BROWSER=1 "$ROOT/Felixa.app/Contents/MacOS/Felixa" >/dev/null 2>&1
+TARGET="$HOME/Library/Application Support/Felixa/app/Felixa.app/Contents/MacOS/Felixa"
+[ -x "$TARGET" ] || TARGET="$ROOT/Felixa.app/Contents/MacOS/Felixa"
 cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>$LABEL</string>
-<key>ProgramArguments</key><array><string>$ROOT/Felixa.app/Contents/MacOS/Felixa</string></array>
+<key>ProgramArguments</key><array><string>$TARGET</string></array>
 <key>EnvironmentVariables</key><dict><key>FELIXA_NO_BROWSER</key><string>1</string></dict>
 <key>RunAtLoad</key><true/>
 <key>StartInterval</key><integer>3600</integer>
@@ -35,5 +39,5 @@ cat > "$PLIST" <<PL
 PL
 launchctl bootout "gui/$UID_NOW/$LABEL" 2>/dev/null
 launchctl bootstrap "gui/$UID_NOW" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null
-say "Felixa now starts by itself when you log in and checks for updates every hour. Give it a minute the first time, then open http://127.0.0.1:5050 in your browser. Keep the Felixa folder where it is."
+say "Felixa now starts by itself when you log in and checks for updates every hour. Give it a minute the first time, then open http://127.0.0.1:5050 in your browser. You can delete the folder you downloaded."
 exit 0

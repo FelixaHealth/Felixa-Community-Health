@@ -46,6 +46,14 @@ class MacApps(unittest.TestCase):
             self.assertIn(needle, text, needle)
         self.assertIn('browse()', (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text())
 
+    def test_the_launcher_runs_from_a_private_copy_so_a_locked_or_deleted_download_does_not_matter(self):
+        text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
+        for needle in ('APP_HOME="$STATE/app"', 'AppTranslocation', 'FELIXA_BOOTSTRAPPED', 'FELIXA_PREPARE_ONLY', 'com.apple.quarantine'):
+            self.assertIn(needle, text, needle)
+        self.assertLess(text.index('FELIXA_BOOTSTRAPPED'), text.index('commits/main'), 'it copies itself before it updates')
+        always = (ROOT / 'Felixa Always On.app' / 'Contents' / 'MacOS' / 'FelixaAlwaysOn').read_text()
+        self.assertIn('Application Support/Felixa/app/Felixa.app', always)
+
     def test_the_launcher_names_what_it_needs_and_does_not_open_a_terminal(self):
         text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
         for needle in ('Application Support/Felixa', 'FELIXA_DATA_DIR', '.local/bin', 'Python.framework', 'FELIXA_NO_LOCAL_MODEL=1', '/health', 'nohup', 'display dialog'):
