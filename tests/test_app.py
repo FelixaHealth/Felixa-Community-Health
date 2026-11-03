@@ -287,7 +287,7 @@ class Journey(AppCase):
         self.assertTrue(vibe_prompts and any('SENSITIVITY: LOW' in s for s in vibe_prompts))
         self.assertFalse(any('SENSITIVITY: MEDIUM' in s for s in vibe_prompts))
 
-        for path in ('workspace', 'report'):
+        for path in ('results', 'report'):
             html = self.client.get(f'/analysis/{aid}/{path}')
             self.assertEqual(html.status_code, 200)
             for needle in ('Observable communication signals', 'What the evidence suggests', 'id="vibe-check"', 'Sentiment mix',
@@ -372,7 +372,7 @@ class Journey(AppCase):
         for needle in ('Mixed sensitivity.', '(Low, High)', 'The saved runs used different sensitivity levels', '<th scope="col">Sensitivity</th>',
                        '<td>Low</td>', '<td>High</td>'):
             self.assertIn(needle, page)
-        self.assertIn('Mixed sensitivity.', self.client.get(f'/analysis/{aid}/workspace').text)
+        self.assertIn('Mixed sensitivity.', self.client.get(f'/analysis/{aid}/results').text)
         pdf = pdf_text(self.client.get(f'/analysis/{aid}/report.pdf').content)
         for needle in ('Mixed sensitivity.', '(Low, High)', 'The saved runs used different sensitivity levels'):
             self.assertIn(needle, pdf)
@@ -400,7 +400,7 @@ class Journey(AppCase):
 
         first, second = 'Run 1 · Mar 8, 2026 09:05 UTC', 'Run 2 · Mar 8, 2026 09:05 UTC'
         for where, page in (('report', self.client.get(f'/analysis/{aid}/report').text),
-                            ('workspace', self.client.get(f'/analysis/{aid}/workspace').text)):
+                            ('results', self.client.get(f'/analysis/{aid}/results').text)):
             for needle in (f'<td>{first}</td>', f'<td>{second}</td>', '<td>Run 3 · ', f'data-vc-tip="{{&quot;t&quot;:&quot;{second}&quot;,',
                            '>Run 1</text>', '>Run 2</text>', '>Run 3</text>'):
                 self.assertIn(needle, page, where)
@@ -1173,7 +1173,7 @@ class Uploads(AppCase):
         vibe = self.store.latest_vibe(aid)
         self.assertEqual(sorted(s['name'] for s in vibe['sources']), sorted([calm, rude]))               # two sources, so an Impact Score by source
         self.assertEqual({f['source'] for f in vibe['flagged']}, {rude})
-        for path in ('workspace', 'report'):
+        for path in ('results', 'report'):
             with self.subTest(path):
                 page = self.client.get(f'/analysis/{aid}/{path}').text
                 self.assertIn('Impact score by source', page)
@@ -1253,7 +1253,7 @@ class ReviewPeriod(AppCase):
         self.assertEqual((len(self.store.units_for(aid)), len(self.app.pipeline.vibe_units(aid))), (76, 30))      # nothing is deleted: the analysis skips them
         said = ('Review period: Mar 1, 2026 to Mar 2, 2026. Left out: 46 communication units dated outside it. '
                 'Kept: 6 communication units with no readable date.')
-        for path in ('workspace', 'report'):
+        for path in ('results', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertIn(said, page, path)
             self.assertIn('30 communication units were rated.', page, path)
@@ -1559,7 +1559,7 @@ class PartialFailures(AppCase):
                 self.assertEqual(len(self.app.analysis.metrics_for(aid)), 13)                     # the ratings are saved and the report shows them
                 self.assertEqual(self.app.analysis.stored_guidance(self.store.get_analysis(aid)), {})
                 self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 200)
-                self.assertIn('Observable communication signals', self.client.get(f'/analysis/{aid}/workspace').text)
+                self.assertIn('Observable communication signals', self.client.get(f'/analysis/{aid}/results').text)
         self.fake.failures.clear()
         self.fake.garbage.clear()
         self.assertEqual(self.run_job(aid)['status'], 'complete')                                 # running it again fills the gap
@@ -1594,7 +1594,7 @@ class PartialFailures(AppCase):
         """The report page, the workspace, the PDF and the CSV all name the parts that have no results, and in the same words. `expected` is a list of
         (title, reason) pairs, [] when nothing is missing. A Vibe Check run that gave no result is not one of them: it says "Not run" for itself, and
         its own reason may contain "not available" too."""
-        for where in ('report', 'workspace'):
+        for where in ('report', 'results'):
             page = self.client.get(f'/analysis/{aid}/{where}').text
             found = [(unescape(title), unescape(reason)) for title, reason in re.findall(r'<div class="eyebrow">Not available</div><h2>(.*?)</h2><p>(.*?)</p>', page)]
             self.assertEqual(found, expected, where)
@@ -1772,7 +1772,8 @@ class PartialFailures(AppCase):
         notice = 'The latest Vibe Check did not finish, so this section shows the previous successful run'
         for path in ('report', 'report.pdf', 'export'):
             self.assertIn(f'href="/analysis/{aid}/{path}"', workspace)
-        for html in (workspace, self.client.get(f'/analysis/{aid}/report').text):
+        results = self.client.get(f'/analysis/{aid}/results').text
+        for html in (results, self.client.get(f'/analysis/{aid}/report').text):
             for needle in (f'<span class="vc-score-num">{fmt_score(good["score"])}</span>', 'Sentiment mix', 'Latest attempt failed', notice):
                 self.assertIn(needle, html)
             self.assertNotIn('<strong>Not run</strong>', html)
@@ -1965,7 +1966,7 @@ class Safety(AppCase):
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': self.HOSTILE + ' you are trash\nthanks everyone for the help\nnice work today\nwell played all\ngreat game', 'actor_role': 'SUBJECT'})
         job = self.run_job(aid)
         self.assertEqual(job['status'], 'complete', job)
-        for path in ('workspace', 'report'):
+        for path in ('workspace', 'results', 'report'):
             html = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertNotIn('<script>alert', html, path)
             self.assertNotIn('<img src=x', html, path)
@@ -2135,7 +2136,7 @@ class Layout(AppCase):
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'Thanks all, great game!\nyou are trash\nnice work today\nwell played everyone\nplease stop, thank you',
                                                             'actor_role': 'SUBJECT'})
         self.assertEqual(self.run_job(aid)['status'], 'complete')
-        for path in ('workspace', 'report'):
+        for path in ('workspace', 'results', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertEqual(page.count('<main class="page" id="main">'), 1, path)
             inside = page.split('<main class="page" id="main">', 1)[1].split('</main>', 1)[0]
@@ -4322,7 +4323,7 @@ class Workplaces(AppCase):
         self.fake.extra_models = [{'name': 'llama3.2:3b', 'details': {'parameter_size': '3.2B'}}]
         self.addCleanup(setattr, self.fake, 'extra_models', [])
         page = self.client.get(f'/analysis/{aid}/check/6').text
-        for needle in ('qwen2.5:7b', 'llama3.2:3b', 'Default', 'model calls for 76 messages', '3.2B parameters', 'About', 'Cost: none'):
+        for needle in ('qwen2.5:7b', 'llama3.2:3b', 'Default', 'model calls for 76 messages', '3.2B parameters', 'About', 'Prices are guesses'):
             self.assertIn(needle, page)
         self.assertEqual(page.count('name="engine"'), 11)                                # two local models, the three of your Claude login, the word rules, and in the fold the three Claude and two GPT models (off: no keys)
         self.fake.models_used.clear()

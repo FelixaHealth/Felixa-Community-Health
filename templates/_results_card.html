@@ -1,0 +1,15 @@
+{# On the workplace page: the headline of the latest results, and the way to the full results on a page of their own. #}
+{% from "_icons.html" import icon %}
+{{ assets|safe }}
+{% if has_results %}<section class="panel vc results-card" id="results"><div class="eyebrow">Results</div><h2>Your latest results</h2>
+{% set vibe_ok = vibe and vibe.status == 'ok' %}
+{% if measures %}{% set look = measures.alert_counts.high + measures.alert_counts.medium %}
+<div class="vc-kpis vc-summary-kpis">
+{% if vibe_ok %}<div class="vc-kpi"><strong>{{ '%g'|format(vibe.score) }}<small> / 10</small></strong><span>{{ 'Impact score' if vibe.multi_source else 'Friendliness score' }}</span></div>{% else %}<div class="vc-kpi"><strong>Not run</strong><span>Vibe Check score</span></div>{% endif %}
+{% if look == 0 and not vibe_ok %}<div class="vc-kpi"><strong>Not checked</strong><span>things to look at first</span></div>{% else %}<div class="vc-kpi"><strong>{{ look }}</strong><span>thing{{ '' if look == 1 else 's' }} to look at first</span></div>{% endif %}
+<div class="vc-kpi"><strong>{{ measures.badges_earned }}</strong><span>badge{{ '' if measures.badges_earned == 1 else 's' }} earned</span></div></div>
+{% elif vibe_ok %}<div class="vc-kpis vc-summary-kpis"><div class="vc-kpi"><strong>{{ '%g'|format(vibe.score) }}<small> / 10</small></strong><span>{{ 'Impact score' if vibe.multi_source else 'Friendliness score' }}</span></div></div>{% endif %}
+{% if families %}<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ a.id }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>Strongest: {{ f.top }}</small><em>See the messages and graphs →</em></a>{% endfor %}</div>{% endif %}
+<p class="results-open"><a class="btn primary large" href="/analysis/{{ a.id }}/results">{{ icon('chart') }} Open the full results</a><span class="small-note">Every part of the results, each on its own tab.</span></p></section>
+{% else %}{% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>
+{% endfor %}{% endif %}

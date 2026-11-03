@@ -91,3 +91,21 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
 // Dashboard: choosing a workplace, a kind or a platform applies at once.
 (() => { document.querySelectorAll('select[data-nav]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit())); })();
 (() => { document.querySelectorAll('#dash-form select[data-auto]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit())); })();
+
+// Tabs: the results page shows one panel at a time. A link to a part inside another panel (#alerts, #vc-flagged) switches to that panel first.
+(() => {
+  const bar = document.querySelector('[data-tabs]'); if (!bar) return;
+  const panels = [...document.querySelectorAll('.tabpanel')]; const tabs = [...bar.querySelectorAll('[role=tab]')];
+  document.documentElement.classList.add('js-tabs'); let current = null;
+  const route = () => {
+    let id = ''; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { id = ''; }
+    const el = id && document.getElementById(id);
+    const inside = el && el.closest('.tabpanel');
+    if (!inside && current) return;                                  // #main, a stray fragment: leave the tab that is open
+    const panel = inside || panels[0]; current = panel;
+    panels.forEach((p) => { p.hidden = p !== panel; });
+    tabs.forEach((t) => { const on = t.getAttribute('href') === '#' + panel.id; t.classList.toggle('on', on); t.setAttribute('aria-selected', String(on)); });
+    if (el && el !== panel) el.scrollIntoView({ block: 'start' });
+  };
+  window.addEventListener('hashchange', route); route();
+})();

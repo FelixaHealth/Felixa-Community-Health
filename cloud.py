@@ -83,8 +83,13 @@ def known(engine) -> bool:
 
 
 def login_offered() -> bool:
-    """Whether the page shows 'Your Claude login' at all: never on a password-protected (hosted) app, and not when FELIXA_CLAUDE_LOGIN=0."""
-    return not os.getenv('FELIXA_PASSWORD') and os.getenv('FELIXA_CLAUDE_LOGIN', '1') != '0'
+    """Whether the page shows 'Your Claude login' at all. On the owner's own computer: always, unless FELIXA_CLAUDE_LOGIN=0. On a password-protected app
+    (one that other people could reach) only when the owner turns it on with FELIXA_CLAUDE_LOGIN=1, which says that the Claude Code program on that machine
+    is signed in to the owner's account and that everyone who has the app's password may use it."""
+    flag = os.getenv('FELIXA_CLAUDE_LOGIN')
+    if flag == '0':
+        return False
+    return flag == '1' if os.getenv('FELIXA_PASSWORD') else True
 
 
 def cli_path():

@@ -116,7 +116,7 @@ class Engines(AppCase):
         self.assertTrue(self.store.latest_vibe(aid)['status'] == 'ok')
         page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertIn('Your report is ready', page)
-        self.assertIn('Alerts', page)
+        self.assertIn('Alerts', self.client.get(f'/analysis/{aid}/results').text)
 
     def test_openai_runs_a_check_through_the_key_after_the_box_is_ticked(self):
         aid = self.with_chat()

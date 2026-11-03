@@ -8,6 +8,7 @@ before a check starts. It touches no database and no model.
 import math
 import re
 
+import prices
 import config
 
 # ---- the choices -----------------------------------------------------------------------
@@ -197,10 +198,11 @@ def tier(name):
     return 'Best' if 'opus' in name else 'Balanced' if 'sonnet' in name else 'Fastest'
 
 
-def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False, login_models=(), login_ready=False, openai_models=(), openai_ready=False, rules=False):
+def engine_options(models, default, messages, volume, sources=1, cloud_models=(), cloud_ready=False, login_models=(), login_ready=False, openai_models=(), openai_ready=False, rules=False, avg_chars=None):
     """The engines to choose from, each with its estimate. `models` are what the local model server has downloaded: [{'name', 'details'}].
     The configured default comes first and is marked, whether or not it is downloaded yet. `cloud_models` are (id, name, about, seconds a
     call takes); they follow the local ones, and are marked not ready when the server has no key for them."""
+    parts = calls_for(messages, volume, sources)
     seen, out = set(), []
     for m in [{'name': default, 'details': {}}] + list(models):
         name = m['name']
@@ -215,20 +217,22 @@ def engine_options(models, default, messages, volume, sources=1, cloud_models=()
                 installed, billions = True, params_billions(name, installed_copy.get('details'))
         out.append({'name': name, 'label': name, 'kind': 'local', 'default': name == default, 'installed': installed, 'billions': billions,
                     'size': f'{billions:g}B parameters', 'estimate': estimate(messages, volume, billions, sources),
-                    'tag': 'Fastest' if billions <= 4 else 'Balanced' if billions <= 9 else 'Best', 'price': 'Free, runs on this computer'})
+                    'tag': 'Fastest' if billions <= 4 else 'Balanced' if billions <= 9 else 'Best', 'price': 'Free, runs on this computer', 'cost': 'Free'})
     for model, label, about, seconds in cloud_models:
         out.append({'name': 'claude:' + model, 'label': label, 'kind': 'cloud', 'default': False, 'installed': cloud_ready, 'billions': None,
                     'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds),
-                    'tag': tier(model), 'price': 'Free while testing'})
+                    'tag': tier(model), 'price': 'Pay as you go, with the server\'s key', 'cost': prices.text('claude:' + model, parts, avg_chars)})
     for alias, label, about, seconds in login_models:
         out.append({'name': 'claudecode:' + alias, 'label': label, 'kind': 'login', 'default': False, 'installed': login_ready, 'billions': None,
                     'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds),
-                    'tag': tier(alias), 'price': 'Uses your Claude plan, no key'})
+                    'tag': tier(alias), 'price': 'Uses your Claude plan, no key',
+                    'cost': ('Included in your plan' if prices.text('claudecode:' + alias, parts, avg_chars) else ''),
+                    'cost_note': ('Worth ' + prices.text('claudecode:' + alias, parts, avg_chars).lower() + ' at API prices') if prices.text('claudecode:' + alias, parts, avg_chars) else ''})
     if rules:
         out.append({'name': 'rules:words', 'label': 'Word rules (no AI)', 'kind': 'rules', 'default': False, 'installed': True, 'billions': None,
-                    'size': 'Word lists, no language model', 'estimate': estimate(messages, volume, None, sources, per_call=0.02), 'tag': 'Fastest', 'price': 'Free, nothing leaves this computer'})
+                    'size': 'Word lists, no language model', 'estimate': estimate(messages, volume, None, sources, per_call=0.02), 'tag': 'Fastest', 'price': 'Free, nothing leaves this computer', 'cost': 'Free'})
     for model, label, about, seconds in openai_models:
         out.append({'name': 'openai:' + model, 'label': label, 'kind': 'openai', 'default': False, 'installed': openai_ready, 'billions': None,
                     'size': about, 'estimate': estimate(messages, volume, None, sources, per_call=seconds),
-                    'tag': 'Fastest' if 'mini' in model else 'Balanced', 'price': 'Uses your OpenAI key'})
+                    'tag': 'Fastest' if 'mini' in model else 'Balanced', 'price': 'Uses your OpenAI key', 'cost': prices.text('openai:' + model, parts, avg_chars)})
     return out

@@ -33,10 +33,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
 import analysis
+import bei_charts
 import config
 import dashboard
+import detail
 import measures
 import pipeline
+import prices
 import report
 import rules
 import report_export
@@ -859,7 +862,7 @@ def bound_label(bound):
     return f'{bound:%Y-%m-%d %H:%M} UTC' if isinstance(bound, datetime.datetime) else bound.isoformat()
 
 
-def check_rows(a, units_n):
+def check_rows(a, units_n, in_scope=None, sources=1, avg_chars=None):
     volume = a['check_volume']
     period = store.period_of(a)
     span = ' to '.join(bound_label(d) if d else 'any date' for d in period) if any(period) else 'All dates'
@@ -867,7 +870,19 @@ def check_rows(a, units_n):
             ('layers', 'Volume', '' if volume is None else 'All of them' if volume == 0 else f'{volume:,} messages'),
             ('lock', 'Incognito', 'On: names removed' if a['incognito'] else 'Off'),
             ('calendar', 'Time frame', span), ('gauge', 'Sensitivity', SENSITIVITY_LABELS.get(a['vibe_sensitivity'] or 'medium', '')),
-            ('cpu', 'Engine', engine_label(a['engine']) if a['engine'] else '')]
+            ('target', 'Price', price_label(a['engine'], units_n if in_scope is None else in_scope, volume, sources, avg_chars)), ('cpu', 'Engine', engine_label(a['engine']) if a['engine'] else '')]
+
+
+def price_label(engine, units_n, volume, sources=1, avg_chars=None) -> str:
+    """What one check on this engine costs, for the summary: 'Free', 'About $0.12', or 'Included in your Claude plan'. Empty while no engine is chosen."""
+    if not engine:
+        return ''
+    if not prices.per_million(engine):
+        return 'Free'
+    text = prices.text(engine, workplace.calls_for(units_n, volume if volume is not None else workplace.DEFAULT_VOLUME, sources), avg_chars)
+    if not text:
+        return 'Add messages to see it'
+    return 'Included in your Claude plan' if cloud.is_login(engine) else text
 
 
 def engine_label(engine) -> str:
@@ -879,6 +894,7 @@ def check_context(a, step):
     period = store.period_coverage(a)
     units_n = store.count_units(aid)
     in_scope = period['kept'] if period else units_n
+    avg_chars = store.average_chars(aid, in_period=bool(period))
     evidence = store.evidence_by_source(aid)
     volume = a['check_volume'] if a['check_volume'] is not None else workplace.DEFAULT_VOLUME
     stamps = sorted(x for x in (parse_ts(e[k]) for e in evidence for k in ('first_ts', 'last_ts') if e[k]) if x)
@@ -893,33 +909,36 @@ def check_context(a, step):
            'voice_ok': voice.available(), 'audio': ', '.join(voice.AUDIO_EXTENSIONS), 'discord': 'Discord' in workplace.split_channels(a['channel'])[0], 'channel_tips': workplace.channel_tips(a['channel']),
            'rail': wizard_rail(aid, workplace.CHECK_STEPS, f'/analysis/{aid}/check', step,
                                foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{aid}/workspace'}),
-           'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n), 'busy': bool(store.active_job(aid))}
+           'summary_title': 'Your check', 'summary_rows': check_rows(a, units_n, in_scope, max(1, len(evidence)), avg_chars), 'busy': bool(store.active_job(aid))}
     if step == CHECK_LAST:
         local = config.local_model_enabled()
         models = local_models() if local else []
         ctx['engines'] = workplace.engine_options(models, config.model_name(), in_scope, volume, max(1, len(evidence)), cloud.CLAUDE_MODELS, cloud.available(),
-                                                  cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available(), cloud.OPENAI_MODELS, cloud.openai_available(), rules=True)
+                                                  cloud.LOGIN_MODELS if cloud.login_offered() else (), cloud.login_available(), cloud.OPENAI_MODELS, cloud.openai_available(), rules=True, avg_chars=avg_chars)
         if not local:
             ctx['engines'] = [e for e in ctx['engines'] if e['kind'] != 'local']
         ctx['local_enabled'] = local
         installed = any(m['name'] in (config.model_name(), config.model_name() + ':latest') for m in models)
         if a['engine']:
             ctx['engine'] = a['engine']
-        elif local and installed:                                                           # preselect whatever can actually run, the local model first
+        elif local and installed and a['model_used']:                                       # a check that ran with no engine saved ran on the model on this computer
             ctx['engine'] = config.model_name()
-        elif cloud.login_available():
+        elif cloud.login_available():                                                       # otherwise your Claude login first when it can run, then the model on this computer
             ctx['engine'] = 'claudecode:' + cloud.LOGIN_MODELS[0][0]
+        elif local and installed:
+            ctx['engine'] = config.model_name()
         elif cloud.available():
             ctx['engine'] = 'claude:' + cloud.CLAUDE_MODELS[0][0]
         else:
             ctx['engine'] = config.model_name() if local else 'claude:' + cloud.CLAUDE_MODELS[0][0]
         ctx['model_server_up'] = bool(models) if local else True
+        ctx['price_note'] = prices.as_of_note(openai=True)
         ctx['cloud_ready'] = cloud.available()
         ctx['openai_ready'] = cloud.openai_available()
         ctx['login_offered'] = cloud.login_offered()
         ctx['login_ready'] = cloud.login_available()
         ctx['cloud_ok'] = bool(a['cloud_ok'])
-        ctx['summary_rows'] = ctx['summary_rows'][:-1] + [('cpu', 'Engine', engine_label(ctx['engine']))]          # what is selected now is what will run
+        ctx['summary_rows'] = ctx['summary_rows'][:-2] + [('target', 'Price', price_label(ctx['engine'], in_scope, a['check_volume'], max(1, len(evidence)), avg_chars)), ('cpu', 'Engine', engine_label(ctx['engine']))]          # what is selected now is what will run
     return ctx
 
 
@@ -1361,6 +1380,52 @@ def job_status(aid: AnalysisId):
 def report_page(request: Request, aid: AnalysisId):
     ctx = report_context(aid, 'report')
     return render(request, 'report.html', **ctx)
+
+
+@app.get('/analysis/{aid}/results', response_class=HTMLResponse)
+def results_page(request: Request, aid: AnalysisId):
+    """The results on a page of their own, with tabs along the top."""
+    return render(request, 'results.html', **report_context(aid, 'page of results'))
+
+
+def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):
+    a = store.get_analysis(aid)
+    if not a:
+        not_found()
+    metrics = [m for m in analysis.metrics_for(aid) if m['attribute'] in attrs]
+    if not metrics:
+        raise PageError(404, 'No results yet', 'Run a check on the workplace page to rate the messages first.', back=(f'/analysis/{aid}/workspace', 'Open the workspace'))
+    rows, total, pages, page = detail.comments(aid, attrs, page)
+    figure_html, figure_note = detail.chart(aid, attrs, title)
+    rated = metrics[0]['n']
+    top = max(metrics, key=lambda m: m['fas'])
+    hits = sum(round(m['detection_rate'] * m['n'] / 100) for m in metrics) if len(metrics) == 1 else total
+    kpis = [{'label': 'Average FAS' if len(metrics) > 1 else 'FAS', 'value': f'{sum(m["fas"] for m in metrics) / len(metrics):.1f}', 'sub': 'strength of the tone, 0 to 100'},
+            {'label': 'Messages showing it', 'value': f'{total:,}', 'sub': f'of {rated:,} rated'},
+            {'label': 'Detection rate', 'value': f'{sum(m["detection_rate"] for m in metrics) / len(metrics):.0f}%', 'sub': 'of rated messages contain it'},
+            {'label': 'Strongest' if len(metrics) > 1 else 'Strength when present', 'value': top['attribute'] if len(metrics) > 1 else f'{top["expression_strength"]:.0f}',
+             'sub': f'FAS {top["fas"]:.1f}' if len(metrics) > 1 else 'out of 100'}]
+    legend = [(m, detail.ROLES[i % len(detail.ROLES)]) for i, m in enumerate(attrs)] if len(attrs) > 1 else []
+    return render(request, 'detail.html', a=a, aid=aid, title=title, kind=kind, blurb=blurb, parent=parent, kpis=kpis, members=sorted(metrics, key=lambda m: -m['fas']) if len(attrs) > 1 else [],
+                  rows=rows, total=total, pages=pages, page=page, figure_html=figure_html, figure_note=figure_note, legend=legend, assets=vibe_check.assets_html(),
+                  tone_class={'Positive': 'good', 'Tense': 'warn', 'Toxic': 'bad'}.get(title if title in ('Positive', 'Tense', 'Toxic') else analysis.family_of(title), ''))
+
+
+@app.get('/analysis/{aid}/category/{name}', response_class=HTMLResponse)
+def category_page(request: Request, aid: AnalysisId, name: str, page: int = 1):
+    attrs = detail.family_attributes(name)
+    if attrs is None:
+        not_found()
+    blurb = next((b for n, b in bei_charts.FAMILY_BLURB.items() if n == name), '')
+    return detail_page(request, aid, page, attrs=attrs, title=name, kind='Category', blurb=blurb)
+
+
+@app.get('/analysis/{aid}/tone/{name}', response_class=HTMLResponse)
+def tone_page(request: Request, aid: AnalysisId, name: str, page: int = 1):
+    if name not in analysis.ATTRIBUTES:
+        not_found()
+    return detail_page(request, aid, page, attrs=[name], title=name, kind=f'{analysis.family_of(name)} tone', parent=analysis.family_of(name),
+                       blurb=f'Every message rated for {name.lower()}, and how it moves over time.')
 
 
 @app.get('/analysis/{aid}/report.pdf')

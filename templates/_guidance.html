@@ -1,0 +1,10 @@
+{% if guidance %}
+<section class="panel guidance" id="guidance"><div class="eyebrow">Guidance</div><h2>What the evidence suggests</h2><div class="summary-callout">{{ guidance.summary }}</div>
+<div class="guide-grid">
+<div><h3>What appears to be working</h3>{% for x in guidance.working or [] %}<article><strong>{{ x.title }}</strong><p>{{ x.body }}</p></article>{% else %}<p class="muted">No supported strength finding was generated.</p>{% endfor %}</div>
+<div><h3>What needs investigation</h3>{% for x in guidance.limitations or [] %}<article><strong>{{ x.title }}</strong><p>{{ x.body }}</p></article>{% else %}<p class="muted">No supported limitation finding was generated.</p>{% endfor %}</div>
+</div>
+<h3 class="recommend-title">What to do next</h3><div class="path-list">{% for x in guidance.recommendations or [] %}<div><b>{{ loop.index }}</b><span><strong>{{ x.action }}</strong><br><small>{{ x.why }} · Measure: {{ x.measure }}</small></span></div>{% endfor %}</div>
+<div class="confidence"><strong>Evidence confidence: {{ guidance.confidence }}</strong><span>{{ guidance.confidence_reason }}</span></div>
+</section>
+{% endif %}

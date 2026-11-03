@@ -40,3 +40,11 @@ The app limits the size of a request itself: an upload may carry 75 MB of files 
 The first launch downloads the model (about 2 GB for the default `qwen2.5:3b`, about 4.7 GB for `qwen2.5:7b`). The app stays available during the download, and `/health` reports when the model is ready. The startup script refuses to run without a password of at least 12 characters and, on Railway, without a volume.
 
 CPU inference is slow. A full run rates three units per model call, so 300 units is 100 calls plus Vibe Check batches of 40 messages. Vibe Check reads at most about 1,000 messages from at most 25 sources, so its cost is bounded however large the upload is. Lower `FELIXA_MAX_RATED_UNITS` if runs take too long. If the model stops answering, Vibe Check tries each batch twice and gives up after three batches in a row, so at most six calls that each wait up to `FELIXA_MODEL_TIMEOUT` (480 seconds by default); lower the timeout on a small instance if you would rather it gave up sooner.
+
+## Your Claude login on a server of your own
+
+The Claude login (Claude Code, no key) is off on a hosted app, because the program and your sign-in live on your own computer. On a server you run yourself you can turn it on: install Claude Code there, sign in once with `claude`, and set `FELIXA_CLAUDE_LOGIN=1`. Everyone who has the app password then uses your login, so share the password only with people you trust with it. On Railway there is no Claude Code, so use the Felixa engine, the word rules or an API key there.
+
+## What a check costs
+
+The engine step shows the price of the check on every engine, from the published price lists (Claude prices read from Anthropic's page, dated on screen) and the size of your messages, as a range. The local model and the word rules are free; the Claude login is included in your plan and shows what the same check would cost at API prices. Update the numbers in `prices.py` when the price lists change.

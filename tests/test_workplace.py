@@ -366,6 +366,12 @@ class ClaudeLogin(unittest.TestCase):
         with self.env(FELIXA_CLAUDE_CLI_PATH='', ), mock.patch('cloud.shutil.which', return_value=None):
             self.assertFalse(cloud.login_available())
 
+    def test_a_hosted_app_offers_it_only_when_its_owner_turns_it_on(self):
+        with self.env(FELIXA_PASSWORD='secret', FELIXA_CLAUDE_LOGIN='1'):
+            self.assertTrue(cloud.login_offered() and cloud.login_available())
+        with self.env(FELIXA_PASSWORD='secret', FELIXA_CLAUDE_LOGIN='0'):
+            self.assertFalse(cloud.login_offered())
+
     def test_the_command_has_no_tools_an_empty_folder_and_no_key_and_the_text_goes_in_on_stdin(self):
         seen = {}
 

@@ -11,7 +11,7 @@
 {% if busy %}<script src="/static/job.js?v={{ asset_v }}" data-job-url="/analysis/{{ a.id }}/job"></script>{% endif %}
 {% if busy %}{% include "_run_dialog.html" %}<script src="/static/run.js?v={{ asset_v }}" defer></script>{% endif %}
 
-<section class="panel new-panel" id="new"><div class="new-text"><div class="eyebrow">Analytics</div><h2>Run new analytics</h2><p>Add messages, choose how to read them and get a report on how healthy the conversation feels.</p></div>
+<section class="panel new-panel" id="new"><div class="new-text"><div class="eyebrow">Analytics</div><h2>Run new analytics</h2><p>Add messages, choose how to read them and get a report on how healthy the conversation feels. The price of the check is shown on the engine step, before anything runs.</p></div>
 {% if busy %}<button class="btn primary large" disabled>A check is running…</button>
 {% elif units_n or has_results %}<details class="new-confirm"><summary class="btn primary large">{{ icon('plus') }} New</summary>
 <p>New analytics replaces the messages and the report you have now. Download the PDF or CSV first if you need a copy. The workplace details and the numbers of earlier checks (scores and counts, never messages, names or file names) stay, so the trend carries on.</p>
@@ -22,7 +22,7 @@
 <section class="panel inline-edit-panel" id="edit"><details class="edit-fold" id="edit-details"{% if edit_open %} open{% endif %}><summary class="btn">{{ icon('target') }} Edit this workplace</summary>{% include "_edit_form.html" %}</details></section>
 
 {# Once there are results they come first: the summary, the alerts, the measures over time and the badges, then the rest of the report. #}
-{% if has_results %}{% include "_results.html" %}{% endif %}
+{% if has_results %}{% include "_results_card.html" %}{% endif %}
 
 <div class="results-grid two-up">
 <section class="panel"><div class="eyebrow">Plan</div><h2>{{ pathway.name }}</h2><p>{{ pathway.question }}</p><div class="path-list">{% for x in pathway.actions %}<div><b>{{ loop.index }}</b><span>{{ x }}</span></div>{% endfor %}</div></section>
@@ -35,6 +35,6 @@
 </div>{% endif %}
 </section>{% endif %}
 
-{% if not has_results %}{% include "_results.html" %}{% endif %}
+{% if not has_results %}{% include "_results_card.html" %}{% endif %}
 {% include "_danger.html" %}
 </div></div>{% endblock %}

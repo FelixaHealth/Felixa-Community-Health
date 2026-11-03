@@ -356,6 +356,12 @@ def rated_units(aid) -> list:
     return units
 
 
+def average_chars(aid, in_period=False):
+    """The average length in characters of the messages of an analysis (each counted up to 2,500, the most that is sent to a model), or None when it has none."""
+    texts = [min(len(u['text']), 2500) for u in units_for(aid, in_period)]
+    return sum(texts) / len(texts) if texts else None
+
+
 def count_units(aid) -> int:
     with db() as c:
         return c.execute('SELECT COUNT(*) n FROM communication_units WHERE analysis_id=?', (aid,)).fetchone()['n']
