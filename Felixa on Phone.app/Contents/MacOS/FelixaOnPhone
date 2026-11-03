@@ -1,0 +1,5 @@
+#!/bin/bash
+# Starts Felixa Community Health so that a phone on the same Wi-Fi can open it. See Felixa.app for how the app starts.
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+export FELIXA_SHARE=1
+exec "$ROOT/Felixa.app/Contents/MacOS/Felixa"

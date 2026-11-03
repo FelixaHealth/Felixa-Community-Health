@@ -116,3 +116,5 @@ The ratings in these tests are made up, so they check the rules and the wording 
 ## Open it like any other Mac app
 
 Keep the folder where it is and double-click **Felixa** (`Felixa.app`). No Terminal window opens: the first time it sets itself up (a few minutes), then your browser opens the app. Double-click it again at any time to open the browser; **Stop Felixa** stops it. The app uses your Claude login, so Claude Code must be installed and signed in once (`claude`). The first time, macOS may say it cannot check the app: right-click it, choose **Open**, then **Open**. The log is in `~/Library/Logs/Felixa/felixa.log`.
+
+**On your phone.** Connect the phone to the same Wi-Fi as the Mac, double-click **Felixa on Phone**, and type the address it shows into the phone's browser. Anyone on that Wi-Fi can open the app while it is shared, so use it only on a network you trust. Double-click **Felixa** to go back to Mac-only.

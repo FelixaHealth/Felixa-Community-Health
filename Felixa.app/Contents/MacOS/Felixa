@@ -24,7 +24,18 @@ stop_with() {
   exit 1
 }
 
-# Already running: open the browser and finish.
+# Phone mode ("Felixa on Phone"): share the app with phones on the same Wi-Fi. It restarts the app if it runs for this Mac only.
+if [ -n "$FELIXA_SHARE" ]; then
+  if [ -f "$STATE/pid" ]; then kill "$(cat "$STATE/pid")" 2>/dev/null; sleep 1; rm -f "$STATE/pid" "$STATE/port"; fi
+  LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | cut -d' ' -f1)"
+  [ -n "$LAN_IP" ] || stop_with "This Mac is not on a Wi-Fi or network, so a phone cannot reach it. Connect to your home Wi-Fi and open Felixa on Phone again."
+  LOCAL_NAME="$(scutil --get LocalHostName 2>/dev/null)"
+  export FELIXA_HOST=0.0.0.0
+  export FELIXA_ALLOWED_HOSTS="$LAN_IP${LOCAL_NAME:+,$LOCAL_NAME.local}"
+fi
+
+# Already running: open the browser and finish. (A private open after sharing restarts it for this Mac only.)
+if [ -z "$FELIXA_SHARE" ] && [ -f "$STATE/shared" ] && [ -f "$STATE/pid" ]; then kill "$(cat "$STATE/pid")" 2>/dev/null; sleep 1; rm -f "$STATE/pid" "$STATE/port" "$STATE/shared"; fi
 if [ -f "$STATE/port" ] && curl -fs "http://127.0.0.1:$(cat "$STATE/port")/health" >/dev/null 2>&1; then
   open "http://127.0.0.1:$(cat "$STATE/port")"
   exit 0
@@ -59,10 +70,17 @@ export PORT
 nohup "$VENV/bin/python" app.py >>"$LOG" 2>&1 &
 echo $! >"$STATE/pid"
 echo "$PORT" >"$STATE/port"
+if [ -n "$FELIXA_SHARE" ]; then touch "$STATE/shared"; else rm -f "$STATE/shared"; fi
 
 for _ in $(seq 1 120); do
   if curl -fs "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     open "http://127.0.0.1:$PORT"
+    if [ -n "$FELIXA_SHARE" ]; then
+      URL="http://$LAN_IP:$PORT"
+      echo "$(date '+%F %T') shared at $URL" >>"$LOG"
+      ANSWER="$(osascript -e "display dialog \"On your phone, connected to the same Wi-Fi as this Mac, open this address:\" & return & return & \"$URL\" & return & return & \"Anyone on this Wi-Fi can open it while Felixa is shared, so use it only on a network you trust. Open Felixa (without Phone) any time to stop sharing.\" buttons {\"Copy address\", \"OK\"} default button \"OK\" with title \"Felixa on Phone\"" 2>/dev/null)"
+      case "$ANSWER" in *"Copy address"*) printf '%s' "$URL" | pbcopy ;; esac
+    fi
     exit 0
   fi
   kill -0 "$(cat "$STATE/pid")" 2>/dev/null || stop_with "Felixa stopped while starting."

@@ -9,7 +9,7 @@ import subprocess
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-APPS = {'Felixa.app': 'Felixa', 'Stop Felixa.app': 'StopFelixa'}
+APPS = {'Felixa.app': 'Felixa', 'Stop Felixa.app': 'StopFelixa', 'Felixa on Phone.app': 'FelixaOnPhone'}
 
 
 class MacApps(unittest.TestCase):
@@ -23,10 +23,16 @@ class MacApps(unittest.TestCase):
             self.assertEqual(subprocess.run(['bash', '-n', str(path)]).returncode, 0, app)
 
     def test_git_keeps_the_executable_bit_so_the_zip_download_still_opens(self):
-        out = subprocess.run(['git', 'ls-files', '-s', '--', 'Felixa.app', 'Stop Felixa.app'], cwd=ROOT, capture_output=True, text=True).stdout
+        out = subprocess.run(['git', 'ls-files', '-s', '--', 'Felixa.app', 'Stop Felixa.app', 'Felixa on Phone.app'], cwd=ROOT, capture_output=True, text=True).stdout
         modes = {line.split('\t')[1]: line.split()[0] for line in out.splitlines()}
         for app, exe in APPS.items():
             self.assertEqual(modes.get(f'{app}/Contents/MacOS/{exe}'), '100755', app)
+
+    def test_the_phone_launcher_shares_on_the_wifi_and_allows_only_that_address(self):
+        text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
+        for needle in ('FELIXA_SHARE', 'FELIXA_HOST=0.0.0.0', 'FELIXA_ALLOWED_HOSTS', 'ipconfig getifaddr', 'Copy address'):
+            self.assertIn(needle, text, needle)
+        self.assertIn('FELIXA_SHARE=1', (ROOT / 'Felixa on Phone.app' / 'Contents' / 'MacOS' / 'FelixaOnPhone').read_text())
 
     def test_the_launcher_names_what_it_needs_and_does_not_open_a_terminal(self):
         text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
