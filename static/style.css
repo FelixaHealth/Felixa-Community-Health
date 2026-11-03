@@ -428,3 +428,45 @@ h2#job-message{font-family:inherit;font-size:19px;font-weight:600;letter-spacing
 /* the edit form opens from the Edit button at the top; the panel with its own button stays out of sight until then */
 .edit-fold>summary{display:none}
 .inline-edit-panel:not(:has(details[open])){display:none}
+
+/* ---- colour: a few calm accents beside the orange, each with a soft tint (dark mode brightens the strong colour and deepens the tint) ---- */
+:root{--teal:#0f7f82;--teal-s:#dff3f2;--blue:#3a64c8;--blue-s:#e6edfc;--violet:#7050b8;--violet-s:#eee9fa;--green:#2a8052;--green-s:#e2f3e8;--red:#b42323;--red-s:#fdf0ee;--red-line:#e8b8b2}
+@media screen{[data-theme="dark"]{--teal:#55d3c8;--teal-s:#133539;--blue:#93b3ff;--blue-s:#1b2948;--violet:#bba0ff;--violet-s:#2b2147;--green:#74d69f;--green-s:#16331f;--red:#ff8d83;--red-s:#331a17;--red-line:#6e302b}}
+.navlink.nl-blue .ic{color:var(--blue)}.navlink.nl-violet .ic{color:var(--violet)}
+.navlink.add-wp{width:40px;padding:0;justify-content:center;background:var(--soft);color:var(--accent);border:1px solid var(--soft-line)}.navlink.add-wp:hover{background:var(--soft-line)}.navlink.add-wp .ic{width:20px;height:20px;color:var(--accent)}
+.navlink.add-wp.text{width:auto;padding:8px 16px}
+.wp-pick select{border-color:var(--soft-line);background:var(--panel)}
+.how>div .how-ic{background:var(--soft);color:var(--accent)}
+.how .h2c .how-ic{background:var(--teal-s);color:var(--teal)}.how .h3c .how-ic{background:var(--violet-s);color:var(--violet)}.how .h4c .how-ic{background:var(--blue-s);color:var(--blue)}
+.setup-row:nth-child(4n+2) .setup-ic{background:var(--teal-s);color:var(--teal)}.setup-row:nth-child(4n+3) .setup-ic{background:var(--violet-s);color:var(--violet)}.setup-row:nth-child(4n+4) .setup-ic{background:var(--blue-s);color:var(--blue)}
+.rail-item.done b{border-color:var(--green);color:var(--green)}
+.dash-kpi{border-top:4px solid var(--orange)}.dash-kpi:nth-child(4n+2){border-top-color:var(--teal)}.dash-kpi:nth-child(4n+3){border-top-color:var(--violet)}.dash-kpi:nth-child(4n+4){border-top-color:var(--blue)}
+.dash-card{border-top:3px solid var(--soft-line)}
+.chip{background:var(--soft)}
+/* home: workplace cards */
+.welcome.hero.compact{padding:24px 32px}.welcome.hero.compact h1{font-size:clamp(26px,3vw,36px)}.welcome.hero.compact p{margin-bottom:0}
+.launch{margin:24px 0 36px}
+.wp-cards{list-style:none;margin:0;padding:0;display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
+.wp-card{--c:var(--accent);--cs:var(--soft);background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:18px;padding:20px 22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0}
+.wp-card.c1{--c:var(--teal);--cs:var(--teal-s)}.wp-card.c2{--c:var(--violet);--cs:var(--violet-s)}.wp-card.c3{--c:var(--blue);--cs:var(--blue-s)}.wp-card.c4{--c:var(--green);--cs:var(--green-s)}
+.wpc-top{display:flex;align-items:center;gap:14px}
+.wpc-avatar{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:var(--cs);color:var(--c);font:700 20px/1 var(--serif)}
+.wpc-title{min-width:0;flex:1}.wpc-title strong{display:block;font-size:19px;line-height:1.25;overflow-wrap:anywhere}.wpc-title .wp-facts{display:block;font-size:14px;color:var(--muted);line-height:1.4}
+.wpc-score{text-align:right;flex:none}.wpc-score b{display:block;font-size:26px;line-height:1;color:var(--c)}.wpc-score small{font-size:12px;color:var(--muted)}
+.wpc-when{font-size:13.5px;color:var(--muted)}
+.wpc-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto}.wpc-actions .btn{flex:1 1 140px}.wpc-actions .btn .ic{width:16px;height:16px;margin-right:8px}
+.wp-card.add{border:2px dashed var(--line2);border-top:2px dashed var(--line2);background:transparent;box-shadow:none;padding:0}
+.wp-card.add a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:170px;padding:20px;border-radius:16px;text-align:center;color:var(--muted)}
+.wp-card.add a:hover{background:var(--soft);color:var(--ink)}.wp-card.add .add-ic{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--soft);color:var(--accent)}.wp-card.add .ic{width:22px;height:22px}
+.wp-card.add strong{color:var(--ink);font-size:17px}.wp-card.add small{font-size:14px}
+/* danger zone */
+.danger-panel{margin:36px 0 8px;border:1px solid var(--red-line);border-left:6px solid var(--red);background:var(--red-s);border-radius:16px;padding:22px 26px}
+.danger-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}.danger-head h2{margin:0;font-family:var(--serif);font-size:24px;color:var(--red)}.danger-head p{margin:4px 0 0;color:var(--ink);font-size:15px}
+.danger-ic{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--red);color:#fff}.danger-ic .ic{width:22px;height:22px}
+.danger-row{display:flex;gap:24px;align-items:flex-start;justify-content:space-between;padding:16px 0;border-top:1px solid var(--red-line)}
+.danger-row h3{margin:0 0 4px;font-size:17px}.danger-row p{margin:0;font-size:14.5px;line-height:1.6;color:var(--muted);max-width:62ch}
+.danger-row details{flex:none;max-width:340px}.danger-row details p{margin:10px 0 0;font-size:14px}.danger-row details form{margin-top:10px}
+.btn.danger-outline{border-color:var(--red);color:var(--red);background:transparent;list-style:none}.btn.danger-outline:hover{background:var(--red);color:#fff;border-color:var(--red)}.btn.danger-outline .ic{width:16px;height:16px;margin-right:8px}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.btn.danger:hover{background:#8f1b1b;border-color:#8f1b1b}
+.danger-row summary::-webkit-details-marker{display:none}
+@media(max-width:720px){.danger-row{flex-direction:column;gap:12px}.danger-row details{max-width:none}}

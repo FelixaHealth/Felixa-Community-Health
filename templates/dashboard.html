@@ -4,7 +4,7 @@
 {{ assets|safe }}
 <section class="dash-head"><div class="eyebrow">Results</div><h1>Results dashboard</h1>
 <p class="lead">Every check of every workplace in one place. Choose a workplace, a kind of community, a platform or a period to switch the view.</p></section>
-{% if empty %}<section class="panel dash-empty"><h2>No results yet</h2><p>Run your first analytics in a workplace, and its numbers appear here. Each later check adds a point to the lines.</p>{% if side_workplaces %}<p><a class="btn primary" href="/analysis/{{ side_workplaces[0].id }}/workspace">{{ icon('plus') }} Open {{ side_workplaces[0].name }}</a></p>{% else %}<p><a class="btn primary" href="/new">{{ icon('plus') }} Create a workplace</a></p>{% endif %}</section>
+{% if empty %}<section class="panel dash-empty"><h2>No results yet</h2><p>Run your first analytics in a workplace, and its numbers appear here. Each later check adds a point to the lines.</p>{% if top_workplaces %}<p><a class="btn primary" href="/analysis/{{ top_workplaces[0].id }}/workspace">{{ icon('plus') }} Open {{ top_workplaces[0].name }}</a></p>{% else %}<p><a class="btn primary" href="/new">{{ icon('plus') }} Create a workplace</a></p>{% endif %}</section>
 {% else %}
 <section class="panel"><form method="get" action="/dashboard" class="dash-form" id="dash-form"><div class="dash-filters">
 <label class="field">Workplace<select name="workplace" data-auto><option value="">All workplaces</option>{% for aid, name in f.workplaces %}<option value="{{ aid }}"{% if f.workplace == aid|string %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>

@@ -535,7 +535,8 @@ def setup_context(a, step):
 
 @app.get('/', response_class=HTMLResponse)
 def index(request: Request):
-    return render(request, 'index.html', workplaces=[{**w, 'when': long_date(w['updated_at']), 'facts': [x for x in (w['subject_type'], w['person_role'], w['channel']) if x]}
+    return render(request, 'index.html', workplaces=[{**w, 'when': long_date(w['updated_at']), 'facts': [x for x in (w['subject_type'], w['person_role'], w['channel']) if x],
+                                                      'new_href': f'/analysis/{w["id"]}/check/1' if not store.count_units(w['id']) else f'/analysis/{w["id"]}/workspace#new'}
                                                      for w in store.workplaces()])
 
 

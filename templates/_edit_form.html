@@ -21,7 +21,4 @@
 <div class="actions"><button class="btn" type="button" data-edit-close>{{ icon('back') }} Cancel</button><button class="btn primary"{% if busy %} disabled{% endif %}>Save changes</button></div>
 {% if busy %}<p class="small-note">A task is running. Saving waits until it finishes.</p>{% endif %}
 </form>
-<div class="danger-zone"><div class="eyebrow">Delete</div><h2>Delete this workplace</h2>
-<p>This permanently deletes {{ a.person_name or 'the workplace' }}: its details, its messages, every result and the numbers of all its earlier checks. Download the PDF or CSV first if you need a copy. It cannot be undone.</p>
-<details class="delete-confirm"><summary class="linkbtn">Delete this workplace…</summary>
-<form method="post" action="/analysis/{{ a.id }}/delete"><button class="btn danger"{% if busy %} disabled{% endif %}>Yes, delete this workplace</button></form></details></div></div>
+</div>

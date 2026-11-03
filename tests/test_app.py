@@ -435,7 +435,7 @@ class Journey(AppCase):
         workspace = self.client.get(f'/analysis/{aid}/workspace').text
         workspace_folds = _Folds()
         workspace_folds.feed(workspace)
-        self.assertEqual([cls for cls, inside in workspace_folds.folds if not inside], ['new-confirm', 'edit-fold', 'delete-confirm', 'clear-confirm'])      # the two confirmations, and the form to edit the workplace with its own delete
+        self.assertEqual([cls for cls, inside in workspace_folds.folds if not inside], ['new-confirm', 'edit-fold', 'clear-confirm', 'delete-confirm'])      # the two confirmations, and the form to edit the workplace with its own delete
         self.assertEqual(workspace.count("addEventListener('beforeprint'"), 1)
 
     def test_the_csv_prints_only_the_vibe_check_blocks_there_is_something_to_say_in(self):
@@ -4915,6 +4915,44 @@ class WorkplaceManagement(AppCase):
         self.assertIn('every result and the numbers of all its earlier checks', page)
         self.assertIn('It cannot be undone.', page)
         self.assertIn(f'action="/analysis/{aid}/delete"', page)
+
+    def test_the_welcome_page_asks_for_a_workplace_first_then_offers_new_analytics_on_each(self):
+        real, names = self.store.workplaces(), self.store.workplace_names()
+        with mock.patch.object(self.store, 'workplaces', return_value=[]), mock.patch.object(self.store, 'workplace_names', return_value=[]):
+            home = self.client.get('/').text
+        self.assertIn('Create your first workplace', home)
+        self.assertIn('Create a workplace', home.split('</header>', 1)[0], 'the top bar offers it only while there is none')
+        self.assertNotIn('class="wp-card', home)
+        one = self.new_analysis(name='Alpha Team')
+        row = next(w for w in self.store.workplaces() if w['id'] == one)
+        with mock.patch.object(self.store, 'workplaces', return_value=[row]):
+            home = self.client.get('/').text
+        self.assertNotIn('Create your first workplace', home)
+        self.assertIn('Ready for new analytics?', home)
+        self.assertIn(f'href="/analysis/{one}/check/1"', home, 'no messages yet: it starts at step 1')
+        top = home.split('</header>', 1)[0]
+        self.assertIn('aria-label="Add a workplace"', top)
+        self.assertNotIn('Create a workplace', top, 'once a workplace exists the top bar has only the + button')
+        two = self.with_chat(name='Beta Crew')
+        home = self.client.get('/').text
+        self.assertIn('Which workplace do you want to check?', home)
+        self.assertEqual(home.count('New analytics</a>'), len(self.store.workplaces()), 'one New analytics button per workplace')
+        self.assertIn(f'href="/analysis/{two}/workspace#new"', home, 'a workplace with messages asks before replacing them')
+        self.assertIn('Add a workplace', home.split('class="how"', 1)[0])
+
+    def test_both_deletions_sit_together_in_a_red_danger_zone_at_the_bottom(self):
+        aid = self.with_chat()
+        page = self.client.get(f'/analysis/{aid}/workspace').text
+        main = page.split('<main', 1)[1].split('</main>', 1)[0]
+        zone = main[main.index('class="danger-panel"'):]
+        self.assertIn('Danger zone', zone)
+        for needle in ('Delete evidence and results', 'Delete this workplace', f'action="/analysis/{aid}/clear-units"', f'action="/analysis/{aid}/delete"'):
+            self.assertIn(needle, zone, needle)
+        self.assertEqual(main.count('class="danger-panel"'), 1)
+        for needle in (f'action="/analysis/{aid}/clear-units"', f'action="/analysis/{aid}/delete"'):
+            self.assertEqual(main.count(needle), 1, 'only in the danger zone')
+        self.assertNotIn('Delete this workplace', main[:main.index('class="danger-panel"')])
+        self.assertNotIn('Delete this workplace', self.client.get(f'/analysis/{aid}/workspace').text.split('id="edit"', 1)[1].split('id="danger"', 1)[0])
 
     def test_the_top_bar_picks_the_workplace_and_the_side_bar_is_only_new_analytics(self):
         first = self.new_analysis(name='Side Tab One')

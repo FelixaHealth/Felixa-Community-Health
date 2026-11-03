@@ -1,17 +1,26 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — See how people really communicate{% endblock %}
 {% block content %}
 <div class="home">
+{% if not workplaces %}
 <section class="welcome hero"><img class="welcome-logo" src="/static/logo_stacked.png" alt="Felixa Community Health" width="128"><div>
-<div class="eyebrow">Community health</div><h1>See how people really communicate.</h1>
-<p>Describe your workplace once, add your messages, and get a clear picture of how healthy the conversation is and what to try next.</p>
-<a class="btn primary large" href="/new">Create a workplace {{ icon('arrow') }}</a></div></section>
-{% if workplaces %}<section class="wp-list" aria-labelledby="wp-title"><h2 id="wp-title">Your workplaces</h2><ul>
-{% for w in workplaces %}<li><a href="/analysis/{{ w.id }}/workspace"><span class="wp-main"><strong>{{ w.person_name }}</strong><span class="wp-facts">{{ w.facts|join(' · ') }}</span></span>
-<span class="wp-score">{% if w.score is not none %}<b>{{ '%g'|format(w.score) }}</b><small>/ 10 vibe</small>{% else %}<small>No check yet</small>{% endif %}</span>
-<span class="wp-when">{{ w.when }}</span><span class="wp-go" aria-hidden="true">{{ icon('arrow') }}</span></a></li>
-{% endfor %}</ul></section>{% endif %}
-<section class="how" aria-label="How it works"><div><span class="how-ic">{{ icon('users') }}</span><strong>Describe</strong><p>Your community or team, and what you want to find out.</p></div>
-<div><span class="how-ic">{{ icon('upload') }}</span><strong>Add messages</strong><p>A file, pasted text, a public link or a recording. Names can be hidden.</p></div>
-<div><span class="how-ic">{{ icon('gauge') }}</span><strong>Check</strong><p>13 tone signals and a Vibe Check, with advice on what to try next.</p></div>
-<div><span class="how-ic">{{ icon('eye') }}</span><strong>Check again</strong><p>Press New after the next upload and follow the trend.</p></div></section>
+<div class="eyebrow">Welcome</div><h1>See how people really communicate.</h1>
+<p>Start by describing your workplace or community once. Then add messages and get a clear picture of how healthy the conversation is and what to try next.</p>
+<a class="btn primary large" href="/new">{{ icon('plus') }} Create your first workplace</a></div></section>
+{% else %}
+<section class="welcome hero compact"><img class="welcome-logo" src="/static/logo_stacked.png" alt="Felixa Community Health" width="96"><div>
+<div class="eyebrow">Welcome back</div><h1>{{ 'Ready for new analytics?' if workplaces|length == 1 else 'Which workplace do you want to check?' }}</h1>
+<p>{{ 'Start a new check for ' ~ workplaces[0].person_name ~ ', or open its workspace to see your results.' if workplaces|length == 1 else 'Choose a workplace to start new analytics, or open it to see its results.' }}</p></div></section>
+<section class="launch" aria-labelledby="launch-title"><h2 id="launch-title" class="sr-only">Your workplaces</h2>
+<ul class="wp-cards">
+{% for w in workplaces %}<li class="wp-card c{{ loop.index0 % 5 }}"><div class="wpc-top"><span class="wpc-avatar" aria-hidden="true">{{ (w.person_name or '?')[:1]|upper }}</span><div class="wpc-title"><strong>{{ w.person_name }}</strong><span class="wp-facts">{{ w.facts|join(' · ') }}</span></div>
+<span class="wpc-score">{% if w.score is not none %}<b>{{ '%g'|format(w.score) }}</b><small>/ 10 vibe</small>{% else %}<small>No check yet</small>{% endif %}</span></div>
+<div class="wpc-when">Last updated {{ w.when }}</div>
+<div class="wpc-actions"><a class="btn primary" href="{{ w.new_href }}">{{ icon('play') }} New analytics</a><a class="btn" href="/analysis/{{ w.id }}/workspace">{{ icon('eye') }} Open workspace</a></div></li>
+{% endfor %}
+<li class="wp-card add"><a href="/new"><span class="add-ic">{{ icon('plus') }}</span><strong>Add a workplace</strong><small>Another team, community or server</small></a></li></ul></section>
+{% endif %}
+<section class="how" aria-label="How it works"><div class="h1c"><span class="how-ic">{{ icon('users') }}</span><strong>Describe</strong><p>Your community or team, and what you want to find out.</p></div>
+<div class="h2c"><span class="how-ic">{{ icon('upload') }}</span><strong>Add messages</strong><p>A file, pasted text, a public link or a recording. Names can be hidden.</p></div>
+<div class="h3c"><span class="how-ic">{{ icon('gauge') }}</span><strong>Check</strong><p>13 tone signals and a Vibe Check, with advice on what to try next.</p></div>
+<div class="h4c"><span class="how-ic">{{ icon('chart') }}</span><strong>Follow the trend</strong><p>Run new analytics after each upload and watch the results change over time.</p></div></section>
 </div>{% endblock %}

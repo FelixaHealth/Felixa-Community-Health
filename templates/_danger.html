@@ -1,0 +1,12 @@
+{# The two permanent deletions, together, at the bottom of the workplace page. #}
+{% from "_icons.html" import icon %}
+<section class="danger-panel" id="danger" aria-labelledby="danger-title"><div class="danger-head"><span class="danger-ic">{{ icon('warning') }}</span><div><h2 id="danger-title">Danger zone</h2><p>These actions are permanent. Download the PDF or CSV first if you need a copy.</p></div></div>
+{% if busy %}<p class="small-note" id="danger-lock">A task is running. Deleting waits until it finishes.</p>{% endif %}
+{% if units_n %}<div class="danger-row"><div class="dr-text"><h3>Delete evidence and results</h3><p>Erase the messages loaded for {{ a.person_name or 'this workplace' }}{% if has_results %} and the results built from them{% endif %}. The workplace and its earlier-check numbers stay.</p></div>
+<details class="clear-confirm"><summary class="btn danger-outline">{{ icon('trash') }} Delete evidence and results…</summary>
+<p>This permanently deletes the {{ '{:,}'.format(units_n) }} communication unit{{ '' if units_n == 1 else 's' }}{% if has_results %} and every result built from them (ratings, guidance, Vibe Check, report, PDF and CSV). Download the PDF or CSV first if you need a copy{% endif %}. The messages are erased from the app's database file. The analysis details (name, role and goals) and the numbers of earlier checks (scores and counts, never messages, names or file names) are kept. This cannot be undone.</p>
+<form method="post" action="/analysis/{{ a.id }}/clear-units"><button class="btn danger"{% if busy %} disabled aria-describedby="danger-lock"{% endif %}>Yes, delete evidence and results</button></form></details></div>{% endif %}
+<div class="danger-row"><div class="dr-text"><h3>Delete this workplace</h3><p>Remove {{ a.person_name or 'the workplace' }} completely, with everything saved for it.</p></div>
+<details class="delete-confirm"><summary class="btn danger-outline">{{ icon('trash') }} Delete this workplace…</summary>
+<p>This permanently deletes {{ a.person_name or 'the workplace' }}: its details, its messages, every result and the numbers of all its earlier checks. Download the PDF or CSV first if you need a copy. It cannot be undone.</p>
+<form method="post" action="/analysis/{{ a.id }}/delete"><button class="btn danger"{% if busy %} disabled aria-describedby="danger-lock"{% endif %}>Yes, delete this workplace</button></form></details></div></section>
