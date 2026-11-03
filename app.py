@@ -34,6 +34,8 @@ from starlette.formparsers import MultiPartException
 
 import analysis
 import config
+import dashboard
+import measures
 import pipeline
 import report
 import report_export
@@ -392,8 +394,11 @@ def redirect(url, msg=None):
 
 def render(request, name, **context):
     flash = request.cookies.get('flash')
+    row = context.get('a')
+    nav = side_nav(row, request.url.path) if row is not None and row['status'] != 'draft' else [{'icon': 'chart', 'label': 'Results dashboard', 'href': '/dashboard',
+                                                                                           'state': 'on' if request.url.path.startswith('/dashboard') else 'todo'}]
     response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
-                                                                              'side_workplaces': store.workplace_names(), **context})
+                                                                              'side_workplaces': store.workplace_names(), 'side_nav': nav, **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -677,12 +682,34 @@ def wizard_rail(aid, steps, base, current, foot=None):
     return {'steps': items, 'foot': foot, 'setup': base.endswith('/step')}      # the steps of setting a workplace up (once) do not carry the list of workplaces
 
 
-def workplace_rail(aid, on):
+def side_nav(a, path):
+    """The side bar's way around one workplace, on every page of it: the dashboard of all results, this workplace's overview, a new analytics run, and editing in place.
+    The item for the page being looked at is marked."""
+    aid = a['id']
     empty = not store.count_units(aid)        # nothing to replace: start straight at step 1; otherwise the page asks before it replaces the messages and the report
-    items = [{'icon': 'eye', 'label': 'Overview', 'href': f'/analysis/{aid}/workspace', 'state': 'on' if on == 'overview' else 'todo'},
-             {'icon': 'plus', 'label': 'New analytics', 'href': f'/analysis/{aid}/check/1' if empty else f'/analysis/{aid}/workspace#new', 'state': 'todo'},
-             {'icon': 'target', 'label': 'Edit workplace', 'href': f'/analysis/{aid}/edit', 'state': 'on' if on == 'edit' else 'todo'}]
-    return {'steps': items, 'foot': None}
+    on = ('dashboard' if path.startswith('/dashboard') else 'edit' if path.endswith('/edit') else 'new' if '/check/' in path else
+          'report' if '/report' in path else 'overview' if path.endswith('/workspace') else '')
+    items = [('chart', 'Results dashboard', '/dashboard', 'dashboard'), ('eye', 'Overview', f'/analysis/{aid}/workspace', 'overview'),
+             ('plus', 'New analytics', f'/analysis/{aid}/check/1' if empty else f'/analysis/{aid}/workspace#new', 'new'),
+             ('target', 'Edit workplace', f'/analysis/{aid}/workspace#edit', 'edit')]
+    return [{'icon': ic, 'label': label, 'href': href, 'state': 'on' if key == on else 'todo'} for ic, label, href, key in items]
+
+
+@app.get('/dashboard', response_class=HTMLResponse)
+def results_dashboard(request: Request):
+    ctx = dashboard.build(request.query_params)
+    ctx['behaviour_keys'] = dashboard.BEHAVIOUR
+    ctx['assets'] = vibe_check.assets_html()
+    ctx['rail'] = {'steps': [], 'foot': None}
+    ctx['detail_ctx'] = None
+    detail = ctx['detail']
+    if detail:                                                       # one workplace: its latest alerts, badges and signal profile come from its own report
+        full = report.build(detail['aid'])
+        ms = full and full.get('measures')
+        if ms:
+            ctx['detail_ctx'] = {'alerts': [x for x in ms['alerts'] if x['level'] != 'good'][:8], 'levels': {k: measures.LEVEL_NAMES[k] for k in measures.LEVELS},
+                                 'badges': [b['name'] for b in ms['badges'] if b['earned']], 'signals': full.get('chart_html', '')}
+    return render(request, 'dashboard.html', **ctx)
 
 
 def read_setup(form):
@@ -702,21 +729,12 @@ def read_setup(form):
     return fields, errors
 
 
-def edit_page(request, a, shown, **extra):
-    """The edit page for workplace row `a`, showing the answers in `shown` (the saved ones, or what was typed when something was wrong)."""
-    ctx = setup_context(shown, 0)
-    ctx.update(rail=workplace_rail(a['id'], 'edit'), busy=bool(store.active_job(a['id'])), a=a if shown is a else shown, **extra)
-    return render(request, 'edit.html', **ctx)
-
-
-@app.get('/analysis/{aid}/edit', response_class=HTMLResponse)
-def edit_get(request: Request, aid: AnalysisId):
+@app.get('/analysis/{aid}/edit')
+def edit_get(aid: AnalysisId):
     a = store.get_analysis(aid)
     if not a:
         return not_found()
-    if a['status'] == 'draft':
-        return redirect(f'/analysis/{aid}/step/1')                       # not set up yet: the steps come first, once
-    return edit_page(request, a, a)
+    return redirect(f'/analysis/{aid}/workspace#edit' if a['status'] != 'draft' else f'/analysis/{aid}/step/1')      # edited in place on the workplace page
 
 
 @app.post('/analysis/{aid}/edit')
@@ -730,7 +748,7 @@ async def edit_post(request: Request, aid: AnalysisId):
     fields, errors = read_setup(form)
     if errors:                                                           # the page comes back with what was typed, so nothing has to be typed again
         typed = {'members': str(form.get('members', ''))[:12], 'time_zone': str(form.get('time_zone', ''))[:60]}
-        return edit_page(request, a, {**dict(a), **fields, **typed}, errors=errors, msg=errors[0])
+        return workspace_page(request, aid, {**dict(a), **fields, **typed}, errors=errors, msg=errors[0], edit_open=True)
     store.update_analysis(aid, **fields)
     return redirect(f'/analysis/{aid}/workspace', 'Workplace saved.')
 
@@ -755,19 +773,32 @@ def delete_workplace(aid: AnalysisId):
     if not a:
         return not_found()
     if not store.delete_analysis(aid):
-        return redirect(f'/analysis/{aid}/edit', 'Wait for the current task to finish, or cancel it, before deleting this workplace.')
+        return redirect(f'/analysis/{aid}/workspace#edit', 'Wait for the current task to finish, or cancel it, before deleting this workplace.')
     return redirect('/', f'Deleted {a["person_name"] or "the workplace"}, with its messages, results and the numbers of its earlier checks.')
 
 
 @app.get('/analysis/{aid}/workspace', response_class=HTMLResponse)
 def workspace(request: Request, aid: AnalysisId):
+    return workspace_page(request, aid)
+
+
+def workspace_page(request, aid, shown=None, **extra):
+    """The workplace page. `shown` holds what the edit form shows when it is not the saved answers (what was typed, when something was wrong)."""
     ctx = report.build(aid)
     if not ctx:
         return not_found()
     a = ctx['a']
-    return render(request, 'workspace.html', **ctx, local_model_ready=local_model_ready(), job=store.latest_job(aid), model=config.model_name(),
-                  local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(), rail=workplace_rail(aid, 'overview'),
-                  summary_title='Your workplace', summary_rows=setup_rows(a))
+    job = store.latest_job(aid)
+    form = setup_context(shown if shown is not None else a, 0)
+    form['form_goals'] = form.pop('goals')                      # the report's own `goals` is another list
+    form['fv'] = shown if shown is not None else a                # what the form shows: the saved answers, or what was typed when something was wrong
+    form.pop('rail', None)
+    form.pop('summary_rows', None)
+    form.pop('summary_title', None)
+    form.pop('a', None)
+    return render(request, 'workspace.html', **ctx, **form, local_model_ready=local_model_ready(), job=job, job_progress=progress_of(job, bool(a['incognito'])), model=config.model_name(),
+                  local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(), rail={'steps': [], 'foot': None},
+                  summary_title='Your workplace', summary_rows=setup_rows(a), **extra)
 
 
 # ---- a new check ----------------------------------------------------------------------------
@@ -1198,6 +1229,9 @@ def clear_units(aid: AnalysisId):
     return redirect(f'/analysis/{aid}/workspace', cleared_message(units, had_results))
 
 
+from progress import describe as progress_of      # noqa: E402  steps and percentage of a running task, for the progress window
+
+
 # ---- background tasks ------------------------------------------------------------------
 WORKER = ThreadPoolExecutor(max_workers=1)    # one model call at a time on a small instance
 JOB_LOCK = threading.Lock()
@@ -1264,6 +1298,8 @@ def job_status(aid: AnalysisId):
     job = store.latest_job(aid)
     if job:
         job.pop('result', None)
+        a = store.get_analysis(aid)
+        job['progress'] = progress_of(job, bool(a and a['incognito']))
     return JSONResponse(job or {})
 
 

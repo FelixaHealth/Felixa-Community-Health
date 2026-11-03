@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Results dashboard{% endblock %}
+{% block content %}
+<div class="shell two">{% include "_rail.html" %}<div class="stage vc">
+{{ assets|safe }}
+<section class="dash-head"><div class="eyebrow">Results</div><h1>Results dashboard</h1>
+<p class="lead">Every check of every workplace in one place. Choose a workplace, a kind of community, a platform or a period to switch the view.</p></section>
+{% if empty %}<section class="panel dash-empty"><h2>No results yet</h2><p>Run your first analytics in a workplace, and its numbers appear here. Each later check adds a point to the lines.</p>{% if side_workplaces %}<p><a class="btn primary" href="/analysis/{{ side_workplaces[0].id }}/workspace">{{ icon('plus') }} Open {{ side_workplaces[0].name }}</a></p>{% else %}<p><a class="btn primary" href="/new">{{ icon('plus') }} Create a workplace</a></p>{% endif %}</section>
+{% else %}
+<section class="panel"><form method="get" action="/dashboard" class="dash-form" id="dash-form"><div class="dash-filters">
+<label class="field">Workplace<select name="workplace" data-auto><option value="">All workplaces</option>{% for aid, name in f.workplaces %}<option value="{{ aid }}"{% if f.workplace == aid|string %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+<label class="field">Kind of community<select name="kind" data-auto><option value="">All kinds</option>{% for k in f.kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+<label class="field">Platform<select name="platform" data-auto><option value="">All platforms</option>{% for p in f.platforms %}<option value="{{ p }}"{% if f.platform == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+<label class="field">From<input type="date" name="from" value="{{ f['from'] }}"></label>
+<label class="field">To<input type="date" name="to" value="{{ f['to'] }}"></label></div>
+<div class="dash-ranges" role="group" aria-label="Period">{% for key, label, days in ranges %}<button class="chip-btn{% if f.range == key %} on{% endif %}" name="range" value="{{ key }}" type="submit">{{ label }}</button>{% endfor %}<button class="btn" type="submit">{{ icon('check') }} Apply dates</button>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}<a class="btn quiet" href="/dashboard">Clear filters</a>{% endif %}</div></form></section>
+{% if none_in_view %}<section class="panel dash-empty"><h2>Nothing in this view</h2><p>No check matches these filters. Widen the period or choose All workplaces.</p></section>
+{% else %}
+<div class="dash-kpis">{% for k in kpis %}<div class="dash-kpi"><small>{{ k.label }}</small><strong>{{ k.value }}</strong><span>{{ k.sub }}{% if k.band %} · {{ k.band }}{% endif %}</span></div>{% endfor %}</div>
+{% if legend %}<ul class="dash-legend" aria-label="Workplaces">{% for name, role in legend %}<li><i class="{{ role }}"></i>{{ name }}</li>{% endfor %}</ul>{% endif %}
+<div class="dash-stack">
+{% if figs.health %}<section class="dash-card"><h2>Health score over time</h2><p class="small-note">One number from 0 to 100 that adds up all 13 tones. 50 is neutral and higher is warmer.</p>{{ figs.health|safe }}</section>{% endif %}
+{% if figs.vibe %}<section class="dash-card"><h2>Vibe Check over time</h2><p class="small-note">The friendliness score out of 10 at each check.</p>{{ figs.vibe|safe }}</section>{% endif %}
+{% if figs.behaviour %}<section class="dash-card"><h2>How people spoke</h2><p class="small-note">Messages per 100 that were openly hostile, caring, sarcastic or heated{% if not f.workplace and not detail %}, averaged across the workplaces in this view{% endif %}.</p><ul class="dash-legend">{% for key, label, role in behaviour_keys %}<li><i class="{{ role }}"></i>{{ label }}</li>{% endfor %}</ul>{{ figs.behaviour|safe }}</section>{% endif %}
+{% if figs.members %}<section class="dash-card"><h2>Members over time</h2><p class="small-note">The number of members each check was made with.</p>{{ figs.members|safe }}</section>{% endif %}
+</div>
+<div class="dash-grid dash-narrow" style="margin-top:18px">
+{% if figs.compare_health %}<section class="dash-card"><h2>Latest health score</h2><p class="small-note">Latest check of each workplace.</p>{{ figs.compare_health|safe }}</section>{% endif %}
+{% if figs.compare_vibe %}<section class="dash-card"><h2>Latest Vibe Check</h2><p class="small-note">Latest check of each workplace, out of 10.</p>{{ figs.compare_vibe|safe }}</section>{% endif %}
+{% if figs.compare_conflict %}<section class="dash-card"><h2>Openly hostile, per 100 messages</h2><p class="small-note">Latest check of each workplace. Lower is calmer.</p>{{ figs.compare_conflict|safe }}</section>{% endif %}
+{% if figs.compare_empathy %}<section class="dash-card"><h2>Care, per 100 messages</h2><p class="small-note">Latest check of each workplace. Higher shows more care and understanding.</p>{{ figs.compare_empathy|safe }}</section>{% endif %}
+</div>
+{% if detail_ctx %}<section class="dash-card dash-detail" style="margin-top:18px"><div class="eyebrow">{{ detail.name }}</div><h2>Latest alerts and badges</h2>
+{% if detail_ctx.alerts %}<ul>{% for al in detail_ctx.alerts %}<li><strong>{{ detail_ctx.levels[al.level] }}:</strong> {{ al.title }}. {{ al.detail }}</li>{% endfor %}</ul>{% else %}<p>No alerts in the latest check.</p>{% endif %}
+{% if detail_ctx.badges %}<p><strong>Badges earned:</strong> {{ detail_ctx.badges|join(', ') }}</p>{% else %}<p>No badges earned in the latest check.</p>{% endif %}
+<p><a class="btn" href="/analysis/{{ detail.aid }}/workspace">{{ icon('eye') }} Open {{ detail.name }}</a> <a class="btn" href="/analysis/{{ detail.aid }}/report">{{ icon('file') }} Full report</a></p>
+{% if detail_ctx.signals %}<h3>Signal profile, latest check</h3>{{ detail_ctx.signals|safe }}{% endif %}</section>{% endif %}
+<section class="dash-card" style="margin-top:18px"><h2>Latest check of each workplace</h2>{% if latest|length %}<div class="table-wrap"><table><caption class="sr-only">Latest check of each workplace</caption><thead><tr>{% for h in latest_head %}<th scope="col">{{ h }}</th>{% endfor %}</tr></thead><tbody>{% for row in latest %}<tr>{% for c in row %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% endif %}</section>
+<section class="dash-card" style="margin-top:18px"><h2>All checks</h2><p class="small-note">{{ shown_n }} of {{ checks_n }} checks in this view, newest first.</p>{{ tables.checks|safe }}</section>
+{% endif %}{% endif %}
+</div></div>{% endblock %}

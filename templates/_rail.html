@@ -1,11 +1,14 @@
-{# Left list of steps. `rail` = {'items': [{num|icon, label, href, state}], 'foot': {icon, label, href} or None}. #}
+{# The side bar, on every page: the workplaces, the way around the current one, and (while setting up or checking) the steps. `rail` = {'steps': [...], 'foot': {...} or None}. #}
 {% from "_icons.html" import icon %}
-<div class="rail-col">{% if side_workplaces and not rail.setup %}<nav class="rail-wps" aria-label="Workplaces"><h2>Workplaces</h2><ul>
+<div class="rail-col">{% if side_workplaces %}<nav class="rail-wps" aria-label="Workplaces"><h2>Workplaces</h2><ul>
 {% for w in side_workplaces %}<li><a href="/analysis/{{ w.id }}/workspace"{% if a is defined and a.id == w.id %} aria-current="page" class="on"{% endif %}>{{ w.name }}</a></li>{% endfor %}
 <li><a class="new" href="/new">{{ icon('plus') }} New workplace</a></li></ul></nav>{% endif %}
-<nav class="rail" aria-label="Steps"><ol>
+{% if side_nav %}<nav class="rail" aria-label="Navigation"><ol>
+{% for it in side_nav %}<li><a class="rail-item{% if it.state == 'on' %} on{% endif %}" href="{{ it.href }}"{% if it.state == 'on' %} aria-current="page"{% endif %}><b>{{ icon(it.icon) }}</b><span>{{ it.label }}</span></a></li>
+{% endfor %}</ol></nav>{% endif %}
+{% if rail.steps %}<nav class="rail rail-steps" aria-label="Steps"><ol>
 {% for it in rail.steps %}<li><a class="rail-item{% if it.state == 'on' %} on{% elif it.state == 'done' %} done{% endif %}" href="{{ it.href }}"{% if it.state == 'on' %} aria-current="step"{% endif %}><b>{% if it.icon %}{{ icon(it.icon) }}{% elif it.state == 'done' %}{{ icon('check') }}{% else %}{{ it.num }}{% endif %}</b><span>{{ it.label }}</span></a></li>
 {% endfor %}</ol>
 {% if rail.foot %}<div class="rail-rule"></div>
 <a class="rail-item" href="{{ rail.foot.href }}"><b>{{ icon(rail.foot.icon) }}</b><span>{{ rail.foot.label }}</span></a>{% endif %}
-</nav></div>
+</nav>{% endif %}</div>

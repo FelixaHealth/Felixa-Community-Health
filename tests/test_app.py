@@ -435,7 +435,7 @@ class Journey(AppCase):
         workspace = self.client.get(f'/analysis/{aid}/workspace').text
         workspace_folds = _Folds()
         workspace_folds.feed(workspace)
-        self.assertEqual([cls for cls, inside in workspace_folds.folds if not inside], ['new-confirm', 'clear-confirm'])
+        self.assertEqual([cls for cls, inside in workspace_folds.folds if not inside], ['new-confirm', 'edit-fold', 'delete-confirm', 'clear-confirm'])      # the two confirmations, and the form to edit the workplace with its own delete
         self.assertEqual(workspace.count("addEventListener('beforeprint'"), 1)
 
     def test_the_csv_prints_only_the_vibe_check_blocks_there_is_something_to_say_in(self):
@@ -2135,7 +2135,7 @@ class Layout(AppCase):
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'Thanks all, great game!\nyou are trash\nnice work today\nwell played everyone\nplease stop, thank you',
                                                             'actor_role': 'SUBJECT'})
         self.assertEqual(self.run_job(aid)['status'], 'complete')
-        for path in ('edit', 'workspace', 'report'):
+        for path in ('workspace', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertEqual(page.count('<main class="page" id="main">'), 1, path)
             inside = page.split('<main class="page" id="main">', 1)[1].split('</main>', 1)[0]
@@ -3922,7 +3922,7 @@ class Workplaces(AppCase):
         page = self.client.get(f'/analysis/{aid}/workspace').text
         for needle in ('Night Owls', 'Online community', 'Gaming', 'Discord', 'Looked after by Sam Rivera, Admin', 'Run new analytics'):
             self.assertIn(needle, page)
-        for needle in ('Your workplace', 'Online community', 'Sam Rivera, Admin', 'Is my community healthy?; Are people engaged?', f'href="/analysis/{aid}/edit"'):
+        for needle in ('Your workplace', 'Online community', 'Sam Rivera, Admin', 'Is my community healthy?; Are people engaged?', f'href="/analysis/{aid}/workspace#edit"'):
             self.assertIn(needle, page)                                                             # the details of the workplace sit on its own page
         self.assertNotIn('Your workplace', self.client.get(f'/analysis/{aid}/step/6').text, 'and no longer beside the setup steps')
 
@@ -4753,11 +4753,13 @@ class WorkplaceManagement(AppCase):
 
     def test_the_edit_page_shows_every_answer_and_saves_them_all_at_once(self):
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/edit').text
+        page = self.client.get(f'/analysis/{aid}/workspace').text
         for name in ('environment', 'workplace_name', 'members', 'time_zone', 'area', 'channel', 'user_name', 'user_role', 'goals'):
             self.assertIn(f'name="{name}"', page, name)
         self.assertIn('value="Night Owls Guild"', page)
         self.assertEqual(self.client.get('/analysis/999999/edit').status_code, 404)
+        r = self.client.get(f'/analysis/{aid}/edit')
+        self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/workspace#edit'), 'the old address opens the form in place')
         r = self.client.post(f'/analysis/{aid}/edit', data=self.FORM)
         self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/workspace'))
         self.assertEqual(flash(r), 'Workplace saved.')
@@ -4766,7 +4768,7 @@ class WorkplaceManagement(AppCase):
                          ('Team', 'Robotics Club', 1200, 'Europe/London', 'Education', 'Slack', 'Alex Kim', 'Manager'))
         self.assertEqual(json.loads(row['goals_json']), ['Are people engaged?'])
         self.assertEqual(row['status'], 'ready', 'editing never sends a workplace back to setup')
-        page = self.client.get(f'/analysis/{aid}/edit').text
+        page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertIn('value="Robotics Club"', page)
         self.assertIn('value="1200"', page)
         self.assertIn('value="Europe/London"', page)
@@ -4827,7 +4829,7 @@ class WorkplaceManagement(AppCase):
 
     def test_the_edit_page_explains_what_deleting_does_before_it_does_it(self):
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/edit').text
+        page = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertIn('Delete this workplace…', page)
         self.assertIn('every result and the numbers of all its earlier checks', page)
         self.assertIn('It cannot be undone.', page)
@@ -4838,16 +4840,21 @@ class WorkplaceManagement(AppCase):
         second = self.new_analysis(name='Side Tab Two')
         draft = int(self.client.get('/new').headers['location'].split('/')[2])
         self.client.post(f'/analysis/{draft}/step/2', data={'workplace_name': 'Never Finished'})
-        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/edit', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3'):
+        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3'):
             page = self.client.get(path).text
             self.assertIn('aria-label="Workplaces"', page, path)
             self.assertIn(f'<a href="/analysis/{first}/workspace" aria-current="page" class="on">Side Tab One</a>', page, path)
             self.assertIn(f'<a href="/analysis/{second}/workspace">Side Tab Two</a>', page, path)
             self.assertIn('New workplace', page, path)
             self.assertNotIn('Never Finished', page, 'a workplace that was never set up is not listed')
-        for step in range(1, 7):                                                                    # setup happens once: its steps carry no list of workplaces
-            self.assertNotIn('aria-label="Workplaces"', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
-        self.assertIn('href="/analysis/%d/edit"' % first, self.client.get(f'/analysis/{first}/workspace').text, 'Edit workplace opens the edit page, not the steps again')
+        for step in range(1, 7):                                                                    # the side bar is on every page, setup steps included
+            self.assertIn('aria-label="Workplaces"', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
+        page = self.client.get(f'/analysis/{first}/workspace').text
+        for label in ('Results dashboard', 'Overview', 'New analytics', 'Edit workplace'):
+            self.assertIn(f'<span>{label}</span>', page, label)
+        self.assertIn(f'href="/analysis/{first}/workspace#edit"', page, 'Edit workplace opens the form on the workplace page, not a new page')
+        self.assertIn('href="/dashboard"', page)
+        self.assertIn('aria-current="page"', self.client.get('/dashboard').text.split('aria-label="Navigation"', 1)[1].split('</nav>', 1)[0], 'the dashboard item is marked on the dashboard')
         self.assertNotIn(f'href="/analysis/{first}/step/1"', self.client.get(f'/analysis/{first}/workspace').text)
 
     def test_members_are_set_while_checking_and_each_check_keeps_its_own_number(self):

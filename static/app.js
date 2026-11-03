@@ -78,3 +78,15 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   const open = () => { if (location.hash === '#new') { const d = document.querySelector('details.new-confirm'); if (d) { d.open = true; d.querySelector('summary').focus(); } } };
   open(); addEventListener('hashchange', open);
 })();
+
+// Edit workplace sits in the workplace page: "Edit" in the side bar opens it, and Cancel closes it.
+(() => {
+  const box = document.getElementById('edit-details');
+  if (!box) return;
+  const sync = () => { if (location.hash === '#edit') { box.open = true; box.scrollIntoView({ block: 'start' }); } };
+  sync(); addEventListener('hashchange', sync);
+  box.querySelectorAll('[data-edit-close]').forEach((b) => b.addEventListener('click', () => { box.open = false; if (location.hash === '#edit') history.replaceState(null, '', location.pathname); }));
+})();
+
+// Dashboard: choosing a workplace, a kind or a platform applies at once.
+(() => { document.querySelectorAll('#dash-form select[data-auto]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit())); })();

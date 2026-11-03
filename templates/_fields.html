@@ -5,7 +5,7 @@
 {% endmacro %}
 {% macro members_field(value) %}<label class="field">Number of members <small>(optional)</small><input name="members" inputmode="numeric" value="{{ value }}" maxlength="12" placeholder="For example: 250"></label>{% endmacro %}
 {% macro zone_field(value, zones) %}<label class="field">Time zone <small>(optional)</small><input name="time_zone" list="zone-list" value="{{ value }}" maxlength="60" placeholder="For example: Europe/London" autocomplete="off" data-tz-auto></label>
-<datalist id="zone-list">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>{% endmacro %}
+<datalist id="zone-list">{% for z in zones %}<option value="{{ z }}"></option>{% endfor %}</datalist>{% endmacro %}
 {% macro choice_grid(name, options, current, typed, label) %}
 <fieldset class="group"><legend class="field-legend">{{ label }}</legend><div class="option-grid chips">{% for o in options %}<label class="option"><input type="radio" name="{{ name }}" value="{{ o }}" data-other="{{ name }}_other" required {% if o == current %}checked{% endif %}><span>{{ o }}</span></label>{% endfor %}</div></fieldset>
 <label class="field other-field" id="{{ name }}_other_wrap" {% if current != 'Other' %}hidden{% endif %}>Tell us <input name="{{ name }}_other" value="{{ typed }}" maxlength="120" placeholder="Type it here"></label>

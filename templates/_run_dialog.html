@@ -1,0 +1,12 @@
+{# The progress window: opens by itself while a task runs. Needs `job`, `job_progress`, `a`. #}
+{% set p = job_progress %}
+<dialog class="run-dialog no-print" id="run-dialog" aria-labelledby="run-title" data-job-url="/analysis/{{ a.id }}/job" data-open="{{ 'yes' if busy else 'no' }}">
+<div class="run-head"><div><div class="eyebrow">{{ 'Vibe Check' if job.kind == 'vibe' else 'Analytics' }}</div><h2 id="run-title">{% if job.status == 'complete' %}Done{% elif job.status in ('failed', 'cancelled') %}{{ 'Stopped' if job.status == 'cancelled' else 'This did not finish' }}{% else %}Running your analytics{% endif %}</h2></div>
+<button class="icon-btn" type="button" data-run-hide aria-label="Hide this window. The task keeps running.">{{ icon('close') }}</button></div>
+<div class="run-bar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ p.percent or 0 }}"><span style="width:{{ p.percent or 0 }}%"></span></div>
+<p class="run-percent"><strong id="run-percent">{{ p.percent or 0 }}%</strong> <span id="run-elapsed"></span></p>
+<ol class="run-steps" id="run-steps">{% for s in p.stages %}<li class="{{ s.state }}" data-key="{{ s.key }}"><i aria-hidden="true"></i><span>{{ s.label }}</span></li>{% endfor %}</ol>
+<p class="run-detail" id="run-detail" role="status" aria-live="polite">{{ p.detail }}</p>
+<p class="small-note">You can hide this window and keep using the app. The task goes on in the background.</p>
+<div class="run-actions"><form method="post" action="/analysis/{{ a.id }}/cancel" id="run-cancel"><button class="btn">Cancel this task</button></form><button class="btn primary" type="button" id="run-open" hidden>Open the results</button><button class="btn" type="button" data-run-hide>Hide</button></div>
+</dialog>

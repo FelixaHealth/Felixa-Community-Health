@@ -35,6 +35,7 @@ ROLES = {
         'series1': '#1f66bf', 'pos': '#1f66bf', 'neu': '#898781', 'neg': '#c93838',
         'good': '#0ca30c', 'warn': '#fab219', 'serious': '#ec835a', 'crit': '#d03b3b',
         'on-fill': '#ffffff', 'on-neu': '#0b0b0b', 'on-warn': '#0b0b0b',
+        'cat1': '#0072B2', 'cat2': '#E69F00', 'cat3': '#009E73', 'cat4': '#D55E00', 'cat5': '#CC79A7', 'cat6': '#56B4E9',      # one colour per workplace on the dashboard (colour-blind safe)
     },
     'dark': {
         'surface': '#1a1a19', 'ink': '#f0efec', 'ink2': '#c3c2b7', 'muted': '#898781',
@@ -42,6 +43,7 @@ ROLES = {
         'series1': '#3987e5', 'pos': '#3987e5', 'neu': '#c3c2b7', 'neg': '#e66767',
         'good': '#0ca30c', 'warn': '#fab219', 'serious': '#ec835a', 'crit': '#d03b3b',
         'on-fill': '#ffffff', 'on-neu': '#0b0b0b', 'on-warn': '#0b0b0b',
+        'cat1': '#56A8E8', 'cat2': '#F0B429', 'cat3': '#2FC197', 'cat4': '#EF7A3A', 'cat5': '#E39BC4', 'cat6': '#7CC4F0',
     },
 }
 
