@@ -4941,19 +4941,24 @@ class WorkplaceManagement(AppCase):
         self.assertIn(f'href="/analysis/{two}/workspace#new"', home, 'a workplace with messages asks before replacing them')
         self.assertIn('Add a workplace', home.split('class="how"', 1)[0])
 
-    def test_both_deletions_sit_together_in_a_red_danger_zone_at_the_bottom(self):
+    def test_both_deletions_sit_together_in_a_small_danger_zone_inside_the_workplace_settings(self):
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/workspace').text
         main = page.split('<main', 1)[1].split('</main>', 1)[0]
-        zone = main[main.index('class="danger-panel"'):]
-        self.assertIn('Danger zone', zone)
-        for needle in ('Delete evidence and results', 'Delete this workplace', f'action="/analysis/{aid}/clear-units"', f'action="/analysis/{aid}/delete"'):
-            self.assertIn(needle, zone, needle)
+        settings = main.index('id="edit-details"')
+        zone = main.index('class="danger-panel"')
+        self.assertGreater(zone, settings, 'the danger zone is inside the settings panel')
+        self.assertIn('Workplace settings', main)
+        self.assertIn('Settings</a>', main)
         self.assertEqual(main.count('class="danger-panel"'), 1)
+        zone_html = main[zone:]
+        self.assertIn('Danger zone', zone_html)
+        for needle in ('Delete evidence and results', 'Delete this workplace', f'action="/analysis/{aid}/clear-units"', f'action="/analysis/{aid}/delete"'):
+            self.assertIn(needle, zone_html, needle)
+            self.assertEqual(main.count(needle) >= 1, True)
         for needle in (f'action="/analysis/{aid}/clear-units"', f'action="/analysis/{aid}/delete"'):
             self.assertEqual(main.count(needle), 1, 'only in the danger zone')
-        self.assertNotIn('Delete this workplace', main[:main.index('class="danger-panel"')])
-        self.assertNotIn('Delete this workplace', self.client.get(f'/analysis/{aid}/workspace').text.split('id="edit"', 1)[1].split('id="danger"', 1)[0])
+        self.assertNotIn('class="danger-panel"', main[:settings], 'not on the open page, only in the settings')
 
     def test_the_top_bar_picks_the_workplace_and_the_side_bar_is_only_new_analytics(self):
         first = self.new_analysis(name='Side Tab One')

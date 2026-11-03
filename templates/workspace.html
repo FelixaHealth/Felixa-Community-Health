@@ -5,7 +5,7 @@
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Workplace</div><h1>{{ a.person_name or 'Untitled workplace' }}</h1>
 <div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}</div>
 {% if a.user_name %}<p>Looked after by {{ a.user_name }}{% if a.user_role %}, {{ a.user_role }}{% endif %}</p>{% endif %}</div>
-<div class="head-actions">{% if has_results %}<a class="btn" href="/analysis/{{ a.id }}/report">{{ icon('eye') }} Open report</a><a class="btn" href="/analysis/{{ a.id }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn" href="/analysis/{{ a.id }}/export">{{ icon('layers') }} CSV</a>{% endif %}<a class="btn quiet" href="/analysis/{{ a.id }}/workspace#edit">Edit</a></div></section>
+<div class="head-actions">{% if has_results %}<a class="btn" href="/analysis/{{ a.id }}/report">{{ icon('eye') }} Open report</a><a class="btn" href="/analysis/{{ a.id }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn" href="/analysis/{{ a.id }}/export">{{ icon('layers') }} CSV</a>{% endif %}<a class="btn quiet" href="/analysis/{{ a.id }}/workspace#edit">{{ icon('target') }} Settings</a></div></section>
 
 {% if job %}{% set partial = job.status == 'complete' and job.message.startswith(with_problems) %}{% set problem = partial or job.status == 'failed' %}<section class="panel{% if problem %} job-problem{% endif %}" role="status" aria-live="polite"><div class="eyebrow">{{ 'Vibe Check' if job.kind=='vibe' else 'Analysis' }} · <span id="job-state">{{ 'Partly complete' if partial else job.status|title }}</span></div>{% if problem %}<h2>{{ with_problems if partial else 'This task did not finish' }}</h2><p id="job-message">{{ (job.message[with_problems|length + 1:] if partial else job.message)|trim }}</p>{% else %}<h2 id="job-message">{{ job.message }}</h2>{% endif %}{% if busy %}<p>You can leave this page and return later. Progress updates automatically.</p><form method="post" action="/analysis/{{ a.id }}/cancel"><button class="btn">Cancel this task</button></form><p><button class="btn" type="button" data-run-show>Show the progress window</button></p>{% endif %}</section>{% endif %}
 {% if busy %}<script src="/static/job.js?v={{ asset_v }}" data-job-url="/analysis/{{ a.id }}/job"></script>{% endif %}
@@ -19,7 +19,7 @@
 {% else %}<form method="post" action="/analysis/{{ a.id }}/check/new"><button class="btn primary large">{{ icon('plus') }} New</button></form>{% endif %}</section>
 
 {% include "_setup.html" %}
-<section class="panel inline-edit-panel" id="edit"><details class="edit-fold" id="edit-details"{% if edit_open %} open{% endif %}><summary class="btn">{{ icon('target') }} Edit this workplace</summary>{% include "_edit_form.html" %}</details></section>
+<section class="panel inline-edit-panel" id="edit"><details class="edit-fold" id="edit-details"{% if edit_open %} open{% endif %}><summary class="btn">{{ icon('target') }} Workplace settings</summary>{% include "_edit_form.html" %}</details></section>
 
 {# Once there are results they come first: the summary, the alerts, the measures over time and the badges, then the rest of the report. #}
 {% if has_results %}{% include "_results_card.html" %}{% endif %}
@@ -35,5 +35,4 @@
 </section>{% endif %}
 
 {% if not has_results %}{% include "_results_card.html" %}{% endif %}
-{% include "_danger.html" %}
 </div></div>{% endblock %}

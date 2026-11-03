@@ -1,7 +1,7 @@
 {# The workplace form, in place on the workplace page. Needs setup_context(...) values, `a`, `busy`, `errors`. #}
 {% from "_fields.html" import choice, choice_grid, channel_grid, members_field, zone_field with context %}
 <div class="edit-inline">
-<p class="lead">Change any detail and save. Earlier checks keep the numbers they were made with.</p>
+<h2 class="mini-h">Workplace settings</h2><p class="lead">Change any detail and save. Earlier checks keep the numbers they were made with.</p>
 {% if errors %}<div class="notice warn" role="alert"><strong>Please fix this:</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
 <form method="post" action="/analysis/{{ a.id }}/edit" class="edit-form">
 <h2 class="mini-h">About the place</h2>
@@ -21,4 +21,5 @@
 <div class="actions"><button class="btn" type="button" data-edit-close>{{ icon('back') }} Cancel</button><button class="btn primary"{% if busy %} disabled{% endif %}>Save changes</button></div>
 {% if busy %}<p class="small-note">A task is running. Saving waits until it finishes.</p>{% endif %}
 </form>
+{% include "_danger.html" %}
 </div>
