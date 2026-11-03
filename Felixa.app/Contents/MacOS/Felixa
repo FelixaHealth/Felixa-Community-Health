@@ -1,0 +1,65 @@
+#!/bin/bash
+# Felixa Community Health: starts the app in the background and opens it in your browser. No Terminal window.
+# Opening it again while the app runs just opens the browser. "Stop Felixa" stops it.
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+STATE="$HOME/Library/Application Support/Felixa"
+LOGDIR="$HOME/Library/Logs/Felixa"
+LOG="$LOGDIR/felixa.log"
+mkdir -p "$STATE" "$LOGDIR"
+# A program started by double-click gets a short PATH: add where Claude Code, Homebrew and python.org put things.
+PY_BINS=""
+for d in /Library/Frameworks/Python.framework/Versions/*/bin; do [ -d "$d" ] && PY_BINS="$d:$PY_BINS"; done
+export PATH="$HOME/.local/bin:$PY_BINS/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+notify() { command -v osascript >/dev/null 2>&1 && osascript -e "display notification \"$1\" with title \"Felixa\"" >/dev/null 2>&1; echo "$(date '+%F %T') $1" >>"$LOG"; }
+stop_with() {
+  echo "$(date '+%F %T') STOPPED: $1" >>"$LOG"
+  command -v osascript >/dev/null 2>&1 && osascript -e "display dialog \"$1\" & return & return & \"Details: $LOG\" buttons {\"OK\"} default button 1 with icon caution with title \"Felixa\"" >/dev/null 2>&1
+  exit 1
+}
+
+# Already running: open the browser and finish.
+if [ -f "$STATE/port" ] && curl -fs "http://127.0.0.1:$(cat "$STATE/port")/health" >/dev/null 2>&1; then
+  open "http://127.0.0.1:$(cat "$STATE/port")"
+  exit 0
+fi
+
+cd "$ROOT" || stop_with "The Felixa folder was not found. Keep Felixa.app inside the Felixa-Community-Health folder."
+
+# Python 3.10 or newer.
+PY=""
+for candidate in python3.15 python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then PY="$candidate"; break; fi
+done
+[ -n "$PY" ] || stop_with "Python 3.10 or newer is needed. Install it from python.org, then open Felixa again."
+
+# First time (or after an update): set the app up. The browser opens when it is ready.
+WANT="$(shasum requirements.txt 2>/dev/null | cut -d' ' -f1)"
+if [ ! -x ".venv/bin/python" ] || [ "$(cat "$STATE/requirements.sha" 2>/dev/null)" != "$WANT" ]; then
+  notify "Setting Felixa up for the first time. This takes a few minutes. Your browser opens when it is ready."
+  if [ -d ".venv" ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then rm -rf .venv; fi
+  [ -x ".venv/bin/python" ] || "$PY" -m venv .venv >>"$LOG" 2>&1 || stop_with "Could not create the Python environment."
+  .venv/bin/python -m pip install -q -r requirements.txt >>"$LOG" 2>&1 || stop_with "Could not install what Felixa needs. Check your internet connection and open Felixa again."
+  echo "$WANT" >"$STATE/requirements.sha"
+fi
+
+command -v claude >/dev/null 2>&1 || notify "Claude Code was not found, so Your Claude login will not work. Install it from claude.com/claude-code and sign in once."
+
+if [ -f ".env" ]; then set -a; . ./.env; set +a; fi
+export FELIXA_NO_LOCAL_MODEL=1
+unset ANTHROPIC_API_KEY FELIXA_ANTHROPIC_API_KEY
+PORT="$(.venv/bin/python pick_port.py 2>>"$LOG")" || stop_with "No free port was found."
+export PORT
+nohup .venv/bin/python app.py >>"$LOG" 2>&1 &
+echo $! >"$STATE/pid"
+echo "$PORT" >"$STATE/port"
+
+for _ in $(seq 1 120); do
+  if curl -fs "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    open "http://127.0.0.1:$PORT"
+    exit 0
+  fi
+  kill -0 "$(cat "$STATE/pid")" 2>/dev/null || stop_with "Felixa stopped while starting."
+  sleep 0.5
+done
+stop_with "Felixa did not start in time."

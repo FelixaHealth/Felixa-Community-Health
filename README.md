@@ -112,3 +112,7 @@ The ratings in these tests are made up, so they check the rules and the wording 
 - Alerts, measures and badges are built from the 13 ratings alone, so they never show a message, an author, a source name or a file name. Only the Vibe Check section quotes messages. They describe wording in part of a chat, not a person or a team, and every cut-off in them is our own starting choice, not a tested norm.
 - The signals describe the language in the supplied text, not personality, intent or mental state.
 - The Vibe Check forecast is a rules-based indicator and says so on the page.
+
+## Open it like any other Mac app
+
+Keep the folder where it is and double-click **Felixa** (`Felixa.app`). No Terminal window opens: the first time it sets itself up (a few minutes), then your browser opens the app. Double-click it again at any time to open the browser; **Stop Felixa** stops it. The app uses your Claude login, so Claude Code must be installed and signed in once (`claude`). The first time, macOS may say it cannot check the app: right-click it, choose **Open**, then **Open**. The log is in `~/Library/Logs/Felixa/felixa.log`.

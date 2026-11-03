@@ -1,0 +1,12 @@
+#!/bin/bash
+# Stops Felixa Community Health, which Felixa.app started in the background.
+STATE="$HOME/Library/Application Support/Felixa"
+if [ -f "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+  kill "$(cat "$STATE/pid")" 2>/dev/null
+  rm -f "$STATE/pid" "$STATE/port"
+  command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Felixa is stopped. Open Felixa to start it again." with title "Felixa"' >/dev/null 2>&1
+else
+  rm -f "$STATE/pid" "$STATE/port"
+  command -v osascript >/dev/null 2>&1 && osascript -e 'display notification "Felixa was not running." with title "Felixa"' >/dev/null 2>&1
+fi
+exit 0

@@ -1,0 +1,39 @@
+"""The double-click Mac launchers: Felixa.app starts the app with no Terminal window, Stop Felixa.app stops it. Run with:
+
+    python3 -m unittest tests.test_mac_app -v
+"""
+import os
+import pathlib
+import plistlib
+import subprocess
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+APPS = {'Felixa.app': 'Felixa', 'Stop Felixa.app': 'StopFelixa'}
+
+
+class MacApps(unittest.TestCase):
+    def test_each_app_has_a_plist_an_icon_and_an_executable_that_parses(self):
+        for app, exe in APPS.items():
+            plist = plistlib.loads((ROOT / app / 'Contents' / 'Info.plist').read_bytes())
+            self.assertEqual((plist['CFBundleExecutable'], plist['CFBundlePackageType']), (exe, 'APPL'), app)
+            self.assertTrue((ROOT / app / 'Contents' / 'Resources' / f'{plist["CFBundleIconFile"]}.icns').is_file(), app)
+            path = ROOT / app / 'Contents' / 'MacOS' / exe
+            self.assertTrue(os.access(path, os.X_OK), f'{app} must be executable')
+            self.assertEqual(subprocess.run(['bash', '-n', str(path)]).returncode, 0, app)
+
+    def test_git_keeps_the_executable_bit_so_the_zip_download_still_opens(self):
+        out = subprocess.run(['git', 'ls-files', '-s', '--', 'Felixa.app', 'Stop Felixa.app'], cwd=ROOT, capture_output=True, text=True).stdout
+        modes = {line.split('\t')[1]: line.split()[0] for line in out.splitlines()}
+        for app, exe in APPS.items():
+            self.assertEqual(modes.get(f'{app}/Contents/MacOS/{exe}'), '100755', app)
+
+    def test_the_launcher_names_what_it_needs_and_does_not_open_a_terminal(self):
+        text = (ROOT / 'Felixa.app' / 'Contents' / 'MacOS' / 'Felixa').read_text()
+        for needle in ('.local/bin', 'Python.framework', 'FELIXA_NO_LOCAL_MODEL=1', '/health', 'nohup', 'display dialog'):
+            self.assertIn(needle, text, needle)
+        self.assertNotIn('Terminal', text.replace('No Terminal window', ''))
+
+
+if __name__ == '__main__':
+    unittest.main()
