@@ -55,7 +55,15 @@ BASE_DIR = config.BASE_DIR
 app = FastAPI(title=config.PRODUCT, docs_url=None, redoc_url=None, openapi_url=None)
 
 SESSION_COOKIE = '__Host-felixa_session'
-SESSION_SECONDS = 8 * 60 * 60
+SESSION_SECONDS = 30 * 24 * 60 * 60            # a sign-in lasts 30 days, so the password is typed about once a month; FELIXA_SESSION_DAYS changes it
+
+
+def session_seconds() -> int:
+    try:
+        days = float(os.getenv('FELIXA_SESSION_DAYS', ''))
+        return max(60, int(days * 86400)) if days > 0 else SESSION_SECONDS
+    except ValueError:
+        return SESSION_SECONDS
 MAX_QUEUED_JOBS = 5
 
 
@@ -78,7 +86,7 @@ class SignIn:
     send one between the guesses of someone else.
     Sessions: the cookie holds a random token and nothing computed from the password, and the server keeps the only record of it (a
     hash of the token, and when it ends). Signing out deletes the record, and a cookie that someone captured says nothing about the
-    password. The records are in memory, so a restart signs everyone out, as the job queue already needs the app to be one process."""
+    password. The records are kept in the database as well as in memory, so a restart (a new deploy) does not sign anyone out."""
 
     WAITS = (0, 0, 0, 0, 2, 4, 8, 16, 32, 64, 128, 256, 300)       # seconds to wait after the 1st, 2nd ... wrong password in a row; the last repeats
     FORGET_SECONDS = 15 * 60
@@ -120,19 +128,43 @@ class SignIn:
         token = secrets.token_urlsafe(32)
         with self.lock:
             now = self.clock()
+            dropped = []
             while self.sessions and (len(self.sessions) >= self.MAX_SESSIONS or next(iter(self.sessions.values())) <= now):
-                self.sessions.popitem(last=False)
-            self.sessions[self.session_key(token)] = now + SESSION_SECONDS
+                dropped.append(self.sessions.popitem(last=False)[0])
+            self.sessions[self.session_key(token)] = now + session_seconds()
+        self._keep(lambda: (store.session_drop(*dropped) if dropped else None, store.session_save(self.session_key(token), time.time() + session_seconds())))
         return token
 
+    @staticmethod
+    def _keep(action):
+        """Runs a database step of a session. A failure never stops a sign-in: the session then lives in memory only, as before."""
+        try:
+            return action()
+        except Exception:
+            log.warning('could not keep a session in the database')
+
     def valid_session(self, token):
+        key = self.session_key(token)
         with self.lock:
-            ends = self.sessions.get(self.session_key(token))
-            return ends is not None and ends > self.clock()
+            ends = self.sessions.get(key)
+            if ends is not None:
+                if ends > self.clock():
+                    return True
+                self.sessions.pop(key, None)                         # over: gone from memory and from the database
+                self._keep(lambda: store.session_drop(key))
+                return False
+        left = self._keep(lambda: store.session_ends(key))           # not in memory: a session that began before a restart
+        if left is None:
+            return False
+        with self.lock:
+            self.sessions[key] = self.clock() + max(0.0, left - time.time())
+        return True
 
     def end_session(self, token):
+        key = self.session_key(token)
         with self.lock:
-            self.sessions.pop(self.session_key(token), None)
+            self.sessions.pop(key, None)
+        self._keep(lambda: store.session_drop(key))
 
 
 sign_in = SignIn()
@@ -203,7 +235,7 @@ def login_post(request: Request, username: str = Form(''), password: str = Form(
     if not signed_in:
         return login_page(error=True)
     response = RedirectResponse('/', status_code=303)
-    response.set_cookie(SESSION_COOKIE, sign_in.start_session(), max_age=SESSION_SECONDS, secure=True, httponly=True, samesite='strict', path='/')
+    response.set_cookie(SESSION_COOKIE, sign_in.start_session(), max_age=session_seconds(), secure=True, httponly=True, samesite='strict', path='/')
     return response
 
 

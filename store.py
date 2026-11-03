@@ -18,6 +18,7 @@ import json
 import math
 import os
 import re
+import time
 import sqlite3
 import threading
 
@@ -129,6 +130,10 @@ CREATE TABLE IF NOT EXISTS measure_history(
   created_at TEXT,
   snapshot_json TEXT NOT NULL,
   gen INTEGER
+);
+CREATE TABLE IF NOT EXISTS web_sessions(
+  key TEXT PRIMARY KEY,
+  ends REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_measurehist_analysis ON measure_history(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_units_analysis ON communication_units(analysis_id);
@@ -502,6 +507,27 @@ def job_update(jid, status: str, message: str, result=None):
     with db() as c:
         c.execute('UPDATE jobs SET status=?, message=?, result=COALESCE(?,result) WHERE id=?',
                   (status, message, json.dumps(result) if result is not None else None, jid))
+
+
+# ---- sign-in sessions ------------------------------------------------------------
+# A session is kept only as the sha256 of its token and the time it ends (wall-clock seconds): the record cannot be turned back into a cookie, and a restart of the
+# app no longer signs everyone out.
+def session_save(key, ends):
+    with db() as c:
+        c.execute('DELETE FROM web_sessions WHERE ends<=?', (time.time(),))
+        c.execute('INSERT OR REPLACE INTO web_sessions(key, ends) VALUES(?,?)', (key, ends))
+
+
+def session_ends(key):
+    """When the session ends (wall-clock seconds), or None when it is unknown or already over."""
+    with db() as c:
+        row = c.execute('SELECT ends FROM web_sessions WHERE key=?', (key,)).fetchone()
+    return row['ends'] if row and row['ends'] > time.time() else None
+
+
+def session_drop(*keys):
+    with db() as c:
+        c.executemany('DELETE FROM web_sessions WHERE key=?', [(k,) for k in keys])
 
 
 # ---- Vibe Check runs -------------------------------------------------------------

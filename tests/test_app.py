@@ -3033,6 +3033,45 @@ class Auth(AppCase):
             self.assertTrue(all(len(t) >= 43 and t.replace('-', '').replace('_', '').isalnum() for t in tokens), tokens)     # 256 random bits, URL-safe
             self.assertNotIn('correct horse', ''.join(tokens))
 
+    def test_a_sign_in_lasts_30_days_and_survives_a_restart_of_the_app(self):
+        """The password used to be asked again after eight hours, and again after every deploy, because the sessions lived in memory only."""
+        self.assertEqual(self.app.SESSION_SECONDS, 30 * 24 * 60 * 60)
+        before = self.app.SignIn()
+        token = before.start_session()
+        restarted = self.app.SignIn()                                                         # a new process: nothing in memory
+        self.assertEqual(len(restarted.sessions), 0)
+        self.assertTrue(restarted.valid_session(token))
+        self.assertTrue(restarted.valid_session(token), 'and again, now from memory')
+        self.assertFalse(restarted.valid_session(token + 'x'))
+        restarted.end_session(token)                                                          # signing out ends it everywhere
+        self.assertFalse(self.app.SignIn().valid_session(token))                              # (one process serves the app, so no second memory is left to disagree)
+        token = before.start_session()                                                        # the database remembers when it ends
+        with mock.patch('time.time', return_value=time.time() + 31 * 24 * 60 * 60):
+            self.assertFalse(self.app.SignIn().valid_session(token), 'over after 30 days')
+
+    def test_the_database_keeps_only_a_hash_of_a_session_never_the_cookie(self):
+        token = self.app.SignIn().start_session()
+        with self.store.db() as c:
+            keys = [r['key'] for r in c.execute('SELECT key FROM web_sessions')]
+        self.assertIn(self.app.SignIn.session_key(token), keys)
+        self.assertNotIn(token, keys)
+        self.assertTrue(all(len(k) == 64 for k in keys))
+
+    def test_the_length_of_a_sign_in_can_be_set_and_a_bad_setting_means_30_days(self):
+        with mock.patch.dict(os.environ, {'FELIXA_SESSION_DAYS': '2'}):
+            self.assertEqual(self.app.session_seconds(), 2 * 86400)
+        for bad in ('', 'x', '0', '-3', 'nan'):
+            with mock.patch.dict(os.environ, {'FELIXA_SESSION_DAYS': bad}):
+                self.assertEqual(self.app.session_seconds(), 30 * 86400, bad)
+        with mock.patch.dict(os.environ, {'FELIXA_SESSION_DAYS': '0.0001'}):
+            self.assertEqual(self.app.session_seconds(), 60, 'never shorter than a minute')
+
+    def test_the_sign_in_cookie_says_30_days(self):
+        with mock.patch.dict(os.environ, self.PASSWORD):
+            r = self.client.post('/login', data={'username': 'felixa', 'password': self.PASSWORD['FELIXA_PASSWORD']})
+            self.assertEqual(r.status_code, 303)
+            self.assertIn(f'Max-Age={30 * 24 * 60 * 60}', r.headers['set-cookie'])
+
     def test_sessions_end_after_eight_hours_and_what_the_server_keeps_is_bounded(self):
         now = [0.0]
         record = self.app.SignIn(clock=lambda: now[0])
