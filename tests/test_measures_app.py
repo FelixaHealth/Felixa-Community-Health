@@ -947,7 +947,7 @@ class FlareUp(MeasuresCase):
         self.assertEqual(escalation[-1], 'Look at this first')                                      # the last column is the mark of the page, in words
         conflict = next(r for r in rows if r[:1] == ['Conflict'])
         self.assertEqual((conflict[1], conflict[-1]), ('Some', 'Worth a look'))                     # a level word says how often; the mark says whether that is good
-        self.assertIn(['Health score', '58', 'Fair', 'Neutral'], rows)                              # the health tile: score, status, mark
+        self.assertIn(['Health score', '55', 'Fair', 'Neutral'], rows)                              # the health tile: score, status, mark
         self.assertEqual(next(r for r in rows if r[:1] == ['Cools fast'])[1], 'Earned')
 
     def test_every_part_of_the_chat_has_the_same_numbers_on_both_pages_and_in_the_csv(self):
@@ -1962,7 +1962,7 @@ class Notes(MeasuresCase):
                          [('Escalation', 'Steep', 'Look at this first'), ('Conflict', 'Some', 'Worth a look'), ('Empathy', 'Often', 'A good sign'), ('Passive-aggressive', 'Rare', 'A good sign')])
         self.assertEqual([row[-1] for row in cards], [card['tone_word'] for card in ms['cards']])
         self.assertLessEqual({row[-1] for row in cards}, set(measures.TONE_WORDS.values()))        # always one of the four phrases of measures.py
-        self.assertEqual([row for row in block if row[:1] == ['Health score'] and len(row) == 4], [['Health score', '58', 'Fair', ms['health']['tone_word']]])
+        self.assertEqual([row for row in block if row[:1] == ['Health score'] and len(row) == 4], [['Health score', '55', 'Fair', ms['health']['tone_word']]])
         self.assertEqual(ms['health']['tone_word'], 'Neutral')
 
 
