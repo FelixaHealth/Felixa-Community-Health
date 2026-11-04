@@ -1030,7 +1030,13 @@ def workspace_page(request, aid, shown=None, **extra):
     form.pop('summary_rows', None)
     form.pop('summary_title', None)
     form.pop('a', None)
-    return render(request, 'workspace.html', **ctx, **form, local_model_ready=local_model_ready(), job=job, job_progress=progress_of(job, bool(a['incognito'])), model=config.model_name(),
+    goals = [g for g in json.loads(a['goals_json'] or '[]') if g] + ([a['goal_text']] if a['goal_text'] else [])
+    when = ''
+    try:
+        when = datetime.datetime.fromisoformat(str(job['created_at'])[:19]).strftime('%b %-d, %Y') if job and job['created_at'] else ''
+    except ValueError:
+        when = ''
+    return render(request, 'workspace.html', **ctx, **form, goal_items=goals, last_when=when, local_model_ready=local_model_ready(), job=job, job_progress=progress_of(job, bool(a['incognito'])), model=config.model_name(),
                   local_enabled=config.local_model_enabled(), claude_ready=cloud.available() or cloud.login_available(),
                   summary_title='Your workplace', summary_rows=setup_rows(a), **extra)
 

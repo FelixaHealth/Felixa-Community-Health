@@ -792,3 +792,15 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .seg button[aria-pressed="true"]{background:#0f4a2e;background-image:none;color:#fff;box-shadow:none}
 .rnav{gap:2px}.rnav a{padding:8px 10px;font-size:13.5px;gap:6px}
 .side-update{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:10px 14px;border-radius:12px;background:#f6c453;color:#2a1d03;font-weight:700;text-decoration:none;font-size:14px}.side-update .ic{width:16px;height:16px}
+
+/* ---- Workplace: header, three tabs, organisation card, goals, latest analysis ---- */
+.wp-head{display:flex;align-items:center;gap:16px;margin:0 0 14px}.wp-head h1{margin:0;font-size:clamp(26px,2.4vw,32px);color:#0f4a2e}.wp-head p{margin:2px 0 0;color:var(--muted)}.wp-head .head-actions{margin-left:auto}
+.wp-ic{width:54px;height:54px;border-radius:16px;background:#0f4a2e;color:#f6c453;display:grid;place-items:center;flex:none}.wp-ic .ic{width:28px;height:28px}
+.wp-tabs{display:inline-flex;margin-bottom:16px}.wp-tabs .tab{padding:9px 26px}
+.wp-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;align-items:start;margin-bottom:16px}.wp-side{display:grid;gap:16px}
+.wp-org h2{margin:0;font-size:24px}.wp-sub{margin:2px 0 14px;color:var(--muted)}
+.wp-rows{margin:0}.wp-rows>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid #efe7d6}.wp-rows dt{display:flex;align-items:center;gap:10px;font-weight:700}.wp-rows dt .ic{width:20px;height:20px;color:#a8780f}.wp-rows dd{margin:0;text-align:right;color:var(--muted)}
+.wp-edit{display:inline-flex;gap:8px;align-items:center;margin-top:12px;color:#a8780f;font-weight:700;text-decoration:none}.wp-edit .ic{width:16px;height:16px}
+.wp-goals ul{margin:0;padding-left:20px;display:grid;gap:6px}.wp-goals li{line-height:1.5}
+.wp-latest{display:flex;align-items:center;gap:16px}.wp-latest h2{margin:0;font-size:20px}.wp-latest small{color:var(--muted)}.wp-latest .chip-lvl{margin-left:auto}.hc-ic.big{width:44px;height:44px}
+@media(max-width:900px){.wp-grid{grid-template-columns:1fr}}

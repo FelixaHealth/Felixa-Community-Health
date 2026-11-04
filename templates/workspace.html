@@ -2,26 +2,47 @@
 {% block content %}
 {% set busy = job and job.status in ['queued','running'] %}
 <div class="shell"><div class="stage">
-<section class="results-head"><div class="rh-main"><div class="eyebrow">Workplace</div><h1>{{ a.person_name or 'Untitled workplace' }}</h1>
-<div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}</div>
-{% if a.user_name %}<p>Looked after by {{ a.user_name }}{% if a.user_role %}, {{ a.user_role }}{% endif %}</p>{% endif %}</div>
-<div class="head-actions">{% if has_results %}<a class="btn primary" href="/analysis/{{ a.id }}/results">{{ icon('chart') }} Open results</a>{% endif %}<a class="btn quiet" href="/analysis/{{ a.id }}/workspace#edit">{{ icon('target') }} Settings</a></div></section>
+<section class="wp-head"><span class="wp-ic">{{ icon('building') }}</span><div><h1>Workplace</h1><p>Manage your organization, teams and data.</p></div>
+<div class="head-actions">{% if has_results %}<a class="btn primary" href="/analysis/{{ a.id }}/results">{{ icon('chart') }} Open results</a>{% endif %}</div></section>
+<nav class="tabs wp-tabs" role="tablist" aria-label="Parts of the workplace" data-tabs>
+<a class="tab on" role="tab" href="#tab-overview"><span>Overview</span></a><a class="tab" role="tab" href="#tab-teams"><span>Teams</span></a><a class="tab" role="tab" href="#tab-data"><span>Data</span></a></nav>
 
-{% if job %}{% set partial = job.status == 'complete' and job.message.startswith(with_problems) %}{% set problem = partial or job.status == 'failed' %}<section class="panel{% if problem %} job-problem{% endif %}" role="status" aria-live="polite"><div class="eyebrow">{{ 'Vibe Check' if job.kind=='vibe' else 'Analysis' }} · <span id="job-state">{{ 'Partly complete' if partial else job.status|title }}</span></div>{% if problem %}<h2>{{ with_problems if partial else 'This task did not finish' }}</h2><p id="job-message">{{ (job.message[with_problems|length + 1:] if partial else job.message)|trim }}</p>{% else %}<h2 id="job-message">{{ job.message }}</h2>{% if job.status == 'complete' %}<p><a class="btn primary" href="/analysis/{{ a.id }}/results">{{ icon('chart') }} Open the results</a></p>{% endif %}{% endif %}{% if busy %}<p>You can leave this page and return later. Progress updates automatically.</p><form method="post" action="/analysis/{{ a.id }}/cancel"><button class="btn">Cancel this task</button></form><p><button class="btn" type="button" data-run-show>Show the progress window</button></p>{% endif %}</section>{% endif %}
+{% if job and not (job.status == 'complete' and not job.message.startswith(with_problems)) %}{% set partial = job.status == 'complete' and job.message.startswith(with_problems) %}{% set problem = partial or job.status == 'failed' %}<section class="panel{% if problem %} job-problem{% endif %}" role="status" aria-live="polite"><div class="eyebrow">{{ 'Vibe Check' if job.kind=='vibe' else 'Analysis' }} · <span id="job-state">{{ 'Partly complete' if partial else job.status|title }}</span></div>{% if problem %}<h2>{{ with_problems if partial else 'This task did not finish' }}</h2><p id="job-message">{{ (job.message[with_problems|length + 1:] if partial else job.message)|trim }}</p>{% else %}<h2 id="job-message">{{ job.message }}</h2>{% if job.status == 'complete' %}<p><a class="btn primary" href="/analysis/{{ a.id }}/results">{{ icon('chart') }} Open the results</a></p>{% endif %}{% endif %}{% if busy %}<p>You can leave this page and return later. Progress updates automatically.</p><form method="post" action="/analysis/{{ a.id }}/cancel"><button class="btn">Cancel this task</button></form><p><button class="btn" type="button" data-run-show>Show the progress window</button></p>{% endif %}</section>{% endif %}
 {% if busy %}<script src="/static/job.js?v={{ asset_v }}" data-job-url="/analysis/{{ a.id }}/job"></script>{% endif %}
 {% if busy %}{% include "_run_dialog.html" %}<script src="/static/run.js?v={{ asset_v }}" defer></script>{% endif %}
 
+<div class="tabpanel" id="tab-overview" role="tabpanel">
+<div class="wp-grid">
+<section class="hcard wp-org"><h2>{{ a.person_name or 'Untitled workplace' }}</h2><p class="wp-sub">{{ [a.subject_type, a.person_role, a.channel]|select|join(' · ') or 'No details yet' }}</p>
+<dl class="wp-rows">
+<div><dt>{{ icon('users') }}<span>People</span></dt><dd>{{ a.members or 'Not set' }}</dd></div>
+<div><dt>{{ icon('chat') }}<span>Communication</span></dt><dd>{{ a.channel or 'Not set' }}</dd></div>
+<div><dt>{{ icon('calendar') }}<span>Environment</span></dt><dd>{{ a.subject_type or 'Not set' }}</dd></div>
+<div><dt>{{ icon('gauge') }}<span>Area</span></dt><dd>{{ a.person_role or 'Not set' }}</dd></div>
+<div><dt>{{ icon('clock') }}<span>Time zone</span></dt><dd>{{ a.time_zone or 'Not set' }}</dd></div>
+{% if a.user_name %}<div><dt>{{ icon('person') }}<span>Looked after by</span></dt><dd>{{ a.user_name }}{% if a.user_role %}, {{ a.user_role }}{% endif %}</dd></div>{% endif %}
+</dl><a class="wp-edit" href="#edit">{{ icon('target') }} Edit details</a></section>
+<div class="wp-side">
+<section class="hcard wp-goals"><div class="hc-top"><span class="hc-ic">{{ icon('target') }}</span><h2>Goals</h2></div>
+{% if goal_items %}<ul>{% for g in goal_items %}<li>{{ g }}</li>{% endfor %}</ul>{% else %}<p class="hc-none-l">No goals yet. Add them under Edit details.</p>{% endif %}</section>
+<a class="hcard wp-latest" href="{{ '/analysis/%d/results'|format(a.id) if has_results else '#new' }}"><span class="hc-ic big">{{ icon('chart') }}</span><div><h2>Latest Analysis</h2><small>{{ last_when or ('Messages loaded, not analysed yet' if units_n else 'Nothing analysed yet') }}</small></div>
+<span class="chip-lvl {{ 'tone-good' if has_results else ('tone-warn' if busy else 'tone-warn') }}">{% if busy %}Running{% elif has_results %}{{ icon('check') }} Completed{% else %}Not run{% endif %}</span><span class="bd-go">{{ icon('chevron') }}</span></a>
+</div></div>
+<section class="panel inline-edit-panel" id="edit"><details class="edit-fold" id="edit-details"{% if edit_open %} open{% endif %}><summary class="btn">{{ icon('target') }} Workplace settings</summary>{% include "_edit_form.html" %}</details></section>
+
+</div>
+<div class="tabpanel" id="tab-teams" role="tabpanel" hidden>
+<section class="hcard wp-org"><h2>People and teams</h2><p class="wp-sub">Who is in this workplace.</p>
+<dl class="wp-rows"><div><dt>{{ icon('users') }}<span>People</span></dt><dd>{{ a.members or 'Not set' }}</dd></div>{% if a.user_name %}<div><dt>{{ icon('person') }}<span>Looked after by</span></dt><dd>{{ a.user_name }}{% if a.user_role %}, {{ a.user_role }}{% endif %}</dd></div>{% endif %}<div><dt>{{ icon('layers') }}<span>Teams</span></dt><dd>Read as one group</dd></div></dl>
+<p class="small-note">Felixa reads a workplace as one group. Splitting it into teams, each with its own results, is not built yet.</p></section>
+</div>
+<div class="tabpanel" id="tab-data" role="tabpanel" hidden>
 <section class="panel new-panel" id="new"><div class="new-text"><div class="eyebrow">Analytics</div><h2>Run new analytics</h2><p>Add messages, choose how to read them and get a report on how healthy the conversation feels. The price of the check is shown on the engine step, before anything runs.</p></div>
 {% if busy %}<button class="btn primary large" disabled>A check is running…</button>
 {% elif units_n or has_results %}<details class="new-confirm"><summary class="btn primary large">{{ icon('plus') }} New</summary>
 <p>New analytics replaces the messages and the report you have now. Download the PDF or CSV first if you need a copy. The workplace details and the numbers of earlier checks (scores and counts, never messages, names or file names) stay, so the trend carries on.</p>
 <form method="post" action="/analysis/{{ a.id }}/check/new"><button class="btn primary">Yes, start new analytics</button></form></details>
 {% else %}<form method="post" action="/analysis/{{ a.id }}/check/new"><button class="btn primary large">{{ icon('plus') }} New</button></form>{% endif %}</section>
-
-{% include "_setup.html" %}
-<section class="panel inline-edit-panel" id="edit"><details class="edit-fold" id="edit-details"{% if edit_open %} open{% endif %}><summary class="btn">{{ icon('target') }} Workplace settings</summary>{% include "_edit_form.html" %}</details></section>
-
-{# Once there are results they come first: the summary, the alerts, the measures over time and the badges, then the rest of the report. #}
 
 <div class="engine-row">
 <section class="panel"><div class="eyebrow">Engine</div>{% if local_enabled %}<h2>{{ 'Ready' if local_model_ready else 'Model needed' }}</h2><p>{% if local_model_ready %}{{ model }} is installed on this computer.{% else %}Start Ollama and download the default model: <code>ollama pull {{ model }}</code>{% if claude_ready %}. Or choose a Claude engine when you press New.{% endif %}{% endif %}</p>{% else %}<h2>{{ 'Claude is ready' if claude_ready else 'Claude key needed' }}</h2><p>{% if claude_ready %}Claude reads your messages in the cloud.{% else %}Set <code>FELIXA_ANTHROPIC_API_KEY</code> on the server to turn Claude on.{% endif %}</p>{% endif %}{% if a.model_used %}<p><strong>Last used:</strong> {{ a.model_used }}</p>{% endif %}</section>
@@ -33,4 +54,5 @@
 </div>{% endif %}
 </section>{% endif %}
 
+</div>
 </div></div>{% endblock %}
