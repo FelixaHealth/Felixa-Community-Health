@@ -4965,7 +4965,7 @@ class WorkplaceManagement(AppCase):
             top = page.split('</header>', 1)[0]
             self.assertIn('href="/dashboard"', top, path)
             self.assertIn('Results dashboard', top, path)
-            self.assertIn('Compare all workplaces', top, path)
+            self.assertIn('>All workplaces</option>', top, path)
             self.assertIn(f'<option value="{second}">Side Tab Two</option>', top, path)
             self.assertNotIn('Never Finished', top, 'a workplace that was never set up is not listed')
             self.assertNotIn('rail-wps', page, path)
