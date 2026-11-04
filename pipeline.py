@@ -129,6 +129,19 @@ def run_vibe_only(aid, jid, progress, call=None):
     return 'failed', 'Vibe Check was not run: ' + result.get('reason', 'unknown reason')
 
 
+def run_tones_only(aid, jid, progress, call=None):
+    """Only the tone ratings: Health Score, Escalation, Conflict, Empathy, Passive-aggressive, Badges and Alerts."""
+    a = store.get_analysis(aid)
+    call = call or engine_call(a)
+    rated, problems = _behaviour(aid, call, progress, volume_limit(a))
+    if rated is None:
+        return 'failed', ' '.join(problems) + ' Your saved inputs are safe. Please retry.'
+    done = f'rated {rated["rated"]:,} of {rated["total"]:,} messages' if rated['note'] else f'rated {rated["rated"]:,} messages'
+    if problems:
+        return 'complete', f'{WITH_PROBLEMS}. We {done}. {" ".join(problems)}'
+    return 'complete', f'Your results are ready: we {done}.'
+
+
 def run_job(jid, aid, kind, call=None):
     """Worker entry point. Never raises: every outcome is written to the job row.
 
@@ -145,7 +158,7 @@ def run_job(jid, aid, kind, call=None):
         if a and a['incognito']:
             progress('Removing names from the messages…')
             store.anonymise_units(aid)
-        runner = run_vibe_only if kind == 'vibe' else run_full
+        runner = run_vibe_only if kind == 'vibe' else run_tones_only if kind == 'tones' else run_full
         status, message = runner(aid, jid, progress, call)
         store.job_update(jid, status, message)
     except Cancelled:

@@ -4980,7 +4980,7 @@ class WorkplaceManagement(AppCase):
 
     def test_the_picker_without_javascript_goes_to_the_workplace_or_the_comparison(self):
         aid = self.new_analysis(name='Go There')
-        self.assertEqual(self.client.get(f'/go?to={aid}').headers['location'], f'/analysis/{aid}/workspace')
+        self.assertEqual(self.client.get(f'/go?to={aid}').headers['location'], f'/?w={aid}')
         for to in ('compare', '999999', 'x', ''):
             self.assertEqual(self.client.get(f'/go?to={to}').headers['location'], '/dashboard#compare', to)
 

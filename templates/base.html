@@ -11,7 +11,7 @@
 <aside class="sidebar no-print" id="side" aria-label="Main">
 <a class="side-logo" href="/"><img src="/static/logo_side.png" alt="Felixa Community Health" width="150" height="144"></a>
 <nav class="side-nav" aria-label="Site">
-<a class="side-link{% if path == '/' %} on{% endif %}" href="/"{% if path == '/' %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Home</span></a>
+<a class="side-link{% if path == '/' %} on{% endif %}" href="{{ '/?w=%d'|format(cur.id) if cur else '/' }}"{% if path == '/' %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Home</span></a>
 <a class="side-link{% if cur and (path.endswith('/workspace') or '/step/' in path) or path == '/new' %} on{% endif %}" href="{{ '/analysis/%d/workspace'|format(cur.id) if cur else '/new' }}">{{ icon('building') }}<span>Workplace</span></a>
 <a class="side-link{% if '/check/' in path or path.endswith('/analytics') %} on{% endif %}" href="{{ '/analysis/%d/analytics'|format(cur.id) if cur else '/new' }}">{{ icon('plussq') }}<span>Analyze</span></a>
 <a class="side-link{% if path.endswith('/results') or '/track/' in path or '/tone/' in path or '/category/' in path %} on{% endif %}" href="{{ '/analysis/%d/results'|format(cur.id) if cur else '/new' }}">{{ icon('chart') }}<span>Results</span></a>

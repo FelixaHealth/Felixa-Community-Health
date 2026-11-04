@@ -1,6 +1,7 @@
 """The Analytics page: the whole set-up on one page, then Run Analysis."""
 import unittest
 
+import analysis
 import rules
 from tests.test_app import AppCase
 
@@ -10,7 +11,7 @@ class Analytics(AppCase):
         aid = self.with_chat()
         page = self.client.get(f'/analysis/{aid}/analytics')
         self.assertEqual(page.status_code, 200)
-        for needle in ('1. Upload Data', '2. Incognito', '3. Timeframe', '4. Number of Messages', '5. Sensitivity', '6. Engine', 'Run Analysis', 'name="engine"', 'name="vibe_sensitivity"'):
+        for needle in ('1. Upload Data', '2. What to evaluate', '3. Incognito', '4. Timeframe', '5. Number of Messages', '6. Sensitivity', '7. Engine', 'Run Analysis', 'name="engine"', 'name="vibe_sensitivity"'):
             self.assertIn(needle, page.text, needle)
         self.assertIn('Word rules', page.text, 'every engine shows with its time and price')
         self.assertEqual(self.client.get('/analysis/9999/analytics').status_code, 404)
@@ -21,6 +22,18 @@ class Analytics(AppCase):
         self.assertEqual(r['status'], 'complete')
         a = self.store.get_analysis(aid)
         self.assertEqual((a['incognito'], a['check_volume'], a['vibe_sensitivity'], a['engine']), (1, 0, 'high', rules.ENGINE))
+
+    def test_what_to_evaluate_picks_which_passes_run(self):
+        aid = self.with_chat()
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        for label in ('Vibe Check', 'Sentiment', 'Health Score', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive'):
+            self.assertIn(f'<strong>{label}</strong>', page)
+        base = dict(path='analytics', incognito='off', period='all', volume='all', vibe_sensitivity='medium', engine=rules.ENGINE, evaluate_sent='1')
+        self.run_job(aid, evaluate=['health', 'empathy'], **base)
+        self.assertTrue(analysis.metrics_for(aid), 'the tone pass ran')
+        self.assertIsNone(self.store.latest_vibe(aid), 'no Vibe Check was asked for')
+        none = self.client.post(f'/analysis/{aid}/analytics', data={k: v for k, v in base.items() if k != 'path'})
+        self.assertEqual(none.headers['location'], f'/analysis/{aid}/analytics')
 
     def test_a_missing_or_wrong_choice_comes_back_to_the_page_with_a_reason(self):
         aid = self.with_chat()

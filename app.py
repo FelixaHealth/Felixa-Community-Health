@@ -611,9 +611,9 @@ def ask_page(request: Request):
 
 
 @app.get('/', response_class=HTMLResponse)
-def index(request: Request):
+def index(request: Request, w: int = 0):
     names = store.workplace_names()
-    cur = current_workplace(None, names)
+    cur = current_workplace(store.get_analysis(w) if w else None, names)
     home = home_view(cur['id']) if cur else None
     return render(request, 'index.html', home=home, alert_count=home['alerts'] if home else 0)
 
@@ -868,7 +868,7 @@ def search_page(request: Request, q: str = ''):
 def go(to: str = ''):
     """The workplace picker of the top bar without JavaScript: a workplace id opens its page, anything else opens the comparison of all of them."""
     if to.isdigit() and any(str(w['id']) == to for w in store.workplace_names()):
-        return RedirectResponse(f'/analysis/{int(to)}/workspace', status_code=303)
+        return RedirectResponse(f'/?w={int(to)}', status_code=303)
     return RedirectResponse('/dashboard#compare', status_code=303)
 
 
@@ -1174,6 +1174,12 @@ async def source_remove(aid: AnalysisId, request: Request):
     return redirect(where, f'Removed {label}: {n:,} message{"" if n == 1 else "s"}. The results made from it were cleared; run the analysis again.')
 
 
+EVALUATE = (('vibe', 'Vibe Check', 'How friendly the chat feels, out of 10'), ('sentiment', 'Sentiment', 'Friendly, neutral and unfriendly messages'),
+            ('health', 'Health Score', 'One number, 0 to 100'), ('escalation', 'Escalation', 'Moments the mood heats up'), ('conflict', 'Conflict', 'Aggressive or disrespectful wording'),
+            ('empathy', 'Empathy', 'Care and understanding'), ('passive', 'Passive-aggressive', 'Digs and sarcasm'))
+VIBE_PARTS, TONE_PARTS = {'vibe', 'sentiment'}, {'health', 'escalation', 'conflict', 'empathy', 'passive'}
+
+
 @app.get('/analysis/{aid}/analytics', response_class=HTMLResponse)
 def analytics_page(request: Request, aid: AnalysisId):
     """Setting up a new analysis on one page: the six choices of the check in a column, then Run Analysis."""
@@ -1197,6 +1203,7 @@ def analytics_page(request: Request, aid: AnalysisId):
     ctx['period_now'] = now
     ctx['period_options'] = list(ANALYTICS_PERIODS) + ([('custom', 'Custom dates: ' + (ctx['period_text'] or 'saved'))] if ctx['period_now'] == 'custom' else [])
     ctx['busy'] = bool(store.active_job(aid))
+    ctx['evaluate'] = EVALUATE
     return render(request, 'analytics.html', **ctx)
 
 
@@ -1269,8 +1276,12 @@ async def analytics_run(request: Request, aid: AnalysisId):
         installed = [m['name'] for m in local_models()]
         if engine and engine != config.model_name() and engine not in installed:
             return redirect(here, 'That engine is not downloaded on this computer. Choose one from the list.')
+    chosen = set(form.getlist('evaluate')) if form.get('evaluate_sent') else VIBE_PARTS | TONE_PARTS
+    want_vibe, want_tones = bool(chosen & VIBE_PARTS), bool(chosen & TONE_PARTS)
+    if not (want_vibe or want_tones):
+        return redirect(here, 'Choose at least one thing to evaluate.')
     store.update_analysis(aid, engine=engine if engine and engine != config.model_name() else None, cloud_ok=int(sent), **fields)
-    return start_job(aid, 'full')
+    return start_job(aid, 'full' if want_vibe and want_tones else 'vibe' if want_vibe else 'tones')
 
 
 @app.get('/analysis/{aid}/check/{step}', response_class=HTMLResponse)
