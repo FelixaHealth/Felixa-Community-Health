@@ -1042,3 +1042,20 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .aa-lvl{font-style:normal;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;background:#f4efe1;color:#6d4a07}
 .aa-high,.aa-high-or-medium{background:#fdeceb;color:#a1261b}.aa-medium{background:#fdf0c9;color:#8a5a08}.aa-good{background:#e4f3e8;color:#0f4a2e}
 .aa-list .vc-how{flex-basis:100%;font-size:13px;color:var(--muted)}
+
+/* Phone: Vibe Check, Health Score and Sentiment stay in one row */
+@media(max-width:760px){
+ .home .home-row.r3:not(.links),.results-hub .home-row.r3:not(.links){grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+ .home .home-row.r3:not(.links)>.hcard,.results-hub .home-row.r3:not(.links)>.hcard{display:flex!important;flex-direction:column;align-items:flex-start;gap:6px;padding:10px 10px 12px!important;min-height:0!important;border-radius:14px}
+ .home-row.r3:not(.links)>.hcard .hc-top{margin:0!important;gap:0;width:100%}
+ .home-row.r3:not(.links)>.hcard .hc-ic{display:none!important}
+ .home-row.r3:not(.links)>.hcard .hc-top h2{font-size:12.5px!important;white-space:normal!important;line-height:1.2;color:var(--muted)}
+ .home-row.r3:not(.links)>.hcard .donut{width:60px!important;height:60px!important;margin:0!important;position:relative!important}
+ .home-row.r3:not(.links)>.hcard .donut strong{font-size:15px!important}
+ .home-row.r3:not(.links)>.hcard .hc-big{margin:0!important;gap:3px}.home-row.r3:not(.links)>.hcard .hc-big strong{font-size:26px!important}.home-row.r3:not(.links)>.hcard .hc-big span{font-size:11px!important}
+ .home-row.r3:not(.links)>.hcard .bar{height:5px!important;margin:0!important;width:100%}
+ .home-row.r3:not(.links)>.hcard .sent{width:100%;height:auto;font-size:10px}.home-row.r3:not(.links)>.hcard .sent b{padding:3px 2px;font-size:10px;min-width:0}
+ .home-row.r3:not(.links)>.hcard .vs{display:flex!important;flex-direction:column;align-items:flex-start;gap:1px;margin:0!important;font-size:10.5px!important;line-height:1.25}
+ .home-row.r3:not(.links)>.hcard .delta{font-size:10.5px!important;padding:2px 6px!important;gap:2px}.home-row.r3:not(.links)>.hcard .delta .ic{width:11px;height:11px}
+ .home-row.r3:not(.links)>.hcard .hc-none{margin:0!important;font-size:12px}
+}
