@@ -13,7 +13,7 @@
 <div class="dash-ranges" role="group" aria-label="Period">{% for key, label, days in ranges %}<button class="chip-btn{% if f.range == key %} on{% endif %}" name="range" value="{{ key }}" type="submit">{{ label }}</button>{% endfor %}<button class="btn" type="submit">{{ icon('check') }} Apply dates</button>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}<a class="btn quiet" href="/dashboard">Clear filters</a>{% endif %}</div></form></section></details>
 {% if none_in_view %}<section class="panel dash-empty"><h2>Nothing in this view</h2><p>No check matches these filters. Widen the period or choose All workplaces.</p></section>
 {% else %}
-<div class="dash-kpis">{% for k in kpis %}<div class="dash-kpi"><small>{{ k.label }}</small><strong>{{ k.value }}</strong><span>{{ k.sub }}{% if k.band %} · {{ k.band }}{% endif %}</span></div>{% endfor %}</div>
+<div class="dash-kpis">{% for k in kpis %}<div class="dash-kpi"><div class="dk-top"><i class="dk-ic">{{ icon(k.icon) }}</i><small>{{ k.label }}</small></div><strong>{{ k.value }}</strong><span>{{ k.sub }}{% if k.band %} · <b>{{ k.band }}</b>{% endif %}</span></div>{% endfor %}</div>
 {% if legend %}<ul class="dash-legend" aria-label="Workplaces">{% for name, role in legend %}<li><i class="{{ role }}"></i>{{ name }}</li>{% endfor %}</ul>{% endif %}
 {% if figs.compare_health or figs.compare_vibe %}<h2 class="dash-sub" id="compare">Overview</h2>
 <div class="dash-grid dash-narrow dash-ov">

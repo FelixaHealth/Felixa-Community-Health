@@ -331,13 +331,13 @@ def build(args, today=None) -> dict:
             first_last = mine[-1]['health'] - mine[0]['health']
     members_now = sum(r['members'] or 0 for r in latest) if any(r['members'] for r in latest) else None
     friendly_pct = round(100.0 * mix[0] / sent_total) if sent_total else None
-    kpis = [{'label': 'Workplaces', 'value': f'{len({r["aid"] for r in rows}):,}', 'sub': 'in this view'},
-            {'label': 'Analytics', 'value': f'{len(rows):,}', 'sub': 'checks run'},
-            {'label': 'Comments analysed', 'value': f'{sum(r["n"] for r in rows):,}', 'sub': 'messages rated'},
-            {'label': 'Vibe Check', 'value': '–' if vibe_now is None else f'{vibe_now:.1f}', 'sub': 'out of 10, latest checks'},
-            {'label': 'Health score', 'value': '–' if health_now is None else f'{round(health_now)}', 'sub': ('average of the latest checks' if len(latest) > 1 else 'latest check')
+    kpis = [{'icon': 'building', 'label': 'Workplaces', 'value': f'{len({r["aid"] for r in rows}):,}', 'sub': 'in this view'},
+            {'icon': 'chart', 'label': 'Analytics', 'value': f'{len(rows):,}', 'sub': 'checks run'},
+            {'icon': 'chat', 'label': 'Comments analysed', 'value': f'{sum(r["n"] for r in rows):,}', 'sub': 'messages rated'},
+            {'icon': 'pulse', 'label': 'Vibe Check', 'value': '–' if vibe_now is None else f'{vibe_now:.1f}', 'sub': 'out of 10, latest checks'},
+            {'icon': 'heart', 'label': 'Health score', 'value': '–' if health_now is None else f'{round(health_now)}', 'sub': ('average of the latest checks' if len(latest) > 1 else 'latest check')
              + ('' if first_last is None else f', {"up" if first_last > 0 else "down" if first_last < 0 else "no change"}{"" if first_last == 0 else f" {abs(round(first_last))}"} since the first'), 'band': measures.health_status(health_now) if health_now is not None else ''},
-            {'label': 'Sentiment', 'value': '–' if friendly_pct is None else f'{friendly_pct}%', 'sub': 'of messages read as friendly'}]
+            {'icon': 'users', 'label': 'Sentiment', 'value': '–' if friendly_pct is None else f'{friendly_pct}%', 'sub': 'of messages read as friendly'}]
 
     latest_rows = [[r['workplace'], r['platform'] or '–', r['kind'] or '–', long_date(r['when'].isoformat()), f'{r["n"]:,}', _cell(r['members']), _cell(r['health']),
                     _cell(r['vibe'], 1), _cell(r['conflict'], 1), _cell(r['empathy'], 1), _cell(r['heated'], 1)] for r in latest]
