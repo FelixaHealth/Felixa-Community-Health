@@ -468,7 +468,7 @@ def render(request, name, **context):
         context['rail'] = check_steps_rail(row) if row is not None and row['status'] != 'draft' else {'steps': [], 'foot': None, 'setup': False}
     names = store.workplace_names()
     response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
-                                                                              'top_workplaces': names, 'cur': current_workplace(row, names), 'update_ready': updater.cached_newer(), **context})
+                                                                              'top_workplaces': names, 'cur': current_workplace(row if row is not None else context.get('focus'), names), 'update_ready': updater.cached_newer(), **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -613,9 +613,10 @@ def ask_page(request: Request):
 @app.get('/', response_class=HTMLResponse)
 def index(request: Request, w: int = 0):
     names = store.workplace_names()
-    cur = current_workplace(store.get_analysis(w) if w else None, names)
+    focus = store.get_analysis(w) if w else None
+    cur = current_workplace(focus, names)
     home = home_view(cur['id']) if cur else None
-    return render(request, 'index.html', home=home, alert_count=home['alerts'] if home else 0)
+    return render(request, 'index.html', home=home, focus=focus, alert_count=home['alerts'] if home else 0)
 
 
 @app.get('/new')

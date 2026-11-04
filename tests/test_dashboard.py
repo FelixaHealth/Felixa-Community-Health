@@ -130,6 +130,16 @@ class Dashboard(DashboardCase):
 
 
 class SideBar(DashboardCase):
+    def test_home_of_a_chosen_workplace_shows_that_workplace(self):
+        a = self.workplace('Home First', checks=[(self.day(5), 60.0, {})])
+        b = self.workplace('Home Second', checks=[(self.day(3), 40.0, {})])
+        page = self.client.get(f'/?w={b}').text
+        self.assertIn('<h1>Home Second</h1>', page)
+        self.assertIn(f'<option value="{b}" selected>Home Second</option>', page)
+        self.assertIn(f'href="/analysis/{b}/results/health"', page, 'the cards open the results of that workplace')
+        self.assertIn('<h1>Home First</h1>', self.client.get(f'/?w={a}').text)
+        self.assertEqual(self.client.get(f'/go?to={b}').headers['location'], f'/?w={b}')
+
     def test_the_dashboard_is_in_the_top_bar_of_every_page_with_the_current_one_marked(self):
         aid = self.new_analysis(name='Nav Test')
         for path in (f'/analysis/{aid}/workspace', f'/analysis/{aid}/analytics', '/dashboard'):
