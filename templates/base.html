@@ -31,7 +31,6 @@
 <a class="avatar" href="/settings" title="Settings" aria-label="Your settings">{{ cur.initial if cur else 'F' }}</a>
 {% if top_workplaces %}<a class="dash-link" href="/dashboard"{% if request.url.path == '/dashboard' %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>{% endif %}
 </header>
-<div class="privacy-bar no-print">{{ icon('lock') }}<span><strong>Runs on your computer.</strong> Nothing leaves it unless you choose a cloud engine and tick the box.</span></div>
 <main class="page" id="main">
 {% if msg %}<div class="flash" id="flash" role="alert" tabindex="-1">{{ msg }}</div>{% endif %}
 {% block content %}{% endblock %}

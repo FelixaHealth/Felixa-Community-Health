@@ -2,7 +2,6 @@
 {% block content %}
 <div class="shell"><div class="stage results-screen">
 {{ assets|safe }}
-<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ title }}</span></nav>
 {% include "_rnav.html" %}
 {% if screen == 'vibe' %}
 {% if vibe_html %}{{ vibe_html|safe }}{% endif %}
