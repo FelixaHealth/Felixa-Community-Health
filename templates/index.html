@@ -4,13 +4,13 @@
 <div class="home">
 <div class="home-top">{% if cur %}<div><h1>{{ cur.name }}</h1><p>Your communication health at a glance.</p></div>{% else %}<div><h1>Welcome to Felixa</h1><p>See how people really communicate.</p></div>{% endif %}
 <div class="home-actions">
-<a class="btn-gold" href="{% if cur %}{{ '/analysis/%d/check/1'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id) }}{% else %}/new{% endif %}">{{ icon('plus') }}<span>New Analysis</span></a>
+<a class="btn-gold" href="{% if cur %}{{ ('/analysis/%d/analytics'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id)) }}{% else %}/new{% endif %}">{{ icon('plus') }}<span>New Analysis</span></a>
 <a class="btn-soft" href="{% if cur %}{{ '/analysis/%d/results'|format(cur.id) if cur.has_results else '/analysis/%d/workspace'|format(cur.id) }}{% else %}/new{% endif %}">{{ icon('folder') }}<span>Open Analysis</span></a>
 </div></div>
 {% if not cur %}
 <section class="hcard home-empty"><h2>See how people really communicate.</h2><p>Describe your workplace or community once, add messages, and get a clear picture of how healthy the conversation is and what to try next.</p><a class="btn-gold" href="/new">{{ icon('plus') }}<span>Create your first workplace</span></a></section>
 {% elif not home %}
-<section class="hcard home-empty"><h2>{{ cur.name }} has no results yet.</h2><p>Add messages and run your first analysis. Vibe Check, the health score and the four modules appear here.</p><a class="btn-gold" href="{{ '/analysis/%d/check/1'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id) }}">{{ icon('plus') }}<span>Run your first analysis</span></a></section>
+<section class="hcard home-empty"><h2>{{ cur.name }} has no results yet.</h2><p>Add messages and run your first analysis. Vibe Check, the health score and the four modules appear here.</p><a class="btn-gold" href="{{ ('/analysis/%d/analytics'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id)) }}">{{ icon('plus') }}<span>Run your first analysis</span></a></section>
 {% else %}
 {% set rid = cur.id %}{% include "_result_cards.html" %}
 <div class="home-row r2">

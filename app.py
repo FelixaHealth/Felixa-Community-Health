@@ -1051,7 +1051,7 @@ CHECK_LAST = len(workplace.CHECK_STEPS)
 
 def check_destination(aid, back):
     """Where a form that adds messages sends the person afterwards: back into the New check, or to the workplace page."""
-    return f'/analysis/{aid}/check/1' if back == 'check' else f'/analysis/{aid}/workspace'
+    return f'/analysis/{aid}/check/1' if back == 'check' else f'/analysis/{aid}/analytics' if back == 'analytics' else f'/analysis/{aid}/workspace'
 
 
 def bound_label(bound):
@@ -1151,7 +1151,90 @@ def check_new(aid: AnalysisId):
     if store.active_job(aid):
         return redirect(f'/analysis/{aid}/workspace', 'Wait for the current task to finish before starting a new check.')
     store.new_check(aid)
-    return redirect(f'/analysis/{aid}/check/1')
+    return redirect(f'/analysis/{aid}/analytics')
+
+
+@app.get('/analysis/{aid}/analytics', response_class=HTMLResponse)
+def analytics_page(request: Request, aid: AnalysisId):
+    """Setting up a new analysis on one page: the six choices of the check in a column, then Run Analysis."""
+    a = store.get_analysis(aid)
+    if not a or a['status'] == 'draft':
+        return not_found()
+    ctx = check_context(a, CHECK_LAST)
+    volume_now = 'all' if a['check_volume'] == 0 else str(a['check_volume']) if a['check_volume'] else ('all' if ctx['volume'] >= ctx['units_n'] and ctx['units_n'] else str(ctx['volume']))
+    ctx['volume_now'] = volume_now
+    ctx['volume_options'] = [(str(v), f'{v:,} messages') for v in ctx['volumes']] + [('all', f'All messages ({ctx["units_n"]:,})' if ctx['units_n'] else 'All messages')]
+    if ctx['custom']:
+        ctx['volume_options'].insert(0, (str(ctx['custom']), f'{int(ctx["custom"]):,} messages'))
+        ctx['volume_now'] = str(ctx['custom'])
+    start, end = a['period_start'] or '', a['period_end'] or ''
+    now, span = 'all', store.timestamp_span(aid)
+    if start or end:
+        now = 'custom'
+        for key, _l, delta in PRESETS:
+            if span and (start, end) == ((span[1] - delta).strftime('%Y-%m-%dT%H:%M'), span[1].strftime('%Y-%m-%dT%H:%M')):
+                now = key
+    ctx['period_now'] = now
+    ctx['period_options'] = list(ANALYTICS_PERIODS) + ([('custom', 'Custom dates: ' + (ctx['period_text'] or 'saved'))] if ctx['period_now'] == 'custom' else [])
+    ctx['busy'] = bool(store.active_job(aid))
+    return render(request, 'analytics.html', **ctx)
+
+
+@app.post('/analysis/{aid}/analytics')
+async def analytics_run(request: Request, aid: AnalysisId):
+    """Run Analysis: saves every choice of the page, then starts the check like the last step of the old flow."""
+    a = store.get_analysis(aid)
+    if not a:
+        return not_found()
+    here = f'/analysis/{aid}/analytics'
+    if store.active_job(aid):
+        return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
+    form = await request.form()
+    fields = {}
+    choice = str(form.get('incognito', 'off'))
+    fields['incognito'] = int(choice == 'on')
+    sens = str(form.get('vibe_sensitivity', ''))
+    if sens not in pipeline.SENSITIVITIES:
+        return redirect(here, 'Choose how sensitive the check should be.')
+    fields['vibe_sensitivity'] = sens
+    vol = str(form.get('volume', ''))
+    if vol == 'all':
+        fields['check_volume'] = 0
+    elif vol.isdigit() and workplace.VOLUME_MIN <= int(vol) <= config.max_units():
+        fields['check_volume'] = int(vol)
+    else:
+        return redirect(here, 'Choose how many messages to read.')
+    period = str(form.get('period', 'all'))
+    if period == 'all':
+        fields.update(period_start='', period_end='', period_tz=None)
+    elif period != 'custom':
+        chosen = next((delta for key, _l, delta in PRESETS if key == period), None)
+        span = store.timestamp_span(aid)
+        if chosen is None or span is None:
+            return redirect(here, 'None of your messages has a readable date, so that time frame cannot be worked out. Choose all dates.')
+        stamp = '%Y-%m-%dT%H:%M'
+        fields.update(period_start=(span[1] - chosen).strftime(stamp), period_end=span[1].strftime(stamp), period_tz=0)
+    engine = str(form.get('engine', '')).strip()
+    sent = False
+    if rules.is_rules(engine):
+        pass
+    elif cloud.is_cloud(engine):
+        if not cloud.known(engine):
+            return redirect(here, 'Choose an engine from the list.')
+        if not cloud.available(engine):
+            return redirect(here, 'Claude Code is not available here. Install it and sign in, or choose another engine.' if cloud.is_login(engine)
+                            else f'{cloud.provider(engine)} is not set up on this server. Choose another engine.')
+        if form.get('cloud_ok') != '1':
+            return redirect(here, f'Tick the box to confirm that your messages may be sent to {cloud.provider(engine)} to be read.')
+        sent = True
+    else:
+        if not config.local_model_enabled():
+            return redirect(here, 'This app runs without a model of its own. Choose a Claude engine.')
+        installed = [m['name'] for m in local_models()]
+        if engine and engine != config.model_name() and engine not in installed:
+            return redirect(here, 'That engine is not downloaded on this computer. Choose one from the list.')
+    store.update_analysis(aid, engine=engine if engine and engine != config.model_name() else None, cloud_ok=int(sent), **fields)
+    return start_job(aid, 'full')
 
 
 @app.get('/analysis/{aid}/check/{step}', response_class=HTMLResponse)
@@ -1252,6 +1335,9 @@ def period_form(a):
 
 PRESETS = (('24h', 'Last 24 hours', datetime.timedelta(hours=24)), ('7d', 'Last 7 days', datetime.timedelta(days=7)),
            ('30d', 'Last 30 days', datetime.timedelta(days=30)), ('90d', 'Last 90 days', datetime.timedelta(days=90)))
+
+
+ANALYTICS_PERIODS = (('all', 'All dates'),) + tuple((k, l) for k, l, _d in PRESETS)
 
 
 @app.post('/analysis/{aid}/check/4')

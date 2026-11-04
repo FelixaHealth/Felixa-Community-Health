@@ -126,7 +126,7 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
 
 // Badges and alerts: the Dashboard / Trends switch, and the "Compare to" menu that reloads with its choice.
 (() => {
-  document.querySelectorAll('select[data-submit]').forEach((s) => s.addEventListener('change', () => s.form.submit()));
+  document.querySelectorAll('select[data-submit], input[type=file][data-submit]').forEach((s) => s.addEventListener('change', () => s.form.submit()));
   document.querySelectorAll('[data-act]').forEach((box) => {
     const buttons = [...box.querySelectorAll('[data-act-view]')];
     buttons.forEach((b) => b.addEventListener('click', () => {
