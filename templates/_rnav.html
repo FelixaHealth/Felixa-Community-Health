@@ -1,0 +1,3 @@
+{# The screens of the results, along the top of each. Needs `rnav` = [(key, label, icon, href, current)]. #}
+{% from "_icons.html" import icon %}
+<nav class="rnav" aria-label="Kinds of result">{% for key, label, ic, href, on in rnav %}<a href="{{ href }}"{% if on %} class="on" aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ label }}</span></a>{% endfor %}</nav>

@@ -1,10 +1,10 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Flagged messages{% endblock %}
 {% block content %}
 <div class="stage flagged-page">
-<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/workspace">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/results#tab-act">Results</a><span aria-hidden="true">/</span><span aria-current="page">Flagged messages</span></nav>
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/results/alerts">Results</a><span aria-hidden="true">/</span><span aria-current="page">Flagged messages</span></nav>
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Latest Vibe Check</div><h1>Flagged messages</h1>
 <p class="lead">{{ view.total }} message{{ '' if view.total == 1 else 's' }} flagged{% if view.serious %}, {{ view.serious }} serious{% endif %}. Each one is copied from your upload, never paraphrased.</p></div>
-<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/flagged.csv{% if query %}?{{ query|urlencode }}{% endif %}">{{ icon('file') }} CSV of this list</a><a class="btn quiet" href="/analysis/{{ aid }}/results#tab-act">{{ icon('back') }} Back to Badges &amp; Alerts</a></div></section>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/flagged.csv{% if query %}?{{ query|urlencode }}{% endif %}">{{ icon('file') }} CSV of this list</a><a class="btn quiet" href="/analysis/{{ aid }}/results/alerts">{{ icon('back') }} Back to Badges &amp; Alerts</a></div></section>
 {% if view.total %}
 <form class="fl-filters panel" method="get" action="/analysis/{{ aid }}/flagged">
 <label>Kind<select name="kind" data-submit><option value="">All kinds</option>{% for k, label in view.kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

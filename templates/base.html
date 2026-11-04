@@ -27,7 +27,7 @@
 <option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>
 <a class="icon-pill add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
 <form class="search" method="get" action="/search" role="search"><label>{{ icon('search') }}<span class="sr-only">Search</span><input type="search" name="q" placeholder="Search analyses, messages or reports…" autocomplete="off" value="{{ search_q or '' }}"></label></form>
-<a class="icon-pill bell" href="{{ ('/analysis/%d/results#tab-act'|format(cur.id)) if cur and cur.has_results else '/' }}" title="Badges and alerts" aria-label="Badges and alerts">{{ icon('bell') }}{% if alert_count %}<i class="dot" aria-hidden="true"></i>{% endif %}</a>
+<a class="icon-pill bell" href="{{ ('/analysis/%d/results/alerts'|format(cur.id)) if cur and cur.has_results else '/' }}" title="Badges and alerts" aria-label="Badges and alerts">{{ icon('bell') }}{% if alert_count %}<i class="dot" aria-hidden="true"></i>{% endif %}</a>
 <a class="avatar" href="/settings" title="Settings" aria-label="Your settings">{{ cur.initial if cur else 'F' }}</a>
 {% if top_workplaces %}<a class="dash-link" href="/dashboard"{% if request.url.path == '/dashboard' %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>{% endif %}
 </header>

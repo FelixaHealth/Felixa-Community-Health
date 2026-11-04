@@ -2,7 +2,7 @@
 {% from "_icons.html" import icon %}
 <div class="act" data-act>
 <section class="act-head"><div class="act-title"><span class="act-shield">{{ icon('shield') }}</span><div><h2>Badges &amp; Alerts</h2><p>Strengths, risks, and changes over time.</p></div></div>
-<form class="act-filters" method="get" action="/analysis/{{ aid }}/results#tab-act"><label>Timeframe<select disabled aria-label="Timeframe"><option>Latest check</option></select></label>
+<form class="act-filters" method="get" action="/analysis/{{ aid }}/results/alerts"><label>Timeframe<select disabled aria-label="Timeframe"><option>Latest check</option></select></label>
 <label>Compare to<select name="compare" data-submit aria-label="Compare to">{% for key, label in act.compare_options %}<option value="{{ key }}"{% if key == act.compare %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn">Apply</button></noscript></form>
 <div class="seg" role="group" aria-label="View"><button type="button" data-act-view="dash" aria-pressed="true">{{ icon('layers') }} Dashboard</button><button type="button" data-act-view="trends" aria-pressed="false">{{ icon('trend') }} Trends</button></div></section>
 <div class="kpi-row act-dash">{% for k in act.kpis %}<article class="kpi"><div class="kpi-top"><span class="hc-ic">{{ icon(k.icon) }}</span><h3>{{ k.label }}</h3></div>

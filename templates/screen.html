@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — {{ title }}{% endblock %}
+{% block content %}
+<div class="shell"><div class="stage results-screen">
+{{ assets|safe }}
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ title }}</span></nav>
+{% include "_rnav.html" %}
+{% if screen == 'vibe' %}
+{% if vibe_html %}{{ vibe_html|safe }}{% endif %}
+{% elif screen == 'health' %}
+{% include "_health_verdict.html" %}
+{% set only = 'health' %}{% include "_over_time.html" %}
+{% elif screen == 'sentiment' %}
+{% if families %}<section class="panel"><div class="eyebrow">Categories</div><h2>Positive, tense and toxic wording</h2><p class="small-note">Open a category to read every message in it and see how it moves over time.</p>
+<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>Strongest: {{ f.top }}</small><em>See the messages</em></a>{% endfor %}</div></section>{% endif %}
+{% if metrics %}{% include "_signals.html" %}{% endif %}
+{% elif screen == 'passive' %}
+{% set only = 'passive' %}{% include "_over_time.html" %}
+{% elif screen == 'alerts' %}
+{% if act %}{% include "_act_dashboard.html" %}{% endif %}
+{% if guidance %}{% include "_guidance.html" %}{% endif %}
+{% if measures %}{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}
+{% elif screen == 'questions' %}
+{% include "_answers.html" %}
+{% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}
+{% endif %}
+</div></div>{% endblock %}

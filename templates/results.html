@@ -1,38 +1,18 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — {{ a.person_name }} results{% endblock %}
 {% block content %}
-<div class="shell"><div class="stage">
+<div class="shell"><div class="stage results-hub">
 {{ assets|safe }}
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Results</div><h1>{{ a.person_name }}</h1>
-<div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}</div>{% if period_text %}<p class="small-note">{{ period_text }}</p>{% endif %}</div>
-<div class="head-actions"><a class="btn" href="/analysis/{{ aid }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn" href="/analysis/{{ aid }}/export">{{ icon('layers') }} CSV</a><a class="btn quiet" href="/analysis/{{ aid }}/workspace">{{ icon('back') }} Workplace</a></div></section>
-<nav class="tabs" role="tablist" aria-label="Parts of the results" data-tabs>
-<a class="tab on" role="tab" href="#tab-overview">{{ icon('eye') }}<span>Overview</span></a>
-{% if measures %}<a class="tab" role="tab" href="#tab-track">{{ icon('target') }}<span>Track</span></a>{% endif %}
-{% if metrics or vibe_html %}<a class="tab" role="tab" href="#tab-understand">{{ icon('chat') }}<span>Understand</span></a>{% endif %}
-{% if measures or guidance %}<a class="tab" role="tab" href="#tab-act">{{ icon('check') }}<span>Act</span></a>{% endif %}
-</nav>
-<div class="tabpanel" id="tab-overview" role="tabpanel">
-<header class="tab-intro"><h2>How healthy is it?</h2><p>The verdict first, then your questions answered.</p></header>
-{% if measures %}{% include "_summary.html" %}
-<section class="panel health-verdict" id="health-verdict" aria-labelledby="hv-h"><div class="hv-score"><strong>{{ '%.0f'|format(measures.health.score) }}</strong><span>/ 100</span></div><div class="hv-text"><div class="eyebrow">Health score</div><h2 id="hv-h">{{ measures.health.status }}</h2><p>{{ measures.health.caption }}{% if measures.health.trend %} {{ measures.health.trend }}{% endif %}</p></div></section>{% endif %}
-{% include "_answers.html" %}
-{% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}
+<div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}{% if period_text %}<span class="chip soft">{{ period_text }}</span>{% endif %}</div></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn quiet" href="/analysis/{{ aid }}/export">{{ icon('layers') }} CSV</a><a class="btn quiet" href="/analysis/{{ aid }}/report">{{ icon('eye') }} Full report</a></div></section>
+{% include "_rnav.html" %}
+{% if home %}{% include "_result_cards.html" %}
+<div class="home-row r3 links">
+<a class="bar-dark" href="/analysis/{{ aid }}/results/alerts"><span class="bd-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
+{% if flagged_n %}<a class="bar-light" href="/analysis/{{ aid }}/flagged"><span class="bl-ic">{{ icon('warning') }}</span><strong>Flagged messages</strong><span class="bd-count soft">{{ flagged_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
+{% if answers_n %}<a class="bar-light" href="/analysis/{{ aid }}/results/questions"><span class="bl-ic">{{ icon('check') }}</span><strong>Your questions</strong><span class="bd-count soft">{{ answers_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
 </div>
-{% if measures %}<div class="tabpanel" id="tab-track" role="tabpanel">
-<header class="tab-intro"><h2>How is it moving?</h2><p>Escalation, Conflict, Empathy and Passive-aggressive, part by part through the chat.</p></header>
-{% if track_view %}{% include "_track.html" %}{% endif %}
-<div id="tab-measures">{% include "_over_time.html" %}</div></div>{% endif %}
-{% if metrics or vibe_html %}<div class="tabpanel" id="tab-understand" role="tabpanel">
-<header class="tab-intro"><h2>What is being said?</h2><p>The sentiment of the chat and the 13 tones, with the messages behind each.</p></header>
-{% if families %}<section class="panel"><div class="eyebrow">Categories</div><h2>Positive, tense and toxic wording</h2><p class="small-note">Open a category to read every message in it and see how it moves over time.</p>
-<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>{{ f.blurb }}</small><em>See the messages and graphs →</em></a>{% endfor %}</div></section>{% endif %}
-{% if metrics %}{% include "_signals.html" %}{% endif %}
-{% if vibe_html %}{{ vibe_html|safe }}{% endif %}
-</div>{% endif %}
-{% if measures or guidance %}<div class="tabpanel" id="tab-act" role="tabpanel">
-{% if act %}{% include "_act_dashboard.html" %}{% endif %}
-{% if guidance %}{% include "_guidance.html" %}{% endif %}
-{% if measures %}<header class="tab-intro act-dash"><h2>Every alert and badge, in full</h2><p>The complete lists, with what each one needs.</p></header>
-{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}
-</div>{% endif %}
+{% if families %}<section class="hcard tones"><div class="hc-top"><span class="hc-ic">{{ icon('chat') }}</span><h2>Tones</h2><a class="more" href="/analysis/{{ aid }}/results/sentiment">All 13 {{ icon('chevron') }}</a></div>
+<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }}</span><small>Strongest: {{ f.top }}</small></a>{% endfor %}</div></section>{% endif %}
+{% endif %}
 </div></div>{% endblock %}

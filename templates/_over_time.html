@@ -1,14 +1,17 @@
 {# Measures over time. Needs `measures` (measures.build) and `measures_html` (measures_view.html). The wording comes from measures.py, the key to the charts too (`ms.chart_key`); only the headings are written here. The notes about the measures are printed here and the notes about the alerts under Alerts, so no note appears twice. The reason two checks are not alike is no note: it is printed once, with the comparison. #}
 {% set ms = measures %}{% set m = ms.m %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set charts = mh.charts or {} %}{% set verdict_tone = mh.verdict_tone or {} %}{% set h = ms.health %}
 {% set over_notes = ms.notes|rejectattr('about', 'equalto', 'alerts')|list %}
-<section class="panel vc" id="over-time" aria-labelledby="over-time-h"><div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>
+<section class="panel vc{{ ' bare' if only is defined }}" id="over-time" aria-labelledby="over-time-h">{% if only is not defined %}<div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>{% else %}<h2 id="over-time-h" class="sr-only">Measures over time</h2>{% endif %}
+{% set notes_html %}
 <p class="vc-note">{{ ms.basis_text }}</p>
 <p class="vc-caveat">{{ ms.caveats.measures }}</p>
 {% if over_notes %}<ul class="vc-quiet">{% for note in over_notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
 {% set said = namespace(no_lines=false) %}{% for note in over_notes %}{% if 'no lines over time' in note.text|lower %}{% set said.no_lines = true %}{% endif %}{% endfor %}
 {% if m.has_series %}<p class="vc-note vc-chart-key">{{ ms.chart_key }}</p>
 {% elif not said.no_lines %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
-<div class="vc-cols vc-measures">{% for c in ms.cards %}
+{% endset %}
+{% if only is defined %}<details class="how-built"><summary>How this is built</summary>{{ notes_html|safe }}</details>{% else %}{{ notes_html|safe }}{% endif %}
+{% if only is not defined or only != 'health' %}<div class="vc-cols vc-measures">{% for c in ms.cards if only is not defined or only == c.key %}
 <div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
 <p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">{{ c.latest_label or 'Latest part' }}: {{ c.latest }}</span>{% endif %}</p>
 <p class="vc-meaning">{{ c.meaning }}</p>
@@ -17,8 +20,8 @@
 {% if c.note %}<p class="vc-card-note">{{ c.note }}</p>{% endif %}
 {% if charts[c.key] %}{{ charts[c.key]|safe }}{% endif %}
 </div>{% endfor %}</div>
-{% if mh.table %}<div class="vc-over-table vc-parts">{{ mh.table|safe }}</div>{% endif %}
-<div class="vc-card vc-health"><h3>{{ h.name }}</h3>
+{% if mh.table and only is not defined %}<div class="vc-over-table vc-parts">{{ mh.table|safe }}</div>{% endif %}{% endif %}
+{% if only is not defined or only == 'health' %}<div class="vc-card vc-health"><h3>{{ h.name }}</h3>
 <div class="vc-health-head"><div class="vc-score"><span class="vc-score-num">{{ mh.health_score }}</span><span class="vc-score-den">/ 100</span></div>
 <div class="vc-badge">{{ icons[h.tone]|safe }}<span>{{ h.status }}</span><span class="sr-only">, {{ h.tone_word }}</span></div></div>
 {% if mh.health %}{{ mh.health|safe }}{% endif %}
@@ -40,4 +43,4 @@
 <p class="vc-note">The health score at each check, oldest first.</p>
 {{ mh.trail_chart|safe }}</div>
 <div class="vc-over-table vc-trail">{{ mh.trail_table|safe }}</div>{% endif %}
-</section>
+{% endif %}</section>

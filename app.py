@@ -1578,16 +1578,59 @@ def track_views(ms, only=None):
     return out
 
 
-@app.get('/analysis/{aid}/results', response_class=HTMLResponse)
-def results_page(request: Request, aid: AnalysisId, compare: str = 'previous'):
-    """The results on a page of their own, with tabs along the top."""
-    ctx = report_context(aid, 'page of results')
+RESULT_SCREENS = {'vibe': ('Vibe Check', 'users'), 'health': ('Health Score', 'pulse'), 'sentiment': ('Sentiment', 'chart'), 'passive': ('Passive-aggressive', 'chat'),
+                  'alerts': ('Badges & Alerts', 'shield'), 'questions': ('Your questions', 'check')}
+
+
+def results_nav(aid, ctx, current):
+    """The row of screens along the top of every results screen: only the ones this check has something for. (key, label, icon, href, current?)"""
+    vibe_ok = bool(ctx.get('vibe') and ctx['vibe'].get('status') == 'ok')
+    ms = ctx.get('measures')
+    has = {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms or ctx.get('guidance')), 'questions': bool(ctx.get('answers'))}
+    out = [('overview', 'Overview', 'home', f'/analysis/{aid}/results', current == 'overview')]
+    for key in ('vibe', 'health', 'sentiment'):
+        if has[key]:
+            out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
+    if ms:
+        for key, icon_name in (('escalation', 'trend'), ('conflict', 'users'), ('empathy', 'heart')):
+            out.append((key, track.NAMES[key], icon_name, f'/analysis/{aid}/track/{key}', current == key))
+        out.append(('passive', 'Passive-aggressive', 'chat', f'/analysis/{aid}/results/passive', current == 'passive'))
+    for key in ('alerts', 'questions'):
+        if has[key]:
+            out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
+    return out
+
+
+def results_context(aid, what='page of results'):
+    ctx = report_context(aid, what)
     ctx['track_view'] = track_views(ctx['measures']) if ctx.get('measures') else None
-    act = actview.build(ctx, compare) if ctx.get('measures') else None
-    if act:
+    return ctx
+
+
+@app.get('/analysis/{aid}/results', response_class=HTMLResponse)
+def results_page(request: Request, aid: AnalysisId):
+    """The results of a workplace: the headline of each kind of result as a card. Each card opens its own screen."""
+    ctx = results_context(aid)
+    home = home_view(aid)
+    flagged_n = len((ctx['vibe'] or {}).get('flagged') or []) if ctx.get('vibe') and ctx['vibe'].get('status') == 'ok' else 0
+    return render(request, 'results.html', home=home, rid=aid, flagged_n=flagged_n, answers_n=len(ctx.get('answers') or []), rnav=results_nav(aid, ctx, 'overview'), **ctx)
+
+
+@app.get('/analysis/{aid}/results/{screen}', response_class=HTMLResponse)
+def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str = 'previous'):
+    """One kind of result on a screen of its own."""
+    if screen not in RESULT_SCREENS:
+        not_found()
+    ctx = results_context(aid, f'{RESULT_SCREENS[screen][0]} screen')
+    nav = results_nav(aid, ctx, screen)
+    if not any(n[0] == screen for n in nav):
+        raise PageError(404, 'Nothing here yet', f'This check has no {RESULT_SCREENS[screen][0]} result.', back=(f'/analysis/{aid}/results', 'Back to the results'))
+    act = None
+    if screen == 'alerts' and ctx.get('measures'):
+        act = actview.build(ctx, compare)
         t = act['trend']
         act['trend_html'] = vibe_check.figure(lambda w: bei_charts.compare_chart(t['cats'], t['cur'], t['prev'], width=w)) if len(t['cats']) >= 2 else ''
-    return render(request, 'results.html', tabs_page=True, act=act, **ctx)
+    return render(request, 'screen.html', screen=screen, title=RESULT_SCREENS[screen][0], act=act, rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
@@ -1599,7 +1642,7 @@ def track_page(request: Request, aid: AnalysisId, key: str):
     view = track_views(ctx['measures'], only=key) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
-    return render(request, 'track.html', track_view=view, card=view['cards'][0], key=key, names=track.NAMES, **ctx)
+    return render(request, 'track.html', track_view=view, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):
