@@ -883,3 +883,40 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .an-rm summary{list-style:none;cursor:pointer}.an-rm summary::-webkit-details-marker{display:none}.an-rm[open]{flex-basis:100%}.an-rm form{margin-top:8px;display:grid;gap:8px;padding:10px;border-radius:12px;background:#fdeceb}.an-rm p{margin:0;font-size:13px;color:#7a2a22}
 .an-two{display:none}
 .an-added li{flex-wrap:wrap}
+
+/* ---- Phone: the side menu becomes a bar along the bottom, like an app ---- */
+.mob-only{display:none}
+@media(max-width:900px){
+ .mob-only{display:grid}
+ body.app{display:block}
+ .sidebar{position:fixed;left:0;right:0;bottom:0;top:auto;height:auto;z-index:60;flex-direction:row;justify-content:space-around;align-items:stretch;gap:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));overflow:visible;background:#0f4a2e;border-top:1px solid rgba(255,255,255,.12);box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+ .side-logo,.side-foot{display:none}
+ .side-nav{display:flex;flex:1;justify-content:space-around;gap:0;width:100%}
+ .side-link{flex:1;flex-direction:column;gap:3px;padding:7px 2px;font-size:11.5px;font-weight:600;border-radius:12px;text-align:center;justify-content:center;min-width:0;box-shadow:none!important}
+ .side-link .ic{width:22px;height:22px}.side-link span{white-space:nowrap}
+ .sidebar .side-link.on{background:rgba(255,255,255,.14);box-shadow:none;color:#fff}
+ .main-col{padding-bottom:84px}
+ .main-col .page{padding:12px 14px 24px}
+ .appbar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px 4px;align-items:center}
+ .wp-pick{flex:1 1 0;min-width:0}.wp-pick select{width:100%}
+ .search{order:5;flex-basis:100%;max-width:none;margin:0}.dash-link{display:none}
+ .help-fab{bottom:calc(86px + env(safe-area-inset-bottom));right:14px;padding:10px 16px 10px 10px;font-size:15px}
+ .home-top{margin-bottom:12px}.home .home-actions{width:100%}.home .btn-gold,.home .btn-soft{flex:1;justify-content:center}
+ .home-row.r3,.home-row.r4,.home-row.r2{grid-template-columns:1fr}
+ .home-row.r4{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .rnav{flex-wrap:nowrap;overflow-x:auto}
+ .analytics .an-row{grid-template-columns:40px minmax(0,1fr)}.analytics .an-c{grid-column:1/-1;justify-content:flex-start}
+ .an-sel select,.an-sel.wide select{min-width:0;width:100%}.an-sel{flex:1}
+ .an-seg{width:100%}.an-seg label{flex:1}.an-seg span{text-align:center;padding:10px 6px;font-size:13px}
+ .an-drawer{padding-left:0}.an-foot{padding-left:0}.an-card{padding:2px 14px 18px}
+ .act-top{grid-template-columns:1fr}
+ .wp-grid{grid-template-columns:1fr}.wp-head{flex-wrap:wrap}
+}
+@media(max-width:900px){
+ .sidebar .side-nav{min-width:0;width:100%;overflow:hidden}
+ .sidebar .side-nav .side-link{flex:1 1 0;min-width:0;width:auto;padding:7px 0;gap:3px;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+ .sidebar .side-nav .side-link span{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+ html,body{overflow-x:hidden}
+}
+.home{grid-template-columns:minmax(0,1fr)}.home>*,.home-row>*{min-width:0}
+@media(max-width:900px){.home .home-actions{flex-wrap:nowrap}.home .btn-gold,.home .btn-soft{padding:0 10px;font-size:13.5px;white-space:nowrap;min-width:0}.hcard{overflow:hidden}}

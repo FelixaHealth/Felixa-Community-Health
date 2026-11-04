@@ -4,7 +4,7 @@
 <div class="home">
 <div class="home-top">{% if cur %}<div><h1>{{ cur.name }}</h1><p>Your communication health at a glance.</p></div>{% else %}<div><h1>Welcome to Felixa</h1><p>See how people really communicate.</p></div>{% endif %}
 <div class="home-actions">
-<a class="btn-gold" href="{% if cur %}{{ ('/analysis/%d/analytics'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id)) }}{% else %}/new{% endif %}">{{ icon('plus') }}<span>New Analysis</span></a>
+<a class="btn-gold" href="{% if cur %}{{ '/analysis/%d/analytics'|format(cur.id) }}{% else %}/new{% endif %}">{{ icon('plus') }}<span>New Analysis</span></a>
 <a class="btn-soft" href="{% if cur %}{{ '/analysis/%d/results'|format(cur.id) if cur.has_results else '/analysis/%d/workspace'|format(cur.id) }}{% else %}/new{% endif %}">{{ icon('folder') }}<span>Open Analysis</span></a>
 </div></div>
 {% if not cur %}
