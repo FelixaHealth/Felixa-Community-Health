@@ -824,3 +824,4 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .home-row.r2{grid-template-columns:repeat(2,minmax(0,1fr))}.home .hc-ic .ic{width:20px;height:20px}.home .hcard .more{margin-left:auto;display:inline-flex;gap:4px;align-items:center;color:#a8780f;font-weight:600;font-size:13px}.home .hcard .more .ic{width:14px;height:14px}
 .facts dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:0}.facts dt{font-size:12.5px;color:var(--muted)}.facts dd{margin:2px 0 0;font-size:22px;font-weight:700;color:#0f4a2e;overflow-wrap:anywhere}.home .hcard.facts{min-height:0}
 @media(max-width:760px){.home-row.r2{grid-template-columns:1fr}}
+.hub-downloads{margin:6px 2px 0;font-size:13px;color:var(--muted)}.hub-downloads a{color:#a8780f;font-weight:600;text-decoration:none}.hub-downloads a:hover{text-decoration:underline}

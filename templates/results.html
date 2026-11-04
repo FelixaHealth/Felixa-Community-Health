@@ -2,9 +2,6 @@
 {% block content %}
 <div class="shell"><div class="stage results-hub">
 {{ assets|safe }}
-<section class="results-head"><div class="rh-main"><div class="eyebrow">Results</div><h1>{{ a.person_name }}</h1>
-<div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}{% if period_text %}<span class="chip soft">{{ period_text }}</span>{% endif %}</div></div>
-<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/report.pdf">{{ icon('file') }} PDF</a><a class="btn quiet" href="/analysis/{{ aid }}/export">{{ icon('layers') }} CSV</a><a class="btn quiet" href="/analysis/{{ aid }}/report">{{ icon('eye') }} Full report</a></div></section>
 {% include "_rnav.html" %}
 {% if home %}{% include "_result_cards.html" %}
 <div class="home-row r3 links">
@@ -15,4 +12,5 @@
 {% if families %}<section class="hcard tones"><div class="hc-top"><span class="hc-ic">{{ icon('chat') }}</span><h2>Tones</h2><a class="more" href="/analysis/{{ aid }}/results/sentiment">All 13 {{ icon('chevron') }}</a></div>
 <div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }}</span><small>Strongest: {{ f.top }}</small></a>{% endfor %}</div></section>{% endif %}
 {% endif %}
+<p class="hub-downloads">Download <a href="/analysis/{{ aid }}/report.pdf">PDF</a> · <a href="/analysis/{{ aid }}/export">CSV</a> · <a href="/analysis/{{ aid }}/report">Full report</a></p>
 </div></div>{% endblock %}
