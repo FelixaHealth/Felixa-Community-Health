@@ -287,7 +287,7 @@ class Journey(AppCase):
         self.assertTrue(vibe_prompts and any('SENSITIVITY: LOW' in s for s in vibe_prompts))
         self.assertFalse(any('SENSITIVITY: MEDIUM' in s for s in vibe_prompts))
 
-        for path in ('results', 'report'):
+        for path in ('report',):
             html = self.client.get(f'/analysis/{aid}/{path}')
             self.assertEqual(html.status_code, 200)
             for needle in ('Observable communication signals', 'What the evidence suggests', 'id="vibe-check"', 'Sentiment mix',
@@ -372,7 +372,7 @@ class Journey(AppCase):
         for needle in ('Mixed sensitivity.', '(Low, High)', 'The saved runs used different sensitivity levels', '<th scope="col">Sensitivity</th>',
                        '<td>Low</td>', '<td>High</td>'):
             self.assertIn(needle, page)
-        self.assertIn('Mixed sensitivity.', self.client.get(f'/analysis/{aid}/results').text)
+        self.assertIn('Mixed sensitivity.', self.client.get(f'/analysis/{aid}/report').text)
         pdf = pdf_text(self.client.get(f'/analysis/{aid}/report.pdf').content)
         for needle in ('Mixed sensitivity.', '(Low, High)', 'The saved runs used different sensitivity levels'):
             self.assertIn(needle, pdf)
@@ -400,7 +400,7 @@ class Journey(AppCase):
 
         first, second = 'Run 1 · Mar 8, 2026 09:05 UTC', 'Run 2 · Mar 8, 2026 09:05 UTC'
         for where, page in (('report', self.client.get(f'/analysis/{aid}/report').text),
-                            ('results', self.client.get(f'/analysis/{aid}/results').text)):
+                            ('report', self.client.get(f'/analysis/{aid}/report').text)):
             for needle in (f'<td>{first}</td>', f'<td>{second}</td>', '<td>Run 3 · ', f'data-vc-tip="{{&quot;t&quot;:&quot;{second}&quot;,',
                            '>Run 1</text>', '>Run 2</text>', '>Run 3</text>'):
                 self.assertIn(needle, page, where)
@@ -435,8 +435,8 @@ class Journey(AppCase):
         workspace = self.client.get(f'/analysis/{aid}/workspace').text
         workspace_folds = _Folds()
         workspace_folds.feed(workspace)
-        self.assertEqual([cls for cls, inside in workspace_folds.folds if not inside], ['new-confirm', 'edit-fold', 'clear-confirm', 'delete-confirm'])      # the two confirmations, and the form to edit the workplace with its own delete
-        self.assertEqual(workspace.count("addEventListener('beforeprint'"), 1)
+        self.assertEqual(sorted(set(cls for cls, inside in workspace_folds.folds if not inside)), ['an-rm', 'clear-confirm', 'delete-confirm', 'edit-fold', 'new-confirm'])      # the two confirmations, and the form to edit the workplace with its own delete
+        self.assertEqual(workspace.count("addEventListener('beforeprint'"), 0, 'the workplace page holds no results to print')
 
     def test_the_csv_prints_only_the_vibe_check_blocks_there_is_something_to_say_in(self):
         import report
@@ -586,7 +586,7 @@ class Journey(AppCase):
         self.assertIsNone(self.store.latest_vibe(aid))
         self.assertEqual(self.app.analysis.metrics_for(aid), [])
         self.assertEqual(len(self.store.vibe_history(aid)), 1)
-        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 303)
 
     def test_after_a_clear_the_database_holds_neither_a_message_nor_a_source_name_but_keeps_the_trend(self):
         """The history that survives a clear is numbers. A file or channel name can be as private as the messages, and a snapshot used to
@@ -602,7 +602,7 @@ class Journey(AppCase):
             self.assertFalse(canary.encode() in database_bytes(self.tmp), 'Clear left a message or a source name on disk')
         history = self.store.vibe_history(aid)
         self.assertEqual((len(history), len(history[0]['sources']), history[0]['analyzed_n']), (1, 2, 12))    # the trend survives, with a fingerprint per source
-        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 303)
 
     def test_the_workspace_says_where_messages_are_kept_and_what_a_delete_leaves(self):
         aid = self.with_chat()
@@ -618,14 +618,13 @@ class Journey(AppCase):
     def test_new_check_controls_lock_while_a_task_runs_and_the_run_button_is_off_without_messages(self):
         """The server refuses evidence edits during a job, and the pages say so instead of offering a button that will be refused."""
         bare = self.new_analysis()
-        self.assertIn('Add messages to continue.', self.client.get(f'/analysis/{bare}/check/1').text)
-        engine = self.client.get(f'/analysis/{bare}/check/6').text
-        self.assertRegex(engine, r'<button class="btn primary" disabled>Run check')
+        self.assertIn('Add messages first.', self.client.get(f'/analysis/{bare}/analytics').text)
+        self.assertRegex(self.client.get(f'/analysis/{bare}/analytics').text, r'<button class="an-run" disabled>')
         aid = self.with_chat()
-        self.assertNotRegex(self.client.get(f'/analysis/{aid}/check/6').text, r'<button class="btn primary" disabled>Run check')
+        self.assertNotRegex(self.client.get(f'/analysis/{aid}/analytics').text, r'<button class="an-run" disabled>')
         job = self.store.create_job(aid, 'vibe')
         self.addCleanup(self.store.job_update, job, 'cancelled', 'test cleanup')
-        self.assertRegex(self.client.get(f'/analysis/{aid}/check/6').text, r'<button class="btn primary" disabled>Run check')
+        self.assertIn('A check is running', self.client.get(f'/analysis/{aid}/analytics').text)
         self.assertIn('A check is running', self.client.get(f'/analysis/{aid}/workspace').text)
         self.assertIn('Wait for the current task', flash(self.client.post(f'/analysis/{aid}/check/new')))
         self.assertIn('Wait for the current task', flash(self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello there', 'back': 'check'})))
@@ -635,7 +634,7 @@ class Journey(AppCase):
         self.run_job(aid)
         clear = f'action="/analysis/{aid}/clear-units"'
         page = self.client.get(f'/analysis/{aid}/workspace').text
-        self.assertIn('Your report is ready', page)
+        self.assertIn('Completed', page)
         start = page.index('<details class="clear-confirm"')
         end = page.index('</details>', start)
         self.assertEqual(page[start:page.index('>', start) + 1], '<details class="clear-confirm">')         # closed until the user opens it
@@ -648,7 +647,7 @@ class Journey(AppCase):
         self.assertNotIn('Your report is ready', after)
         self.assertNotIn('Your report is ready', self.client.get(f'/analysis/{aid}/workspace').text)         # nor after a reload
         self.assertEqual(self.client.get(f'/analysis/{aid}/job').json(), {})
-        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 303)
 
     def test_the_clear_message_only_claims_what_there_was_to_delete(self):
         aid = self.new_analysis()
@@ -668,7 +667,9 @@ class Journey(AppCase):
             r = self.client.get(f'/analysis/{aid}/step/{step}')
             self.assertEqual(r.status_code, 200, step)
         self.assertEqual(self.client.get(f'/analysis/{aid}/step/7').status_code, 404)
-        for step in range(1, 7):
+        self.assertEqual(self.client.get(f'/analysis/{aid}/check/1').status_code, 303, 'adding messages is on the Analytics page')
+        self.assertEqual(self.client.get(f'/analysis/{aid}/analytics').status_code, 200)
+        for step in range(2, 7):
             self.assertEqual(self.client.get(f'/analysis/{aid}/check/{step}').status_code, 200, step)
         self.assertEqual(self.client.get(f'/analysis/{aid}/check/7').status_code, 404)
         self.assertEqual(self.client.get('/').status_code, 200)
@@ -1132,7 +1133,7 @@ class Uploads(AppCase):
         self.assertEqual([row['label'] for row in labels], shown)
         page = self.client.get(f'/analysis/{aid}/workspace').text
         for name in shown:
-            self.assertIn(f'<td>{name}</td>', page)
+            self.assertIn(f'data-label="Source">{name}</td>', page)
 
     def test_a_file_label_keeps_the_name_and_drops_only_what_cannot_be_shown_or_grouped_on(self):
         label = self.app.file_label
@@ -1173,7 +1174,7 @@ class Uploads(AppCase):
         vibe = self.store.latest_vibe(aid)
         self.assertEqual(sorted(s['name'] for s in vibe['sources']), sorted([calm, rude]))               # two sources, so an Impact Score by source
         self.assertEqual({f['source'] for f in vibe['flagged']}, {rude})
-        for path in ('results', 'report'):
+        for path in ('report',):
             with self.subTest(path):
                 page = self.client.get(f'/analysis/{aid}/{path}').text
                 self.assertIn('Impact score by source', page)
@@ -1205,7 +1206,7 @@ class Uploads(AppCase):
         r = self.client.post(f'/analysis/{aid}/upload', data={'back': 'check'}, files=[('files', ('chat.txt', b'Alice: hi\nBob: hello\nAlice: ok', 'text/plain'))])
         self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/1')
         self.assertEqual(self.store.count_units(aid), 3)
-        self.assertIn('chat.txt', self.client.get(f'/analysis/{aid}/check/1').text)
+        self.assertIn('chat.txt', self.client.get(f'/analysis/{aid}/analytics').text)
         r = self.client.post(f'/analysis/{aid}/upload', files=[('files', ('more.txt', b'Carl: yes\nDana: no', 'text/plain'))])
         self.assertEqual(r.headers['location'], f'/analysis/{aid}/workspace')                    # without `back` the person stays on the workplace page
         r = self.client.post(f'/analysis/{aid}/upload', data={'back': 'https://evil.example/'}, files=[('files', ('x.txt', b'Eve: hi', 'text/plain'))])
@@ -1253,7 +1254,7 @@ class ReviewPeriod(AppCase):
         self.assertEqual((len(self.store.units_for(aid)), len(self.app.pipeline.vibe_units(aid))), (76, 30))      # nothing is deleted: the analysis skips them
         said = ('Review period: Mar 1, 2026 to Mar 2, 2026. Left out: 46 communication units dated outside it. '
                 'Kept: 6 communication units with no readable date.')
-        for path in ('results', 'report'):
+        for path in ('report',):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertIn(said, page, path)
             self.assertIn('30 communication units were rated.', page, path)
@@ -1505,7 +1506,7 @@ class PartialFailures(AppCase):
     @staticmethod
     def job_panel(page):
         """The task panel of the workspace: from its opening tag to the end of its section."""
-        start = page.index('<section class="panel', page.index('class="results-head"'))
+        start = page.index('<section class="panel', page.index('class="tabs wp-tabs"'))
         return page[start:page.index('</section>', start)]
 
     def test_a_task_that_finished_with_problems_says_so_first_and_in_plain_words(self):
@@ -1559,7 +1560,7 @@ class PartialFailures(AppCase):
                 self.assertEqual(len(self.app.analysis.metrics_for(aid)), 13)                     # the ratings are saved and the report shows them
                 self.assertEqual(self.app.analysis.stored_guidance(self.store.get_analysis(aid)), {})
                 self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 200)
-                self.assertIn('Observable communication signals', self.client.get(f'/analysis/{aid}/results').text)
+                self.assertIn('Observable communication signals', self.client.get(f'/analysis/{aid}/report').text)
         self.fake.failures.clear()
         self.fake.garbage.clear()
         self.assertEqual(self.run_job(aid)['status'], 'complete')                                 # running it again fills the gap
@@ -1732,10 +1733,10 @@ class PartialFailures(AppCase):
         aid = self.with_chat()
         job = self.run_job(aid)
         self.assertTrue(job['message'].startswith('Your report is ready: We rated 76 communication units and ran Vibe Check ('), job['message'])
-        panel = self.job_panel(self.client.get(f'/analysis/{aid}/workspace').text)
-        self.assertTrue(panel.startswith('<section class="panel" '), panel)
-        self.assertIn('<h2 id="job-message">Your report is ready: We rated 76 communication units and ran Vibe Check (', panel)
-        self.assertNotIn('Finished with problems', panel)
+        work = self.client.get(f'/analysis/{aid}/workspace').text
+        self.assertIn('Completed', work)                                                          # a clean result is the Latest Analysis card, not a panel
+        self.assertNotIn('Finished with problems', work)
+        self.assertNotIn('id="job-message"', work)
         busy = self.store.create_job(aid, 'full')                                                 # the poller writes progress into #job-message: it stays the heading
         self.addCleanup(self.store.job_update, busy, 'cancelled', 'done')
         panel = self.job_panel(self.client.get(f'/analysis/{aid}/workspace').text)
@@ -1768,11 +1769,11 @@ class PartialFailures(AppCase):
         self.assertEqual(self.run_job_fast(aid, path='run-vibe')['status'], 'failed')
         self.assertEqual(self.store.latest_vibe(aid), good)                                       # the earlier result is still the one a report shows
         self.assertEqual(self.store.failed_vibe_attempt(aid)['status'], 'unavailable')            # and the failed attempt is known, to be mentioned
-        workspace = self.client.get(f'/analysis/{aid}/workspace').text
+        workspace = self.client.get(f'/analysis/{aid}/results').text
         notice = 'The latest Vibe Check did not finish, so this section shows the previous successful run'
         for path in ('report', 'report.pdf', 'export'):
             self.assertIn(f'href="/analysis/{aid}/{path}"', workspace)
-        results = self.client.get(f'/analysis/{aid}/results').text
+        results = self.client.get(f'/analysis/{aid}/report').text
         for html in (results, self.client.get(f'/analysis/{aid}/report').text):
             for needle in (f'<span class="vc-score-num">{fmt_score(good["score"])}</span>', 'Sentiment mix', 'Latest attempt failed', notice):
                 self.assertIn(needle, html)
@@ -1813,11 +1814,11 @@ class PartialFailures(AppCase):
 
     def test_a_run_that_produced_nothing_offers_no_report_pdf_or_csv(self):
         def no_report(aid, label):
-            page = self.client.get(f'/analysis/{aid}/workspace').text
+            page = self.client.get(f'/analysis/{aid}/results').text.split('</aside>', 1)[1]       # not the menu, which always has Reports
             self.assertNotIn(f'href="/analysis/{aid}/report"', page, label)
             for path in ('report', 'report.pdf', 'export'):
                 self.assertNotIn(f'href="/analysis/{aid}/{path}"', page, f'{label}: {path} is offered')
-                self.assertEqual(self.client.get(f'/analysis/{aid}/{path}').status_code, 404, f'{label}: {path}')
+                self.assertEqual(self.client.get(f'/analysis/{aid}/{path}').status_code, 303 if path == 'report' else 404, f'{label}: {path}')
 
         aid = self.with_chat()
         self.fake.fail_next('rating', 99)
@@ -1858,7 +1859,7 @@ class PartialFailures(AppCase):
         r = self.client.post(f'/analysis/{aid}/run-ai')
         self.assertIn('model is still preparing', flash(r))
         self.assertIsNone(self.store.latest_job(aid))
-        self.assertIn('Model needed', self.client.get(f'/analysis/{aid}/workspace').text)
+        self.assertIn('Ollama is not running', self.client.get(f'/analysis/{aid}/analytics').text)
 
     def test_nothing_to_analyse_and_double_submit(self):
         empty = self.new_analysis()
@@ -2048,7 +2049,7 @@ class Safety(AppCase):
         aid = self.new_analysis()
         cases = ((f'/analysis/99999/workspace', 404, 'Analysis not found'), ('/nope', 404, 'Page not found'),
                  ('/analysis/abc/workspace', 404, 'Page not found'), (f'/analysis/{aid}/step/9', 404, 'Step not found'),
-                 (f'/analysis/{aid}/report', 404, 'No results yet'), (f'/analysis/{aid}/export', 404, 'No results yet'),
+                 (f'/analysis/{aid}/export', 404, 'No results yet'),
                  ('/analysis/99999/report', 404, 'Analysis not found'))
         for path, status, heading in cases:
             r = self.client.get(path)
@@ -2136,7 +2137,7 @@ class Layout(AppCase):
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'Thanks all, great game!\nyou are trash\nnice work today\nwell played everyone\nplease stop, thank you',
                                                             'actor_role': 'SUBJECT'})
         self.assertEqual(self.run_job(aid)['status'], 'complete')
-        for path in ('workspace', 'results', 'report'):
+        for path in ('workspace', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             self.assertEqual(page.count('<main class="page" id="main">'), 1, path)
             inside = page.split('<main class="page" id="main">', 1)[1].split('</main>', 1)[0]
@@ -2145,7 +2146,7 @@ class Layout(AppCase):
 
     def test_the_front_page_has_one_plain_headline_and_leads_back_to_each_workplace(self):
         page = self.client.get('/').text
-        self.assertEqual(page.split('<h1 class="sr-only">', 1)[1].split('</h1>', 1)[0], 'Home')
+        self.assertEqual(page.split('<h1>', 1)[1].split('</h1>', 1)[0], 'Welcome to Felixa')
         self.assertIn('See how people really communicate.', page)
         self.assertIn('Create a workplace', page)
         draft = int(self.client.get('/new').headers['location'].split('/')[2])               # started, never given a name: not a workplace yet
@@ -2788,12 +2789,11 @@ class BodyLimits(AppCase):
         """A browser that picks a file the server would refuse is told at once, not after the whole file has been uploaded. The limits in
         the check and in the text next to the input come from config, as the server's own do."""
         aid = self.new_analysis()
-        html = self.client.get(f'/analysis/{aid}/check/1').text
+        html = self.client.get(f'/analysis/{aid}/analytics').text
         self.assertIn('src="/static/file_check.js?v=', html)
         self.assertIn('data-max-file-mb="15" data-max-upload-mb="75"', html)
         self.assertIn('setCustomValidity', self.client.get('/static/file_check.js').text)
         self.assertIn('Up to 15 MB each', html)
-        self.assertIn('A file may be up to 15 MB, and one upload 75 MB in all', html)
         for path in (f'/analysis/{aid}/check/2', f'/analysis/{aid}/workspace', f'/analysis/{aid}/step/5'):
             self.assertNotIn('file_check.js', self.client.get(path).text, path)                      # only the page that has a file input
 
@@ -3960,9 +3960,9 @@ class Workplaces(AppCase):
                          ('Online community', 'Night Owls', 'Gaming', 'Discord', 'Sam Rivera', 'Admin', 'ready'))
         self.assertEqual(json.loads(a['goals_json']), ['Is my community healthy?', 'Are people engaged?'])
         page = self.client.get(f'/analysis/{aid}/workspace').text
-        for needle in ('Night Owls', 'Online community', 'Gaming', 'Discord', 'Looked after by Sam Rivera, Admin', 'Run new analytics'):
+        for needle in ('Night Owls', 'Online community', 'Gaming', 'Discord', 'Looked after by', 'Sam Rivera, Admin', 'Run new analytics'):
             self.assertIn(needle, page)
-        for needle in ('Your workplace', 'Online community', 'Sam Rivera, Admin', 'Is my community healthy?; Are people engaged?', f'href="/analysis/{aid}/workspace#edit"'):
+        for needle in ('Goals', 'Is my community healthy?', 'Are people engaged?', 'href="#edit"'):
             self.assertIn(needle, page)                                                             # the details of the workplace sit on its own page
         self.assertNotIn('Your workplace', self.client.get(f'/analysis/{aid}/step/6').text, 'and no longer beside the setup steps')
 
@@ -4021,11 +4021,11 @@ class Workplaces(AppCase):
         for place in ('Reddit', 'YouTube', 'Twitch'):
             self.assertEqual(self.post(aid, 'step/4', channel=place).headers['location'], f'/analysis/{aid}/step/5', place)
             self.assertEqual(self.store.get_analysis(aid)['channel'], place)
-            tip = self.client.get(f'/analysis/{aid}/check/1').text
+            tip = self.client.get(f'/analysis/{aid}/analytics').text
             self.assertIn(f'Adding {place} messages.', tip)
             self.assertIn(workplace.CHANNEL_TIPS[place].split('.')[0], tip)
         self.post(aid, 'step/4', channel='Slack')
-        self.assertNotIn('Adding Slack messages.', self.client.get(f'/analysis/{aid}/check/1').text, 'a platform with no tip shows none')
+        self.assertNotIn('Adding Slack messages.', self.client.get(f'/analysis/{aid}/analytics').text, 'a platform with no tip shows none')
         for place in ('Google Meet', 'Messages (SMS or iMessage)'):
             r = self.post(aid, 'step/4', channel=place)
             self.assertEqual((r.headers['location'], self.store.get_analysis(aid)['channel']), (f'/analysis/{aid}/step/5', place))
@@ -4058,7 +4058,7 @@ class Workplaces(AppCase):
         self.assertNotRegex(page, r'name="channel" value="Zoom"[^>]*checked')
         self.assertIn('value="Mastodon Bluesky"', page)
         self.assertNotRegex(page, r'id="discord-offer"\s+hidden')
-        check = self.client.get(f'/analysis/{aid}/check/1').text
+        check = self.client.get(f'/analysis/{aid}/analytics').text
         self.assertIn('Adding Reddit messages.', check)
         self.assertEqual(workplace.split_channels('Slack, Reddit, Mastodon'), (['Slack', 'Reddit'], 'Mastodon'))
         self.assertEqual(workplace.split_channels('Discord'), (['Discord'], ''), 'an old single value still reads')
@@ -4071,11 +4071,12 @@ class Workplaces(AppCase):
     def test_any_kind_of_file_can_be_added_and_the_page_says_so(self):
         from openpyxl import Workbook
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/check/1').text
-        file_tab = page[page.index('id="p-file"'):page.index('id="p-paste"')]
-        self.assertIn('<input type="file" name="files" multiple', file_tab)                              # the file box takes anything: no list of allowed types
-        self.assertIn('accept=', page[page.index('id="p-voice"'):page.index('id="p-link"')])             # the Voice box takes recordings only
-        for needle in ('Excel', 'Word (.docx, .doc)', 'PDF', 'email (.eml)', 'subtitles', 'each sheet of a workbook is its own source', 'Any kind of file with text in it'):
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        file_box = page[page.index('Upload files'):page.index('Transcribe a voice recording')]
+        self.assertIn('<input type="file" name="files" multiple', file_box)                              # the file box takes anything: no list of allowed types
+        self.assertNotIn('accept=', file_box)
+        self.assertIn('accept=', page[page.index('Transcribe a voice recording'):page.index('Paste text')])   # the voice box takes recordings only
+        for needle in ('Excel', 'Word', 'PDF', 'Zip', 'Audio', 'subtitles', 'zip archives', 'voice recordings'):
             self.assertIn(needle, page)
         book = Workbook()
         sheet = book.active
@@ -4176,12 +4177,12 @@ class Workplaces(AppCase):
         history = len(self.store.vibe_history(aid))
         self.store.update_analysis(aid, check_volume=100, incognito=1, engine='x', period_start='2026-03-01')
         r = self.client.post(f'/analysis/{aid}/check/new')
-        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/1')
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/analytics')
         a = self.store.get_analysis(aid)
         self.assertEqual((self.store.count_units(aid), a['check_volume'], a['incognito'], a['engine'], a['period_start']), (0, None, 0, None, ''))
         self.assertEqual(len(self.store.vibe_history(aid)), history)                              # the trend carries on
         self.assertEqual((a['person_name'], a['channel'], a['user_name']), ('Night Owls Guild', 'Discord', 'Sam Rivera'))   # so does the workplace
-        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 303)
 
     def test_a_fresh_workplace_offers_new_without_a_question(self):
         aid = self.new_analysis()
@@ -4189,19 +4190,14 @@ class Workplaces(AppCase):
         self.assertNotIn('new-confirm', page)
         self.assertIn(f'<form method="post" action="/analysis/{aid}/check/new">', page)
 
-    def test_new_analytics_in_the_side_tab_goes_somewhere_and_the_old_name_is_gone(self):
-        """The side-tab item used to link to a spot on the page the person was already on, so clicking it seemed to do nothing."""
-        empty = self.new_analysis(name='Fresh One')
-        page = self.client.get(f'/analysis/{empty}/workspace').text
-        self.assertIn('<h2 class="rail-title">New analytics</h2>', page)
-        self.assertIn(f'href="/analysis/{empty}/check/1"', page, 'nothing to replace: it starts at step 1')
-        self.assertEqual(self.client.get(f'/analysis/{empty}/check/1').status_code, 200)
-        full = self.with_chat(name='Has Messages')
-        page = self.client.get(f'/analysis/{full}/workspace').text
-        self.assertIn(f'href="/analysis/{full}/workspace#new"', page, 'messages exist: it goes to the box that asks before replacing them')
-        self.assertIn('id="new"', page)
-        self.assertIn('Yes, start new analytics', page)
-        self.assertNotIn('New check', page.split('<main', 1)[1].split('</main>', 1)[0])
+    def test_analyze_in_the_menu_always_opens_the_analytics_page(self):
+        """The menu item used to send a workplace that already had messages to the Workplace page, so clicking it seemed to go the wrong way."""
+        for aid in (self.new_analysis(name='Fresh One'), self.with_chat(name='Has Messages')):
+            page = self.client.get(f'/analysis/{aid}/workspace').text
+            menu = page.split('</aside>', 1)[0]
+            self.assertIn(f'href="/analysis/{aid}/analytics"', menu)
+            self.assertEqual(self.client.get(f'/analysis/{aid}/analytics').status_code, 200)
+        self.assertIn('Yes, start new analytics', page.split('<main', 1)[1])
 
     def test_a_file_that_is_chosen_is_added_at_once(self):
         """Choosing or dropping a file used to wait for a small button far down the page, and Next only appeared after it, so the step seemed stuck."""
@@ -4209,9 +4205,10 @@ class Workplaces(AppCase):
         self.assertIn("form.requestSubmit()", js)
         self.assertIn("input.addEventListener('change'", js)
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/check/1').text
-        self.assertEqual(page.count('class="dropzone"'), 2, 'the file tab and the voice tab: both sit in a form the script submits')
-        self.assertIn('Add files', page, 'the button stays, for a browser without scripts')
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        self.assertEqual(page.count('class="dropzone"'), 1, 'the upload method: it sits in a form the script submits')
+        self.assertIn('type="file" name="files" accept=', page)
+        self.assertIn('data-submit', page, 'the voice box submits as soon as a recording is chosen')
 
     def test_switching_incognito_on_after_a_run_says_to_run_the_check_again(self):
         """Names go out of the messages when a check runs, so Incognito turned on after results exist does not touch those results: the page says to run again."""
@@ -4472,7 +4469,7 @@ class Workplaces(AppCase):
         summary = self.client.get(f'/analysis/{aid}/check/6').text
         self.assertIn('Claude Haiku 5.5 (cloud)', summary)
         self.assertRegex(summary, r'name="cloud_ok" value="1" checked')
-        for text in (self.client.get(f'/analysis/{aid}/report').text, self.client.get(f'/analysis/{aid}/workspace').text,
+        for text in (self.client.get(f'/analysis/{aid}/report').text,
                      pdf_text(self.client.get(f'/analysis/{aid}/report.pdf').content), self.client.get(f'/analysis/{aid}/export').text):
             self.assertIn('claude-haiku-5-5', text)
             self.assertNotIn('test-claude-key', text)                                            # the key is nowhere a person can read it
@@ -4536,12 +4533,11 @@ class Workplaces(AppCase):
         self.fake.models_listed = False
         self.addCleanup(setattr, self.fake, 'models_listed', True)
         self.no_claude_env()
-        with mock.patch.dict(os.environ, {'FELIXA_CLAUDE_LOGIN': '0'}):
-            self.assertNotIn('Or choose a Claude engine', self.client.get(f'/analysis/{aid}/workspace').text)
         self.fake_claude()
-        page = self.client.get(f'/analysis/{aid}/workspace').text
-        self.assertIn('Model needed', page)
-        self.assertIn('Or choose a Claude engine when you press New.', page)
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        self.assertIn('Ollama is not running on this computer', page)
+        self.assertIn('choose a Claude engine', page)
+        self.assertNotIn('Model needed', self.client.get(f'/analysis/{aid}/workspace').text, 'the engine card is not in the workplace space')
 
     def test_an_app_without_a_local_model_offers_claude_only_and_says_so(self):
         aid = self.with_chat()
@@ -4558,15 +4554,15 @@ class Workplaces(AppCase):
             r = self.post(aid, 'check/6', engine='', cloud_ok='1')                                        # the local default is not on offer
             self.assertIn('Choose a Claude engine', flash(r))
             self.assertIsNone(self.store.latest_job(aid))
-            workspace = self.client.get(f'/analysis/{aid}/workspace').text
-            self.assertIn('Claude is ready', workspace)
-            self.assertNotIn('Model needed', workspace)
+            analytics = self.client.get(f'/analysis/{aid}/analytics').text
+            self.assertIn('Claude Haiku', analytics)
+            self.assertNotIn('Ollama is not running', analytics)
             health = self.client.get('/health').json()
             self.assertEqual((health['local_model_enabled'], health['local_model_ready'], health['claude_ready']), (False, False, True))
             job = self.run_job(aid, path='check/6', engine='claude:claude-haiku-5-5', cloud_ok='1')
             self.assertEqual(job['status'], 'complete', job)
         with self.no_claude_env_ctx(), mock.patch.dict(os.environ, {'FELIXA_NO_LOCAL_MODEL': '1', 'FELIXA_CLAUDE_LOGIN': '0'}):
-            self.assertIn('Claude key needed', self.client.get(f'/analysis/{aid}/workspace').text)
+            self.assertRegex(self.client.get(f'/analysis/{aid}/analytics').text, r'<option value="claude:[^"]+" disabled')
 
     def test_with_no_model_server_and_no_key_the_login_can_still_run_a_check(self):
         aid = self.with_chat()
@@ -4687,33 +4683,34 @@ class Workplaces(AppCase):
                 job_call('x', 'y')
 
     def test_the_pages_say_where_messages_go(self):
-        page = self.client.get('/').text
-        self.assertIn('Nothing leaves it unless you choose a cloud engine and tick the box', page)
-        self.assertIn('Only if you choose a Claude engine and tick the box do they go to Anthropic', page)
+        aid = self.new_analysis()
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        self.assertIn('send the messages to that provider to be read', page)
+        self.assertIn('Tick to allow it for this analysis', page)
         self.assertNotIn('A language model on this machine reads your messages', page)
 
     # ---- ways of adding messages ----------------------------------------------------------
-    def test_every_way_of_adding_messages_is_on_the_first_step(self):
+    def test_every_way_of_adding_messages_is_on_the_analytics_page(self):
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/check/1').text
+        page = self.client.get(f'/analysis/{aid}/analytics').text
         for needle in (f'action="/analysis/{aid}/upload"', f'action="/analysis/{aid}/add-text"', f'action="/analysis/{aid}/add-voice"', f'action="/analysis/{aid}/add-link"',
-                       'Paste text', 'Voice', 'From a link', 'name="back" value="check"', 'Add messages to continue.'):
+                       'Upload files', 'Paste text', 'Transcribe a voice recording', 'From a link', 'name="back" value="analytics"', 'Add messages first.'):
             self.assertIn(needle, page)
-        self.assertEqual(page.count('name="back" value="check"'), 4)
+        self.assertEqual(page.count('name="back" value="analytics"'), 4)
 
     def test_the_link_tab_says_which_comments_a_link_can_and_cannot_give(self):
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/check/1').text
+        page = self.client.get(f'/analysis/{aid}/analytics').text
         for needle in ('YouTube, Reddit, Instagram, Facebook, X', 'not read', 'plain lines of text with no names or times', 'Pages behind a login'):
             self.assertIn(needle, page)
 
     def test_pasting_in_a_check_returns_to_the_check_and_unlocks_next(self):
         aid = self.new_analysis()
-        r = self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello there everyone\nwelcome all', 'actor_role': 'SUBJECT', 'back': 'check'})
-        self.assertEqual(r.headers['location'], f'/analysis/{aid}/check/1')
-        page = self.client.get(f'/analysis/{aid}/check/1').text
-        self.assertIn(f'<a class="btn primary" href="/analysis/{aid}/check/2">', page)
-        self.assertNotIn('Add messages to continue.', page)
+        r = self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello there everyone\nwelcome all', 'actor_role': 'SUBJECT', 'back': 'analytics'})
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/analytics')
+        page = self.client.get(f'/analysis/{aid}/analytics').text
+        self.assertNotIn('Add messages first.', page)
+        self.assertIn('2</strong> messages added', page)
 
     def test_a_link_is_read_into_messages_and_a_repeat_is_skipped(self):
         aid = self.new_analysis()
@@ -4754,9 +4751,9 @@ class Workplaces(AppCase):
 
     def test_voice_says_what_to_install_and_works_when_it_is_there(self):
         aid = self.new_analysis()
-        page = self.client.get(f'/analysis/{aid}/check/1').text
+        page = self.client.get(f'/analysis/{aid}/analytics').text
         with mock.patch.object(self.app.voice, 'available', return_value=False):
-            self.assertIn('pip install faster-whisper', self.client.get(f'/analysis/{aid}/check/1').text)
+            self.assertIn('faster-whisper', self.client.get(f'/analysis/{aid}/analytics').text)
         with mock.patch.dict(sys.modules, {'faster_whisper': None}):
             r = self.client.post(f'/analysis/{aid}/add-voice', data={'back': 'check'}, files=[('files', ('talk.wav', b'RIFFxxxx', 'audio/wav'))])
             self.assertIn('pip install faster-whisper', flash(r))
@@ -4790,7 +4787,7 @@ class Workplaces(AppCase):
         digest = "'sha256-" + base64.b64encode(hashlib.sha256(vibe_check.JS.encode()).digest()).decode() + "'"
         self.assertIn(digest, csp)
         self.assertNotIn("'unsafe-inline'", csp.split('style-src')[0])
-        self.assertEqual(self.client.get(f'/analysis/{self.with_chat()}/report').status_code, 404)           # no report yet: nothing else to check here
+        self.assertEqual(self.client.get(f'/analysis/{self.with_chat()}/report').status_code, 303)           # no report yet: nothing else to check here
 
     def test_the_logo_names_the_product_and_has_no_background(self):
         from PIL import Image
@@ -4930,7 +4927,7 @@ class WorkplaceManagement(AppCase):
             home = self.client.get('/').text
         self.assertNotIn('Create your first workplace', home)
         self.assertIn('Alpha Team has no results yet.', home)
-        self.assertIn(f'href="/analysis/{one}/check/1"', home, 'no messages yet: New Analysis starts at step 1')
+        self.assertIn(f'href="/analysis/{one}/analytics"', home, 'no messages yet: New Analysis opens the Analytics page')
         top = home.split('</header>', 1)[0]
         self.assertIn('aria-label="Add a workplace"', top)
         self.assertNotIn('Create a workplace', top, 'once a workplace exists the top bar has only the + button')
@@ -4938,7 +4935,7 @@ class WorkplaceManagement(AppCase):
         home = self.client.get('/').text
         self.assertIn('>Beta Crew</option>', home)
         self.assertIn('>Alpha Team</option>', home)
-        self.assertRegex(home, r'href="/analysis/\d+/(workspace#new|check/1)"', 'New Analysis leads to the current workplace')
+        self.assertRegex(home, r'href="/analysis/\d+/analytics"', 'New Analysis leads to the current workplace')
 
     def test_both_deletions_sit_together_in_a_small_danger_zone_inside_the_workplace_settings(self):
         aid = self.with_chat()
@@ -4948,7 +4945,6 @@ class WorkplaceManagement(AppCase):
         zone = main.index('class="danger-panel"')
         self.assertGreater(zone, settings, 'the danger zone is inside the settings panel')
         self.assertIn('Workplace settings', main)
-        self.assertIn('Settings</a>', main)
         self.assertEqual(main.count('class="danger-panel"'), 1)
         zone_html = main[zone:]
         self.assertIn('Danger zone', zone_html)
@@ -4964,7 +4960,7 @@ class WorkplaceManagement(AppCase):
         second = self.new_analysis(name='Side Tab Two')
         draft = int(self.client.get('/new').headers['location'].split('/')[2])
         self.client.post(f'/analysis/{draft}/step/2', data={'workplace_name': 'Never Finished'})
-        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/check/1', f'/analysis/{first}/check/3', '/dashboard'):
+        for path in (f'/analysis/{first}/workspace', f'/analysis/{first}/analytics', f'/analysis/{first}/check/3', '/dashboard'):
             page = self.client.get(path).text
             top = page.split('</header>', 1)[0]
             self.assertIn('href="/dashboard"', top, path)
@@ -4975,15 +4971,12 @@ class WorkplaceManagement(AppCase):
             self.assertNotIn('rail-wps', page, path)
         self.assertIn(f'<option value="{first}" selected>Side Tab One</option>', self.client.get(f'/analysis/{first}/workspace').text)
         page = self.client.get(f'/analysis/{first}/workspace').text
-        side = page.split('aria-label="New analytics steps"', 1)[1].split('</nav>', 1)[0]
-        for label in ('Upload', 'Volume', 'Incognito', 'Time frame', 'Sensitivity', 'Engine'):
-            self.assertIn(f'<span>{label}</span>', side, label)
-        for gone in ('Overview', 'Edit workplace', 'Results dashboard', 'Workplaces'):
-            self.assertNotIn(gone, side, gone)
+        menu = page.split('</aside>', 1)[0]
+        for label in ('Home', 'Workplace', 'Analyze', 'Results', 'Reports', 'Settings'):
+            self.assertIn(f'<span>{label}</span>', menu, label)
         self.assertNotIn(f'href="/analysis/{first}/step/1"', page)
         for step in range(1, 7):                                                                    # setting up keeps its own steps
             self.assertIn('Set up your workplace', self.client.get(f'/analysis/{draft}/step/{step}').text, step)
-        self.assertNotIn('aria-label="New analytics steps"', self.client.get('/dashboard').text, 'the dashboard has no side bar')
 
     def test_the_picker_without_javascript_goes_to_the_workplace_or_the_comparison(self):
         aid = self.new_analysis(name='Go There')
@@ -4993,11 +4986,11 @@ class WorkplaceManagement(AppCase):
 
     def test_members_are_set_while_checking_and_each_check_keeps_its_own_number(self):
         aid = self.with_chat()
-        self.assertEqual(self.post(aid, 'members', members='x').headers['location'], f'/analysis/{aid}/check/1')
+        self.assertEqual(self.post(aid, 'members', members='x').headers['location'], f'/analysis/{aid}/analytics')
         self.assertIsNone(self.store.get_analysis(aid)['members'])
         r = self.post(aid, 'members', members='200')
-        self.assertEqual((r.headers['location'], flash(r)), (f'/analysis/{aid}/check/1', 'Members saved.'))
-        self.assertIn('value="200"', self.client.get(f'/analysis/{aid}/check/1').text)
+        self.assertEqual((r.headers['location'], flash(r)), (f'/analysis/{aid}/analytics', 'Members saved.'))
+        self.assertIn('value="200"', self.client.get(f'/analysis/{aid}/analytics').text)
         self.run_job(aid)
         first = self.store.measure_history(aid)[-1]
         self.assertEqual(first['members'], 200)

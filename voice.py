@@ -24,17 +24,27 @@ def helper_python():
     if given:
         return given if Path(given).exists() else None
     import config
-    found = config.data_dir().parent / 'venv-voice' / 'bin' / 'python'
-    return str(found) if found.exists() else None
+    for folder in (config.data_dir().parent, Path.home() / 'Library' / 'Application Support' / 'Felixa'):      # next to the data, or where the Mac app keeps its state
+        found = folder / 'venv-voice' / 'bin' / 'python'
+        if found.exists():
+            return str(found)
+    return None
+
+
+def _in_process() -> bool:
+    try:
+        return importlib.util.find_spec('faster_whisper') is not None
+    except ValueError:                      # a stand-in module without a spec (tests)
+        return 'faster_whisper' in sys.modules
 
 
 def available() -> bool:
-    return importlib.util.find_spec('faster_whisper') is not None or helper_python() is not None
+    return _in_process() or helper_python() is not None
 
 
 def transcribe(path):
     """The spoken sentences of an audio file, one string per phrase. Raises VoiceUnavailable when speech-to-text is not installed."""
-    if importlib.util.find_spec('faster_whisper') is None:
+    if not _in_process():
         py = helper_python()
         if not py:
             raise VoiceUnavailable('Voice needs the speech-to-text add-on, which is not installed on this computer. '

@@ -2,15 +2,15 @@
 {% set ms = measures %}{% set m = ms.m %}{% set mh = measures_html or {} %}{% set icons = mh.icons or {} %}{% set charts = mh.charts or {} %}{% set verdict_tone = mh.verdict_tone or {} %}{% set h = ms.health %}
 {% set over_notes = ms.notes|rejectattr('about', 'equalto', 'alerts')|list %}
 <section class="panel vc{{ ' bare' if only is defined }}" id="over-time" aria-labelledby="over-time-h">{% if only is not defined %}<div class="eyebrow">Over time</div><h2 id="over-time-h">Measures over time</h2>{% else %}<h2 id="over-time-h" class="sr-only">Measures over time</h2>{% endif %}
-{% set notes_html %}
+{% macro notes_block() %}
 <p class="vc-note">{{ ms.basis_text }}</p>
 <p class="vc-caveat">{{ ms.caveats.measures }}</p>
 {% if over_notes %}<ul class="vc-quiet">{% for note in over_notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
 {% set said = namespace(no_lines=false) %}{% for note in over_notes %}{% if 'no lines over time' in note.text|lower %}{% set said.no_lines = true %}{% endif %}{% endfor %}
 {% if m.has_series %}<p class="vc-note vc-chart-key">{{ ms.chart_key }}</p>
 {% elif not said.no_lines %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
-{% endset %}
-{% if only is defined %}<details class="how-built"><summary>How this is built</summary>{{ notes_html|safe }}</details>{% else %}{{ notes_html|safe }}{% endif %}
+{% endmacro %}
+{% if only is defined %}<details class="how-built"><summary>How this is built</summary>{{ notes_block() }}</details>{% else %}{{ notes_block() }}{% endif %}
 {% if only is not defined or only != 'health' %}<div class="vc-cols vc-measures">{% for c in ms.cards if only is not defined or only == c.key %}
 <div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
 <p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">{{ c.latest_label or 'Latest part' }}: {{ c.latest }}</span>{% endif %}</p>

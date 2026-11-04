@@ -1004,9 +1004,9 @@ async def members_post(request: Request, aid: AnalysisId):
         return redirect(f'/analysis/{aid}/workspace', BUSY_SETTINGS)
     members, error = workplace.read_members(await request.form())
     if error:
-        return redirect(f'/analysis/{aid}/check/1', error)
+        return redirect(f'/analysis/{aid}/analytics', error)
     store.update_analysis(aid, members=members)
-    return redirect(f'/analysis/{aid}/check/1', 'Members saved.' if members else 'Members cleared.')
+    return redirect(f'/analysis/{aid}/analytics', 'Members saved.' if members else 'Members cleared.')
 
 
 @app.post('/analysis/{aid}/delete')
@@ -1704,6 +1704,9 @@ def job_status(aid: AnalysisId):
 # ---- reports ---------------------------------------------------------------------------
 @app.get('/analysis/{aid}/report', response_class=HTMLResponse)
 def report_page(request: Request, aid: AnalysisId):
+    built = report.build(aid)
+    if built and not built['has_results']:          # nothing analysed yet: the Results page says so and leads to the first analysis
+        return redirect(f'/analysis/{aid}/results')
     ctx = report_context(aid, 'report')
     return render(request, 'report.html', **ctx)
 
@@ -1730,11 +1733,17 @@ RESULT_SCREENS = {'vibe': ('Vibe Check', 'users'), 'health': ('Health Score', 'p
                   'alerts': ('Badges & Alerts', 'shield'), 'questions': ('Insights', 'check')}
 
 
-def results_nav(aid, ctx, current):
-    """The row of screens along the top of every results screen: only the ones this check has something for. (key, label, icon, href, current?)"""
+def screens_with_results(ctx) -> dict:
+    """Which results screens this check has something for."""
     vibe_ok = bool(ctx.get('vibe') and ctx['vibe'].get('status') == 'ok')
     ms = ctx.get('measures')
-    has = {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms or ctx.get('guidance')), 'questions': bool(ctx.get('answers'))}
+    return {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms or ctx.get('guidance')), 'questions': bool(ctx.get('answers'))}
+
+
+def results_nav(aid, ctx, current):
+    """The row of screens along the top of every results screen: only the ones this check has something for. (key, label, icon, href, current?)"""
+    ms = ctx.get('measures')
+    has = screens_with_results(ctx)
     out = []
     for key in ('vibe', 'health', 'sentiment'):
         if has[key]:
@@ -1776,7 +1785,7 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
         not_found()
     ctx = results_context(aid, f'{RESULT_SCREENS[screen][0]} screen')
     nav = results_nav(aid, ctx, screen)
-    if not any(n[0] == screen for n in nav):
+    if not screens_with_results(ctx).get(screen):
         raise PageError(404, 'Nothing here yet', f'This check has no {RESULT_SCREENS[screen][0]} result.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     act = None
     if screen == 'alerts' and ctx.get('measures'):

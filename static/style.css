@@ -946,3 +946,6 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 }
 @media(max-width:900px){.sidebar .side-foot{margin:auto 0 0 0;width:100%;border:0;border-top:1px solid rgba(255,255,255,.14);padding:10px 0 0}}
 .an-added li>span{flex:1 1 0;min-width:0}.an-rm{flex:none}.an-rm[open]{flex:1 1 100%}
+.an-linkbox{padding:16px;display:grid;gap:10px}.an-linkbox textarea{width:100%;border:1px solid #d9cdb4;border-radius:12px;padding:12px;font:inherit;background:#fffefb}.an-linkbox .btn{justify-self:start}
+.an-drawer .members-box{display:grid;grid-template-columns:minmax(0,260px) auto;gap:8px 12px;align-items:end}.an-drawer .members-box p{grid-column:1/-1;margin:0}.an-drawer .members-box input{min-height:40px;border:1px solid #d9cdb4;border-radius:12px;padding:0 12px;background:#fffefb;font:inherit}
+.channel-tip{border-radius:14px}

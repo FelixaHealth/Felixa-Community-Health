@@ -25,31 +25,20 @@ class Pages(AppCase):
         self.assertEqual(job['status'], 'complete', job)
         return aid
 
-    def test_the_workplace_page_shows_the_headline_and_the_results_have_a_page_with_tabs(self):
+    def test_the_workplace_page_holds_no_results_and_the_results_are_a_screen_for_each_kind(self):
         aid = self.ready()
         work = self.client.get(f'/analysis/{aid}/workspace').text
         self.assertIn(f'href="/analysis/{aid}/results"', work)
-        self.assertIn('Open the full results', work)
-        self.assertNotIn('id="over-time"', work, 'the parts of the results are on the results page, not here')
+        self.assertNotIn('id="over-time"', work, 'the parts of the results are on the results screens, not here')
         page = self.client.get(f'/analysis/{aid}/results').text
-        bar = page.split('data-tabs>', 1)[1].split('</nav>', 1)[0]
-        self.assertEqual(bar.count('role="tab"'), 4, 'four tabs, no more')
-        for tab in ('Overview', 'Track', 'Understand', 'Act'):
-            self.assertIn(f'<span>{tab}</span>', bar, tab)
-        for panel in ('tab-overview', 'tab-track', 'tab-understand', 'tab-act'):
-            self.assertIn(f'id="{panel}"', page, panel)
-            self.assertIn(f'href="#{panel}"', bar, panel)
-        where = lambda marker: page.index(marker)      # noqa: E731
-        panels = [where(f'id="{p}"') for p in ('tab-overview', 'tab-track', 'tab-understand', 'tab-act')]
-        self.assertEqual(panels, sorted(panels))
-        inside = lambda p: page[where(f'id="{p}"'):(page.index('class="tabpanel"', where(f'id="{p}"')) if 'class="tabpanel"' in page[where(f'id="{p}"'):] else len(page))]      # noqa: E731
-        # every part of the results lives in exactly the tab the map gives it
-        for marker, tab in (('id="summary"', 'tab-overview'), ('id="answers"', 'tab-overview'), ('id="track"', 'tab-track'), ('id="over-time"', 'tab-track'),
-                            ('id="behaviour"', 'tab-understand'), ('id="vibe-check"', 'tab-understand'), ('id="alerts"', 'tab-act'), ('id="badges"', 'tab-act'), ('id="guidance"', 'tab-act')):
-            if marker in page:
-                self.assertIn(marker, inside(tab), f'{marker} belongs in {tab}')
-        self.assertIn(f'href="/analysis/{aid}/category/Positive"', page)
-        self.assertEqual(self.client.get('/analysis/999999/results').status_code, 404)
+        for card in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Badges &amp; Alerts', 'Tones'):
+            self.assertIn(card, page, card)
+        for screen in ('vibe', 'health', 'sentiment', 'passive', 'alerts'):
+            self.assertIn(f'href="/analysis/{aid}/results/{screen}"', page, screen)
+            self.assertEqual(self.client.get(f'/analysis/{aid}/results/{screen}').status_code, 200, screen)
+        for key in ('escalation', 'conflict', 'empathy'):
+            self.assertEqual(self.client.get(f'/analysis/{aid}/track/{key}').status_code, 200, key)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/results/nothing').status_code, 404)
 
     def test_a_category_page_lists_its_messages_and_a_tone_page_its_own(self):
         aid = self.ready()
@@ -229,7 +218,7 @@ class Questions(AppCase):
 
     def test_every_question_asked_is_answered_in_the_results_and_the_report(self):
         aid = self.ready(own='Do newcomers feel welcome?')
-        for path in ('results', 'report'):
+        for path in ('results/questions', 'report'):
             page = self.client.get(f'/analysis/{aid}/{path}').text
             block = page.split('id="answers"', 1)[1].split('</section>', 1)[0]
             for q in self.GOALS + ['Do newcomers feel welcome?']:
@@ -240,7 +229,7 @@ class Questions(AppCase):
 
     def test_only_the_questions_that_were_chosen_are_answered(self):
         aid = self.ready(goals=['Are people engaged?'])
-        block = self.client.get(f'/analysis/{aid}/results').text.split('id="answers"', 1)[1].split('</section>', 1)[0]
+        block = self.client.get(f'/analysis/{aid}/results/questions').text.split('id="answers"', 1)[1].split('</section>', 1)[0]
         self.assertEqual(block.count('<article class="answer">'), 1)
         self.assertIn('Are people engaged?', block)
 

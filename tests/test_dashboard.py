@@ -128,7 +128,7 @@ class Dashboard(DashboardCase):
 class SideBar(DashboardCase):
     def test_the_dashboard_is_in_the_top_bar_of_every_page_with_the_current_one_marked(self):
         aid = self.new_analysis(name='Nav Test')
-        for path in (f'/analysis/{aid}/workspace', f'/analysis/{aid}/check/1', '/dashboard'):
+        for path in (f'/analysis/{aid}/workspace', f'/analysis/{aid}/analytics', '/dashboard'):
             self.assertIn('href="/dashboard"', self.client.get(path).text.split('</header>', 1)[0], path)
         top = self.client.get('/dashboard').text.split('</header>', 1)[0]
         self.assertIn('aria-current="page"', top.split('href="/dashboard"', 1)[1].split('>', 1)[0])

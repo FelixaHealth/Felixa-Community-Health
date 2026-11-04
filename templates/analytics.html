@@ -10,6 +10,7 @@
 <div class="an-drawer">
 {% if evidence %}<div class="an-added"><h3>Added so far</h3><ul>{% for e in evidence %}<li><span><strong>{{ e.source_label }}</strong><small>{{ '{:,}'.format(e.n) }} message{{ '' if e.n == 1 else 's' }}{% if e.first_ts %} · {{ e.first_ts[:10] }}{% if e.last_ts and e.last_ts[:10] != e.first_ts[:10] %} to {{ e.last_ts[:10] }}{% endif %}{% endif %}</small></span>
 <details class="an-rm"><summary class="rm-x" title="Remove" aria-label="Remove">{{ icon('close') }}</summary><form method="post" action="/analysis/{{ a.id }}/source/remove"><input type="hidden" name="label" value="{{ e.source_label }}"><input type="hidden" name="kind" value="{{ e.source_type }}"><p>Removes these messages and clears the results made from them.</p><button class="btn danger-outline">Yes, remove</button></form></details></li>{% endfor %}</ul></div>{% endif %}
+{% for name, tip in channel_tips %}<div class="notice channel-tip"><strong>Adding {{ name }} messages.</strong> {{ tip }}</div>{% endfor %}
 <p class="an-pick">How do you want to add messages?</p>
 <details class="an-method" name="upmethod"><summary>{{ icon('folder') }}<span>Upload files</span><small>Drag and drop or choose</small></summary>
 <form class="an-drop" data-drop method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="analytics">
@@ -21,6 +22,12 @@
 <details class="an-method" name="upmethod"><summary>{{ icon('file') }}<span>Paste text</span><small>One message per line</small></summary>
 <form class="an-pastebox" method="post" action="/analysis/{{ a.id }}/add-text"><input type="hidden" name="back" value="analytics">
 <textarea name="raw_text" rows="4" placeholder="Paste a chat, comments or replies, one message per line" required></textarea><button class="btn">Add text</button></form></details>
+<details class="an-method" name="upmethod"><summary>{{ icon('link') }}<span>From a link</span><small>Up to 5 public pages</small></summary>
+<form class="an-linkbox" method="post" action="/analysis/{{ a.id }}/add-link"><input type="hidden" name="back" value="analytics">
+<label class="field">Web addresses, one per line (up to 5)<textarea name="links" rows="3" placeholder="https://example.com/community/thread"></textarea></label>
+<p class="small-note">Felixa Community Health fetches each public page from the internet and reads the text the page contains. That is the only time it connects outside this computer. Comments that a page loads with scripts after it opens (YouTube, Reddit, Instagram, Facebook, X) are not in that text, so they are not read. Comments written into the page itself, as on most forums and blogs, are read, but as plain lines of text with no names or times. Pages behind a login, such as Discord or WhatsApp, cannot be read from a link: export those and add the file.</p><button class="btn primary">Read these pages</button></form></details>
+<form class="members-box" method="post" action="/analysis/{{ a.id }}/members"><label class="field">Members right now <small>(optional)</small><input name="members" inputmode="numeric" value="{{ a.members or '' }}" maxlength="12" placeholder="For example: 250"></label>
+<button class="btn">Save</button><p class="small-note">Each check keeps the number of members it was made with, so the report can follow how the group grows or shrinks next to its health.</p></form>
 </div></details>
 <form class="an-main" method="post" action="/analysis/{{ a.id }}/analytics">
 <div class="an-row"><span class="an-i">{{ icon('lock') }}</span><div class="an-t"><h2>2. Incognito</h2><p>Remove names from the messages before they are read.</p></div>

@@ -641,9 +641,11 @@ class MeasuresCase(AppCase):
             self.assertIn(norm(ms['badge_note']), badges, where)
         # the sentences that must always be shown sit outside every fold
         outside = page.visible_outside_folds
-        for key in ('alerts', 'measures', 'badges'):
-            self.assertIn(norm(caveats[key]), outside, f'{where}: the {key} caveat is folded away or missing')
-        self.assertEqual(norm(caveats['empty']) in outside, not shown, where)
+        anywhere = norm(page.text)
+        self.assertIn(norm(caveats['measures']), outside, f'{where}: the measures caveat is folded away or missing')
+        for key in ('alerts', 'badges'):                      # the person asked for these two descriptions to be folded ("How alerts work", "How badges are meant")
+            self.assertIn(norm(caveats[key]), anywhere, f'{where}: the {key} caveat is missing')
+        self.assertEqual(norm(caveats['empty']) in anywhere, not shown, where)
 
     def assert_pdf_agrees(self, ms, pages, where='pdf'):
         ours = squeeze(measures_pdf(pages))
@@ -1432,7 +1434,7 @@ class Checks(MeasuresCase):
             self.assertIn('This is your first check.', section_text(self.page(aid, what), 'over-time'))
         self.new_check(aid)
         self.assertEqual(len(self.store.measure_history(aid)), 1, 'the record of the earlier check stays when a new check starts')
-        self.assertEqual(self.client.get(f'/analysis/{aid}/results').status_code, 404, 'a new check has no results yet')
+        self.assertIn('has no results yet', self.client.get(f'/analysis/{aid}/results').text, 'a new check has no results yet')
         self.check(aid, chat_csv(messages(48), at(48, days_ago(60))), 'two.csv')
         history = self.store.measure_history(aid)
         self.assertEqual(len(history), 2)                                                          # exactly two records
@@ -1777,7 +1779,8 @@ class Checks(MeasuresCase):
         pipeline.run_job(self.store.create_job(other, 'full'), other, 'full', call=cancel_on_the_second_call)
         self.assertEqual(self.store.latest_job(other)['status'], 'cancelled')
         self.assertEqual((self.store.measure_history(other), report.build(other)['measures']), ([], None))
-        self.assertEqual(self.client.get(f'/analysis/{other}/report').status_code, 404)           # no results, so no report to open
+        gone = self.client.get(f'/analysis/{other}/report')                                       # no results, so no report to open: the Results page says so
+        self.assertEqual((gone.status_code, gone.headers['location']), (303, f'/analysis/{other}/results'))
 
 
 # =============================================================================================================================================
@@ -1997,7 +2000,7 @@ class Privacy(MeasuresCase):
         self.assertRegex(kept[0]['model_key'], r'^[0-9a-f]{12}$')                                   # a fingerprint of the model name (so two names the store cannot keep are told apart) ...
         self.assertNotEqual(kept[0]['model_key'], kept[0]['model'])                                  # ... and not the name
         self.assertEqual(self.store.measure_history(aid), kept)
-        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 404)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/report').status_code, 303)
         self.assertEqual(self.client.get(f'/analysis/{aid}/workspace').status_code, 200)
         self.assertNotIn(canary, self.page(aid, 'workspace'))
         # the next check carries on from the kept record
@@ -2219,7 +2222,7 @@ class Robustness(MeasuresCase):
         self.assertEqual((ms['m']['n'], len(ms['m']['stretches']), ms['m']['verdicts']), (n, 24, True))
         self.assertEqual(len(ms['m']['episodes']), 1)                                              # the 300 messages with a burst of insults
         began = time.perf_counter()
-        results = self.client.get(f'/analysis/{aid}/results')
+        results = self.client.get(f'/analysis/{aid}/report')                                       # the whole of the results on one page
         self.assertEqual(results.status_code, 200)
         self.assertLess(time.perf_counter() - began, 2.5, 'the results page took too long')
         self.assert_page_agrees(ms, results.text, 'results of 5,000')
@@ -2833,9 +2836,9 @@ class PageStructure(MeasuresCase):
 
     def test_the_sections_come_in_the_order_summary_alerts_measures_badges_then_the_signal_profile(self):
         aid = self.flare()
-        for what in ('results', 'report'):
+        for what in ('report',):
             html = self.page(aid, what)
-            # the report keeps one long page in this order; the results page puts each part in its tab: Overview, Track, Understand, then Act
+            # the report keeps one long page in this order; the results are a screen for each kind of result
             ids = ('summary', 'alerts', 'over-time', 'badges', 'behaviour', 'guidance', 'vibe-check') if what == 'report' else ('summary', 'over-time', 'behaviour', 'vibe-check', 'guidance', 'alerts', 'badges')
             places = [html.index(f'id="{sid}"') for sid in ids]
             self.assertEqual(places, sorted(places), what)
@@ -2958,15 +2961,15 @@ class PageStructure(MeasuresCase):
             phone.append(css[found.end():i])
         self.assertTrue(any('.vc-since' in block and '.vc-summary-kpis' in block for block in phone), 'no phone layout for the table and the summary strip')
 
-    def test_the_workplace_page_has_the_headline_before_the_plan_and_the_results_page_has_every_section(self):
+    def test_the_workplace_page_holds_no_results_and_the_report_has_every_section(self):
         aid = self.flare()
         html = self.page(aid, 'workspace')
         self.assertNotIn('<div class="eyebrow">Plan</div>', html, 'the pathway panel is gone')
-        self.assertLess(html.index('id="results"'), html.index('<div class="eyebrow">Engine</div>'))
+        self.assertNotIn('id="results"', html, 'the results are not in the workplace space')
         self.assertIn(f'href="/analysis/{aid}/results"', html)
         for sid in SECTIONS:
-            self.assertNotIn(f'id="{sid}"', html, 'the parts of the results are on the results page')
-        page = self.page(aid, 'results')
+            self.assertNotIn(f'id="{sid}"', html, 'the parts of the results are on the results screens')
+        page = self.page(aid, 'results')                     # the whole of the results on one page: the report
         for sid in SECTIONS + ('behaviour', 'guidance', 'vibe-check'):
             self.assertIn(f'id="{sid}"', page, sid)
         fresh = self.new_analysis()
@@ -2983,13 +2986,12 @@ class PageStructure(MeasuresCase):
                 html = self.page(aid, what)
                 page = Page(html)
                 outside = page.visible_outside_folds
-                for key, sid in (('alerts', 'alerts'), ('measures', 'over-time'), ('badges', 'badges')):
-                    self.assertIn(norm(ms['caveats'][key]), outside, f'{what}: the {key} caveat')
-                    self.assertIn(norm(ms['caveats'][key]), Page(section(html, sid)).visible_outside_folds, f'{what}: the {key} caveat is not in its own section')
-                self.assertEqual(norm(ms['caveats']['empty']) in outside, not ms['alerts'], what)
+                self.assertIn(norm(ms['caveats']['measures']), Page(section(html, 'over-time')).visible_outside_folds, f'{what}: the measures caveat')
+                for key, sid in (('alerts', 'alerts'), ('badges', 'badges')):          # folded on purpose: "How alerts work", "How badges are meant"
+                    self.assertIn(norm(ms['caveats'][key]), norm(Page(section(html, sid)).text), f'{what}: the {key} caveat is not in its own section')
+                self.assertEqual(norm(ms['caveats']['empty']) in norm(page.text), not ms['alerts'], what)
                 for fold in re.findall(r'<details.*?</details>', html, re.S):
-                    for key in ('alerts', 'measures', 'badges'):
-                        self.assertNotIn(ms['caveats'][key][:60], unescape(fold), f'{what}: the {key} caveat sits in a fold')
+                    self.assertNotIn(ms['caveats']['measures'][:60], unescape(fold), f'{what}: the measures caveat sits in a fold')
         self.assertIn('Alerts are prompts to look, not findings.', measures.CAVEAT_ALERTS)
 
     def test_the_new_sections_use_none_of_the_words_that_stay_out_and_nothing_punitive(self):
@@ -3034,9 +3036,10 @@ class PageStructure(MeasuresCase):
 
     def test_every_inline_script_is_named_by_the_content_security_policy_and_no_tag_has_an_event_attribute(self):
         aid = self.flare()
-        for what in ('results', 'report'):
+        for what in ('results/health', 'report'):
             response = self.client.get(f'/analysis/{aid}/{what}')
             page = Page(response.text)
+            has_sections = what == 'report'
             policy = response.headers['content-security-policy']
             script_src = next(part for part in policy.split(';') if part.strip().startswith('script-src'))
             self.assertNotIn('unsafe-inline', script_src)
@@ -3049,8 +3052,10 @@ class PageStructure(MeasuresCase):
             for tag, name, address in page.addresses:                                              # nothing is fetched from another site
                 if tag in ('img', 'script', 'link', 'source', 'iframe'):
                     self.assertFalse(re.match(r'(?i)(?:https?:)?//', address), f'{what}: {tag} {name}={address}')
-            self.assertNotRegex(measures_markup(response.text), r'(?i)(?:src|href)="(?:https?:)?//')
-            self.assertNotRegex(measures_markup(response.text), r'<script|<iframe|javascript:')
+            if has_sections:
+                self.assertNotRegex(measures_markup(response.text), r'(?i)(?:src|href)="(?:https?:)?//')
+            if has_sections:
+                self.assertNotRegex(measures_markup(response.text), r'<script|<iframe|javascript:')
 
     def test_the_home_dashboard_shows_four_headline_cards_and_none_of_the_result_sections(self):
         """Home is a glance: Vibe Check, health score, sentiment, the four modules, then the two doors. The detail stays on the results page."""
@@ -3060,7 +3065,7 @@ class PageStructure(MeasuresCase):
         text = Page(main).human
         vibe = self.store.latest_vibe(aid)
         self.assertIn(f'Vibe Check {round(vibe["score"] * 10)} percent', main)
-        for needle in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Latest analysis', 'Flagged messages'):
+        for needle in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Badges & Alerts', 'Flagged messages'):
             self.assertIn(needle, text, needle)
         for needle in ('High priority', 'Medium priority', 'Good news', 'Earned', 'Cools fast', 'No serious flags', 'The mood heated up fast', 'thing to look at'):
             self.assertNotIn(needle, text, needle)
