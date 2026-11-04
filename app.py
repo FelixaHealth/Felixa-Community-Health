@@ -613,6 +613,8 @@ def ask_page(request: Request):
 @app.get('/', response_class=HTMLResponse)
 def index(request: Request, w: int = 0):
     names = store.workplace_names()
+    if not w and names:                                # Home is the overview of all workplaces; a workplace is chosen from the top bar
+        return dashboard_response(request)
     focus = store.get_analysis(w) if w else None
     cur = current_workplace(focus, names)
     home = home_view(cur['id']) if cur else None
@@ -870,7 +872,7 @@ def go(to: str = ''):
     """The workplace picker of the top bar without JavaScript: a workplace id opens its page, anything else opens the comparison of all of them."""
     if to.isdigit() and any(str(w['id']) == to for w in store.workplace_names()):
         return RedirectResponse(f'/?w={int(to)}', status_code=303)
-    return RedirectResponse('/dashboard#compare', status_code=303)
+    return RedirectResponse('/', status_code=303)
 
 
 def engine_choices():
@@ -940,6 +942,10 @@ async def settings_delete_all(request: Request):
 
 @app.get('/dashboard', response_class=HTMLResponse)
 def results_dashboard(request: Request):
+    return dashboard_response(request)
+
+
+def dashboard_response(request: Request):
     ctx = dashboard.build(request.query_params)
     ctx['behaviour_keys'] = dashboard.BEHAVIOUR
     ctx['assets'] = vibe_check.assets_html()

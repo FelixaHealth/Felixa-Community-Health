@@ -11,7 +11,7 @@
 <aside class="sidebar no-print" id="side" aria-label="Main">
 <a class="side-logo" href="/"><img src="/static/logo_side.png" alt="Felixa Community Health" width="150" height="144"></a>
 <nav class="side-nav" aria-label="Site">
-<a class="side-link{% if path == '/' %} on{% endif %}" href="{{ '/?w=%d'|format(cur.id) if cur else '/' }}"{% if path == '/' %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Home</span></a>
+<a class="side-link{% if path == '/' and not request.query_params.get('w') %} on{% endif %}" href="/"{% if path == '/' and not request.query_params.get('w') %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Overview</span></a>
 <a class="side-link{% if cur and (path.endswith('/workspace') or '/step/' in path) or path == '/new' %} on{% endif %}" href="{{ '/analysis/%d/workspace'|format(cur.id) if cur else '/new' }}">{{ icon('building') }}<span>Workplace</span></a>
 <a class="side-link{% if '/check/' in path or path.endswith('/analytics') %} on{% endif %}" href="{{ '/analysis/%d/analytics'|format(cur.id) if cur else '/new' }}">{{ icon('plussq') }}<span>Analyze</span></a>
 <a class="side-link{% if path.endswith('/results') or '/track/' in path or '/tone/' in path or '/category/' in path %} on{% endif %}" href="{{ '/analysis/%d/results'|format(cur.id) if cur else '/new' }}">{{ icon('chart') }}<span>Results</span></a>
@@ -25,8 +25,8 @@
 <button class="menu-btn mob-only" type="button" data-menu aria-label="Open the menu" aria-expanded="false" aria-controls="side">{{ icon('menu') }}</button>
 {% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label>{{ icon('building') }}<span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>
 {% if not cur %}<option value="" disabled selected>Choose a workplace…</option>{% endif %}
-<option value="compare"{% if request.url.path == '/dashboard' %} selected{% endif %}>All workplaces</option>
-{% for w in top_workplaces %}<option value="{{ w.id }}"{% if cur and cur.id == w.id and request.url.path != '/dashboard' %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>
+<option value="compare"{% if request.url.path == '/dashboard' or (request.url.path == '/' and not request.query_params.get('w')) %} selected{% endif %}>All workplaces</option>
+{% for w in top_workplaces %}<option value="{{ w.id }}"{% if cur and cur.id == w.id and request.url.path != '/dashboard' and (request.url.path != '/' or request.query_params.get('w')) %} selected{% endif %}>{{ w.name }}</option>{% endfor %}</select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>
 <a class="icon-pill add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
 <form class="search" method="get" action="/search" role="search"><label>{{ icon('search') }}<span class="sr-only">Search</span><input type="search" name="q" placeholder="Search analyses, messages or reports…" autocomplete="off" value="{{ search_q or '' }}"></label></form>
 <a class="icon-pill bell" href="{{ ('/analysis/%d/results/alerts'|format(cur.id)) if cur and cur.has_results else '/' }}" title="Badges and alerts" aria-label="Badges and alerts">{{ icon('bell') }}{% if alert_count %}<i class="dot" aria-hidden="true"></i>{% endif %}</a>

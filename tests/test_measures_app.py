@@ -3060,7 +3060,7 @@ class PageStructure(MeasuresCase):
     def test_the_home_dashboard_shows_four_headline_cards_and_none_of_the_result_sections(self):
         """Home is a glance: Vibe Check, health score, sentiment, the four modules, then the two doors. The detail stays on the results page."""
         aid = self.flare()
-        html = self.client.get('/').text
+        html = self.client.get(f'/?w={aid}').text
         main = html[html.index('<main'):html.index('</main>')]
         text = Page(main).human
         vibe = self.store.latest_vibe(aid)

@@ -2099,7 +2099,7 @@ class Safety(AppCase):
         self.assertEqual(health.headers['x-frame-options'], 'DENY')
         self.assertNotIn('strict-transport-security', self.client.get('/health', headers={'x-forwarded-proto': 'http'}).headers)
         self.assertIn('max-age=', self.client.get('/health', headers={'x-forwarded-proto': 'https'}).headers['strict-transport-security'])
-        self.assertNotIn('<script>', self.client.get('/').text)
+        self.assertNotIn('<script>', self.client.get('/settings').text)
 
     def test_security_headers_on_every_response(self):
         for path in ('/', '/health', '/login', '/static/style.css'):
@@ -2156,9 +2156,9 @@ class Layout(AppCase):
         self.assertNotIn(f'<option value="{draft}"', listing)
         self.assertIn('Night &lt;b&gt;Owls&lt;/b&gt; &amp; Co', listing)                        # a name a person typed is text, never markup
         self.assertNotIn('<b>Owls</b>', listing)
-        self.assertIn('has no results yet', listing)
+        self.assertIn('has no results yet', self.client.get(f'/?w={aid}').text)
         self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')
-        listing = self.client.get('/').text
+        listing = self.client.get(f'/?w={aid}').text
         self.assertIn('Vibe Check', listing)
         self.assertRegex(listing, r'Vibe Check \d+ percent')
         self.assertEqual([w['id'] for w in self.store.workplaces()][:1], [aid])
@@ -4924,7 +4924,7 @@ class WorkplaceManagement(AppCase):
         row = next(w for w in self.store.workplaces() if w['id'] == one)
         name_row = next(w for w in self.store.workplace_names() if w['id'] == one)
         with mock.patch.object(self.store, 'workplaces', return_value=[row]), mock.patch.object(self.store, 'workplace_names', return_value=[name_row]):
-            home = self.client.get('/').text
+            home = self.client.get(f'/?w={one}').text
         self.assertNotIn('Create your first workplace', home)
         self.assertIn('Alpha Team has no results yet.', home)
         self.assertIn(f'href="/analysis/{one}/analytics"', home, 'no messages yet: New Analysis opens the Analytics page')
@@ -4972,7 +4972,7 @@ class WorkplaceManagement(AppCase):
         self.assertIn(f'<option value="{first}" selected>Side Tab One</option>', self.client.get(f'/analysis/{first}/workspace').text)
         page = self.client.get(f'/analysis/{first}/workspace').text
         menu = page.split('</aside>', 1)[0]
-        for label in ('Home', 'Workplace', 'Analyze', 'Results', 'Reports', 'Settings'):
+        for label in ('Overview', 'Workplace', 'Analyze', 'Results', 'Reports', 'Settings'):
             self.assertIn(f'<span>{label}</span>', menu, label)
         self.assertNotIn(f'href="/analysis/{first}/step/1"', page)
         for step in range(1, 7):                                                                    # setting up keeps its own steps
@@ -4982,7 +4982,7 @@ class WorkplaceManagement(AppCase):
         aid = self.new_analysis(name='Go There')
         self.assertEqual(self.client.get(f'/go?to={aid}').headers['location'], f'/?w={aid}')
         for to in ('compare', '999999', 'x', ''):
-            self.assertEqual(self.client.get(f'/go?to={to}').headers['location'], '/dashboard#compare', to)
+            self.assertEqual(self.client.get(f'/go?to={to}').headers['location'], '/', to)
 
     def test_members_are_set_while_checking_and_each_check_keeps_its_own_number(self):
         aid = self.with_chat()
