@@ -136,3 +136,12 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
     }));
   });
 })();
+
+
+// Upload rows: highlight while a file is dragged over; the file input covers the row, so a drop is a choice.
+(() => {
+  document.querySelectorAll('[data-drop]').forEach((row) => {
+    ['dragenter', 'dragover'].forEach((t) => row.addEventListener(t, () => row.classList.add('drag')));
+    ['dragleave', 'drop'].forEach((t) => row.addEventListener(t, () => row.classList.remove('drag')));
+  });
+})();

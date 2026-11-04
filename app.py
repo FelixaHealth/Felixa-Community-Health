@@ -892,7 +892,7 @@ def settings_page(request: Request):
     return render(request, 'settings.html', rail={'steps': [], 'foot': None, 'setup': False}, engine_choices=choices, default_engine=current,
                   default_sensitivity=store.setting('default_sensitivity') if store.setting('default_sensitivity') in store.SENSITIVITIES else 'medium',
                   default_incognito=store.setting('default_incognito') == '1', sens_options=[(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
-                  version=config.VERSION, update=(updater.check() if updater.available() else None), data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
+                  version=config.VERSION, data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
                   login_offered=cloud.login_offered(), login_ready=cloud.login_available(), local_enabled=config.local_model_enabled(), hosted=bool(os.getenv('FELIXA_PASSWORD')))
 
 

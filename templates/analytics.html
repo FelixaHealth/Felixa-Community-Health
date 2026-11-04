@@ -4,11 +4,13 @@
 <section class="an-head"><span class="an-ic">{{ icon('chart') }}</span><div><h1>Analytics</h1><p>Set up a new analysis.</p></div></section>
 {% include "_file_check.html" %}
 <div class="an-card">
-<form class="an-row an-upload" method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="analytics">
-<span class="an-i">{{ icon('upload') }}</span><div class="an-t"><h2>1. Upload Data</h2><p>{% if units_n %}{{ '{:,}'.format(units_n) }} message{{ '' if units_n == 1 else 's' }} added from {{ evidence|length }} source{{ '' if evidence|length == 1 else 's' }}. Add more files or paste text.{% else %}Add files or paste text.{% endif %}</p></div>
-<div class="an-c"><label class="an-btn">{{ icon('folder') }}<span>Choose Files</span><input type="file" name="files" multiple data-submit></label><span class="an-ext">TXT, CSV, DOCX, PDF and more</span></div></form>
+<form class="an-row an-upload" data-drop method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="analytics">
+<span class="an-i">{{ icon('upload') }}</span><div class="an-t"><h2>1. Upload Data</h2><p>Drag files here or choose them: chats, spreadsheets, Word, PDF, text, subtitles, zip archives and voice recordings.{% if units_n %} <strong>{{ '{:,}'.format(units_n) }}</strong> message{{ '' if units_n == 1 else 's' }} added from {{ evidence|length }} source{{ '' if evidence|length == 1 else 's' }}.{% endif %}</p></div>
+<div class="an-c"><span class="an-btn">{{ icon('folder') }}<span>Choose Files</span></span><span class="an-ext">Any file with text, or speech</span></div>
+<input class="an-file" type="file" name="files" multiple data-submit aria-label="Choose files to upload"></form>
 <details class="an-paste"{% if not units_n %} open{% endif %}><summary>Paste text instead</summary>
 <form method="post" action="/analysis/{{ a.id }}/add-text"><input type="hidden" name="back" value="analytics"><textarea name="raw_text" rows="4" placeholder="Paste a chat, comments or replies, one message per line" required></textarea><button class="btn">Add text</button></form></details>
+<p class="an-voice">{% if voice_ok %}Voice recordings (MP3, WAV, M4A, OGG, FLAC, MP4) are turned into text on this computer.{% else %}Voice recordings ({{ audio }}) can be dropped in too, but turning speech into text needs the add-on <code>faster-whisper</code>, which is not installed here. Text and documents work now.{% endif %}</p>
 <form class="an-main" method="post" action="/analysis/{{ a.id }}/analytics">
 <div class="an-row"><span class="an-i">{{ icon('lock') }}</span><div class="an-t"><h2>2. Incognito</h2><p>Remove names from the messages before they are read.</p></div>
 <div class="an-c"><div class="an-seg"><label><input type="radio" name="incognito" value="on"{% if incognito %} checked{% endif %}><span>On (Recommended)</span></label><label><input type="radio" name="incognito" value="off"{% if not incognito %} checked{% endif %}><span>Off</span></label></div></div></div>
