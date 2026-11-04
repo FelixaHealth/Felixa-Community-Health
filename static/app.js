@@ -155,3 +155,6 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   document.querySelectorAll('[data-menu-close], .sidebar a').forEach((el) => el.addEventListener('click', () => set(false)));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
 })();
+
+// The Track dropdown in the results row closes when anything else is tapped.
+document.addEventListener('click', e => { document.querySelectorAll('.rn-more[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); }); });

@@ -958,3 +958,17 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .ins-hero h2{margin:0;font-size:26px;letter-spacing:-.02em;color:#fff}.ins-hero p{margin:4px 0 0;color:rgba(255,255,255,.85);font-size:15px}
 .ins-ic{width:52px;height:52px;border-radius:16px;background:rgba(246,196,83,.18);color:#f6c453;display:grid;place-items:center;flex:none}.ins-ic .ic{width:26px;height:26px}
 .guidance h2{font-size:24px;letter-spacing:-.02em;color:#0f4a2e}
+
+/* Track screens in one dropdown */
+.rnav{position:relative;flex-wrap:wrap!important;overflow:visible!important}
+.rn-more{position:relative}
+.rn-more summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:8px 12px 8px 14px;border-radius:11px;color:var(--muted);font-weight:600;font-size:14px;white-space:nowrap}
+.rn-more summary::-webkit-details-marker{display:none}
+.rn-more summary .ic{width:16px;height:16px}.rn-car{width:14px;height:14px;transition:transform .15s}
+.rn-more[open] .rn-car{transform:rotate(180deg)}
+.rn-more summary:hover,.rn-more[open] summary{background:#f6f0e2;color:#0f4a2e}
+.rn-more.on summary{background:#0f4a2e;color:#fff}
+.rn-menu{position:absolute;z-index:30;top:calc(100% + 6px);left:0;min-width:210px;display:flex;flex-direction:column;gap:2px;padding:6px;background:#fffefb;border:1px solid #efe7d6;border-radius:14px;box-shadow:0 12px 30px rgba(15,74,46,.16)}
+.rn-menu a{width:100%;box-sizing:border-box}
+@media(max-width:900px){.rnav a,.rn-more summary{padding:8px 10px;font-size:13.5px}}
+.plain-note{margin:0 0 12px;color:var(--muted);font-size:15px;line-height:1.55}

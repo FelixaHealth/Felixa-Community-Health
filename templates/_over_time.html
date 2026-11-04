@@ -10,7 +10,8 @@
 {% if m.has_series %}<p class="vc-note vc-chart-key">{{ ms.chart_key }}</p>
 {% elif not said.no_lines %}<p class="vc-note">There are no lines over time yet.</p>{% endif %}
 {% endmacro %}
-{% if only is defined %}<details class="how-built"><summary>How this is built</summary>{{ notes_block() }}</details>{% else %}{{ notes_block() }}{% endif %}
+{% if only is defined %}<p class="plain-note">A language model read {{ '{:,}'.format(m.n) }} of your messages and scored how each one sounds. Below is what it found and what that means. Nobody has checked the scores yet, so use them to start a conversation, not to judge a person.</p>
+<details class="how-built"><summary>More detail</summary>{{ notes_block() }}</details>{% else %}{{ notes_block() }}{% endif %}
 {% if only is not defined or only != 'health' %}<div class="vc-cols vc-measures">{% for c in ms.cards if only is not defined or only == c.key %}
 <div class="vc-card vc-measure"><h3>{{ c.name }}</h3>
 <p class="vc-level">{{ icons[c.tone]|safe }}<strong>{{ c.level }}</strong><span class="sr-only">, {{ c.tone_word }}</span>{% if c.latest %}<span class="vc-latest">{{ c.latest_label or 'Latest part' }}: {{ c.latest }}</span>{% endif %}</p>
