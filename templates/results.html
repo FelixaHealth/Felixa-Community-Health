@@ -5,7 +5,7 @@
 {% include "_rnav.html" %}
 {% if home %}{% include "_result_cards.html" %}
 <div class="home-row r3 links">
-<a class="bar-dark" href="/analysis/{{ aid }}/results/alerts"><span class="bd-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
+<a class="bar-light" href="/analysis/{{ aid }}/results/alerts"><span class="bl-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count soft">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
 {% if flagged_n %}<a class="bar-light" href="/analysis/{{ aid }}/flagged"><span class="bl-ic">{{ icon('warning') }}</span><strong>Flagged messages</strong><span class="bd-count soft">{{ flagged_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
 {% if answers_n %}<a class="bar-light" href="/analysis/{{ aid }}/results/questions"><span class="bl-ic">{{ icon('check') }}</span><strong>Your questions</strong><span class="bd-count soft">{{ answers_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
 </div>
