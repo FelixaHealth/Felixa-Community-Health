@@ -487,7 +487,8 @@ class MeasuresCase(AppCase):
 
     # -- the four surfaces ------------------------------------------------------------------------
     def page(self, aid, what='results') -> str:
-        response = self.client.get(f'/analysis/{aid}/{what}')
+        """A page of the app. The results are now one screen per kind; the report is the whole of them on one page, so `results` reads the report."""
+        response = self.client.get(f'/analysis/{aid}/{"report" if what == "results" else what}')
         self.assertEqual(response.status_code, 200, what)
         return response.text
 

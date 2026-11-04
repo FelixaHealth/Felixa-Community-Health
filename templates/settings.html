@@ -19,6 +19,13 @@
 <p>{% if hosted and not login_offered %}This app runs online, where your own Claude login cannot be used, because it lives on your computer. Use the Felixa engine, the word rules or an API key.{% elif not login_offered %}Your Claude login is switched off for this app.{% elif login_ready %}<strong class="ok-word">Ready.</strong> Claude Code is installed, so the Claude engines that use your login can run. They count against your own Claude usage.{% else %}<strong class="warn-word">Claude Code was not found.</strong> Install it from claude.com/claude-code, run <code>claude</code> once and sign in, then reload this page.{% endif %}</p>
 <p class="small-note">To try it, open a check's Engine step and press <em>Test my Claude login</em>.</p></div></div></section>
 
+<section class="panel set-card" id="updates" aria-labelledby="set-update"><div class="set-head"><span class="set-ic c-orange">{{ icon('spark') }}</span><div><h2 id="set-update">Updates</h2>
+{% if update is none %}<p class="small-note">This copy was not opened with the Felixa app on a Mac, so it cannot update itself here. Open Felixa from its app and this button appears.</p>
+{% elif update.newer %}<p>A newer version is ready ({{ update.current }} to {{ update.latest }}). Felixa installs it and starts again in a few seconds. Your workplaces and messages stay as they are.</p>
+<form method="post" action="/update"><button class="btn primary">{{ icon('spark') }} Update and restart</button></form>
+{% elif update.error %}<p class="small-note">{{ update.error }} You are on version {{ update.current }}.</p><form method="post" action="/update"><button class="btn">Try again</button></form>
+{% else %}<p>You have the newest version ({{ update.current }}).</p>{% endif %}</div></div></section>
+
 <section class="panel set-card" aria-labelledby="set-about"><div class="set-head"><span class="set-ic c-blue">{{ icon('layers') }}</span><div><h2 id="set-about">About this app</h2></div></div>
 <dl class="set-facts"><div><dt>Version</dt><dd>{{ version }}</dd></div><div><dt>Workplaces</dt><dd>{{ workplace_count }}</dd></div><div><dt>Your data is kept in</dt><dd><code>{{ data_folder }}</code></dd></div><div><dt>Engine on this computer</dt><dd>{{ 'On' if local_enabled else 'Off, Claude only' }}</dd></div></dl>
 <p class="small-note">On a Mac, <strong>Felixa</strong> checks GitHub for a newer version every time it is opened, and <strong>Felixa Always On</strong> checks every hour. Updates never touch your workplaces or messages.</p></section>

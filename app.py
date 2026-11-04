@@ -44,6 +44,7 @@ import measures
 import pipeline
 import prices
 import track
+import updater
 import report
 import rules
 import report_export
@@ -467,7 +468,7 @@ def render(request, name, **context):
         context['rail'] = check_steps_rail(row) if row is not None and row['status'] != 'draft' else {'steps': [], 'foot': None, 'setup': False}
     names = store.workplace_names()
     response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
-                                                                              'top_workplaces': names, 'cur': current_workplace(row, names), **context})
+                                                                              'top_workplaces': names, 'cur': current_workplace(row, names), 'update_ready': updater.cached_newer(), **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -887,8 +888,21 @@ def settings_page(request: Request):
     return render(request, 'settings.html', rail={'steps': [], 'foot': None, 'setup': False}, engine_choices=choices, default_engine=current,
                   default_sensitivity=store.setting('default_sensitivity') if store.setting('default_sensitivity') in store.SENSITIVITIES else 'medium',
                   default_incognito=store.setting('default_incognito') == '1', sens_options=[(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
-                  version=config.VERSION, data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
+                  version=config.VERSION, update=(updater.check() if updater.available() else None), data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
                   login_offered=cloud.login_offered(), login_ready=cloud.login_available(), local_enabled=config.local_model_enabled(), hosted=bool(os.getenv('FELIXA_PASSWORD')))
+
+
+@app.post('/update')
+def update_now():
+    """Installs the newest version from GitHub over this one and starts again on the same address."""
+    if not updater.available():
+        return redirect('/settings', 'This copy of Felixa updates itself only when it was opened with the Felixa app on a Mac.')
+    try:
+        version = updater.install()
+    except Exception as e:
+        return redirect('/settings', f'The update did not work: {e}. Nothing was changed.')
+    updater.restart_soon()
+    return redirect('/settings', f'Updated to {version}. Felixa is starting again: reload this page in a few seconds.')
 
 
 @app.post('/settings')
@@ -1744,6 +1758,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     host = os.getenv('FELIXA_HOST', '127.0.0.1')
     warn_if_sign_in_needs_https(host)
+    updater.start_background_check()
     uvicorn.run('app:app', host=host, port=int(os.getenv('PORT', '5050')), reload=False)
 
 
