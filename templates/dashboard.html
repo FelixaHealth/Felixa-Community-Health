@@ -2,8 +2,6 @@
 {% block content %}
 <div class="shell"><div class="stage vc">
 {{ assets|safe }}
-<section class="dash-head"><div class="eyebrow">Results</div><h1>Results dashboard</h1>
-<p class="lead">All your workplaces together: how healthy they are, how that changes over time, and how friendly the conversation feels.</p></section>
 {% if empty %}<section class="panel dash-empty"><h2>No results yet</h2><p>Run your first analytics in a workplace, and its numbers appear here. Each later check adds a point to the lines.</p>{% if top_workplaces %}<p><a class="btn primary" href="/analysis/{{ top_workplaces[0].id }}/workspace">{{ icon('plus') }} Open {{ top_workplaces[0].name }}</a></p>{% else %}<p><a class="btn primary" href="/new">{{ icon('plus') }} Create a workplace</a></p>{% endif %}</section>
 {% else %}
 <details class="dash-filter"><summary><span>Filters</span><small>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}Active{% else %}All workplaces · all time{% endif %}</small></summary><section class="panel"><form method="get" action="/dashboard" class="dash-form" id="dash-form"><div class="dash-filters">
