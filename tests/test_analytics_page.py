@@ -63,6 +63,16 @@ class Analytics(AppCase):
             r = self.client.post(f'/analysis/{aid}/analytics', data={'vibe_sensitivity': 'low', 'volume': 'all', 'engine': rules.ENGINE, **data})
             self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/analytics'), data)
 
+    def test_the_workplace_page_lists_the_sources_with_a_remove_button_and_no_engine_card(self):
+        aid = self.with_chat()
+        page = self.client.get(f'/analysis/{aid}/workspace').text
+        self.assertIn(f'action="/analysis/{aid}/source/remove"', page)
+        self.assertNotIn('Model needed', page)
+        self.assertNotIn('is installed on this computer', page)
+        first = self.store.evidence_by_source(aid)[0]
+        r = self.client.post(f'/analysis/{aid}/source/remove', data={'back': 'workspace', 'label': first['source_label'], 'kind': first['source_type']})
+        self.assertEqual(r.headers['location'], f'/analysis/{aid}/workspace')
+
 
 if __name__ == '__main__':
     unittest.main()

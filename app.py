@@ -1163,10 +1163,10 @@ async def source_remove(aid: AnalysisId, request: Request):
     """Removes one added file, recording or pasted text from the analysis."""
     if not store.get_analysis(aid):
         return not_found()
-    where = f'/analysis/{aid}/analytics'
+    form = await request.form()
+    where = f'/analysis/{aid}/workspace' if form.get('back') == 'workspace' else f'/analysis/{aid}/analytics'
     if store.active_job(aid):
         return redirect(where, 'Wait for the current task to finish before removing messages.')
-    form = await request.form()
     label, kind = str(form.get('label', '')), str(form.get('kind', ''))
     n = store.remove_source(aid, label, kind)
     if not n:
