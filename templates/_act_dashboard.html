@@ -4,7 +4,7 @@
 <section class="act-head"><div class="act-title"><span class="act-shield">{{ icon('shield') }}</span><div><h2>Badges &amp; Alerts</h2><p>Strengths, risks, and changes over time.</p></div></div>
 <form class="act-filters" method="get" action="/analysis/{{ aid }}/results/alerts"><label>Timeframe<select disabled aria-label="Timeframe"><option>Latest check</option></select></label>
 <label>Compare to<select name="compare" data-submit aria-label="Compare to">{% for key, label in act.compare_options %}<option value="{{ key }}"{% if key == act.compare %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn">Apply</button></noscript></form>
-<div class="seg" role="group" aria-label="View"><button type="button" data-act-view="dash" aria-pressed="true">{{ icon('layers') }} Dashboard</button><button type="button" data-act-view="trends" aria-pressed="false">{{ icon('trend') }} Trends</button></div></section>
+</section>
 <div class="kpi-row act-dash">{% for k in act.kpis %}<article class="kpi"><div class="kpi-top"><span class="hc-ic">{{ icon(k.icon) }}</span><h3>{{ k.label }}</h3></div>
 <div class="kpi-val"><strong>{{ k.value }}<small>{{ k.unit }}</small></strong>{% if k.delta %}<span class="delta d-{{ k.delta.tone }}">{% if k.delta.dir == 'up' %}{{ icon('arrowup') }}{% elif k.delta.dir == 'down' %}{{ icon('arrowdown') }}{% endif %}{{ '%+d'|format(k.delta.pp) if k.delta.pp else '0' }} pp</span>{% endif %}</div>
 <small class="kpi-vs">{% if k.delta %}vs. {{ k.prev }}{{ k.unit if k.unit == '%' else '' }}{% else %}{{ 'first check' if not act.has_prev else '' }}{% endif %}</small></article>{% endfor %}</div>
@@ -19,7 +19,5 @@
 {% else %}<p class="hc-none-l">Nothing needs a look right now.</p>{% endif %}
 {% if vibe and vibe.flagged %}<a class="btn quiet fl-link" href="/analysis/{{ aid }}/flagged">{{ icon('chat') }} See every flagged message ({{ vibe.flagged|length }})</a>{% endif %}</section></div>
 <div class="act-two trends">
-<section class="hcard vc"><div class="hc-top"><span class="hc-ic">{{ icon('chart') }}</span><h3>Trend Comparison</h3>{% if act.trend.prev %}<ul class="tl"><li><i class="k-cur"></i>Current check</li><li><i class="k-prev"></i>{{ 'First' if act.compare == 'first' else 'Previous' }} check</li></ul>{% endif %}</div>
-{{ act.trend_html|safe }}{% if not act.trend.prev %}<p class="small-note">Run another check to compare with this one.</p>{% endif %}</section>
 <section class="hcard insight"><div class="hc-top"><span class="hc-ic">{{ icon('target') }}</span><h3>Key Insight</h3></div><div class="ins-body"><p>{{ act.insight }}</p><a class="btn-gold small" href="#guidance">View Details {{ icon('chevron') }}</a></div></section></div>
 </div>

@@ -1648,8 +1648,6 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
     act = None
     if screen == 'alerts' and ctx.get('measures'):
         act = actview.build(ctx, compare)
-        t = act['trend']
-        act['trend_html'] = vibe_check.figure(lambda w: bei_charts.compare_chart(t['cats'], t['cur'], t['prev'], width=w)) if len(t['cats']) >= 2 else ''
     return render(request, 'screen.html', screen=screen, title=RESULT_SCREENS[screen][0], act=act, rnav=nav, **ctx)
 
 
