@@ -13,9 +13,8 @@
 {% elif screen == 'passive' %}
 {% set only = 'passive' %}{% include "_over_time.html" %}
 {% elif screen == 'alerts' %}
-{% if act %}{% include "_act_dashboard.html" %}{% endif %}
+<div class="act-top">{% if act %}{% include "_act_dashboard.html" %}{% endif %}{% if measures %}{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}</div>
 {% if guidance %}{% include "_guidance.html" %}{% endif %}
-{% if measures %}{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}
 {% elif screen == 'questions' %}
 {% include "_answers.html" %}
 {% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}

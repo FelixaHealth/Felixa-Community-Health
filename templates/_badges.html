@@ -6,5 +6,5 @@
 {% else %}<p class="vc-trendline">{{ ms.texts.no_badges }}</p>{% endif %}
 {% if ms.badge_note %}<p class="vc-note">{{ ms.badge_note }}</p>{% endif %}
 {% if others %}<details><summary>How the other badges work</summary><ul class="vc-rules">{% for b in others %}<li><strong>{{ b.name }}</strong><span class="vc-how">{{ b.how }}</span>{% if b.needs %}<span class="vc-needs">{{ b.needs }}</span>{% endif %}</li>{% endfor %}</ul></details>{% endif %}
-<p class="vc-caveat">{{ ms.caveats.badges }}</p>
+<details><summary>How badges are meant</summary><p class="vc-caveat">{{ ms.caveats.badges }}</p></details>
 </section>

@@ -20,10 +20,10 @@
 <p class="small-note">To try it, open a check's Engine step and press <em>Test my Claude login</em>.</p></div></div></section>
 
 <section class="panel set-card" id="updates" aria-labelledby="set-update"><div class="set-head"><span class="set-ic c-orange">{{ icon('spark') }}</span><div><h2 id="set-update">Updates</h2>
-{% if update is none %}<p class="small-note">This copy was not opened with the Felixa app on a Mac, so it cannot update itself here. Open Felixa from its app and this button appears.</p>
+{% if update is none %}<p class="small-note">This copy does not update itself from GitHub: it was started by hand or with updates turned off. New versions come as a zip file.</p>
 {% elif update.newer %}<p>A newer version is ready ({{ update.current }} to {{ update.latest }}). Felixa installs it and starts again in a few seconds. Your workplaces and messages stay as they are.</p>
 <form method="post" action="/update"><button class="btn primary">{{ icon('spark') }} Update and restart</button></form>
-{% elif update.error %}<p class="small-note">{{ update.error }} You are on version {{ update.current }}.</p><form method="post" action="/update"><button class="btn">Try again</button></form>
+{% elif update.error %}<p class="small-note">{{ update.error }}. You are on version {{ update.current }}.</p><form method="post" action="/update"><button class="btn">Try again</button></form>
 {% else %}<p>You have the newest version ({{ update.current }}).</p>{% endif %}</div></div></section>
 
 <section class="panel set-card" aria-labelledby="set-about"><div class="set-head"><span class="set-ic c-blue">{{ icon('layers') }}</span><div><h2 id="set-about">About this app</h2></div></div>

@@ -37,10 +37,21 @@ def installed() -> str:
 
 def available() -> bool:
     """True when this copy can replace its own files: it sits in a folder the launcher manages (it remembers a version) and the folder is writable."""
-    return bool(installed()) and os.access(config.BASE_DIR, os.W_OK)
+    return bool(installed()) and not os.getenv('FELIXA_NO_UPDATE') and os.access(config.BASE_DIR, os.W_OK)
 
 
 def _get(url, timeout=10):
+    """The page at `url`. The Mac's own curl first (it trusts the certificates the Mac trusts; Python from python.org often does not), then Python."""
+    import shutil as _sh
+    import subprocess
+    curl = _sh.which('curl')
+    if curl:
+        try:
+            out = subprocess.run([curl, '-fsSL', '--max-time', str(timeout), '-H', 'Accept: application/vnd.github.sha', '-A', 'Felixa', url], capture_output=True, timeout=timeout + 5)
+            if out.returncode == 0 and out.stdout:
+                return out.stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
     req = urllib.request.Request(url, headers={'Accept': 'application/vnd.github.sha', 'User-Agent': 'Felixa'})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
@@ -54,7 +65,7 @@ def check(force=False) -> dict:
                 sha = ''.join(c for c in _get(API).decode('ascii', 'ignore') if c in '0123456789abcdef')
                 _cache.update(at=time.time(), remote=sha if len(sha) >= 7 else '', error='' if len(sha) >= 7 else 'GitHub gave no version.')
             except Exception as e:     # no internet, rate limit, anything: the app goes on as it is
-                _cache.update(at=time.time(), remote='', error=f'Could not reach GitHub ({type(e).__name__}).')
+                _cache.update(at=time.time(), remote='', error=f'Could not reach GitHub ({type(e).__name__})')
         cur, new = installed(), _cache['remote']
         return {'current': cur[:7], 'latest': new[:7], 'newer': bool(new and cur and new != cur), 'error': _cache['error']}
 

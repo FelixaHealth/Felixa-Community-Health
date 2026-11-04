@@ -11,9 +11,9 @@
 {% if look == 1 %}<p class="vc-trendline vc-count">1 thing to look at first.</p>
 {% elif look > 1 %}<p class="vc-trendline vc-count">{{ look }} things worth a look.</p>
 {% elif ms.all_clear %}<p class="vc-trendline vc-count">Nothing needs urgent attention in {{ 'this message' if ms.m.n == 1 else 'these {:,} messages'.format(ms.m.n) }}.</p>{% endif %}
-<p class="vc-caveat">{{ ms.caveats.alerts }}</p>
 {% if shown %}<ul class="vc-flags vc-alerts">{% for al in shown[:5] %}{{ row(al) }}{% endfor %}</ul>
 {% if shown|length > 5 %}<details><summary>Show {{ shown|length - 5 }} more</summary><ul class="vc-flags vc-alerts">{% for al in shown[5:] %}{{ row(al) }}{% endfor %}</ul></details>{% endif %}
-{% else %}<p class="vc-caveat">{{ ms.caveats.empty }}</p>{% endif %}
+{% else %}<div class="vc-awards"><div class="award award-clear"><span class="award-tag">{{ icons.good|safe }}Clear</span><strong class="award-name">No alerts this time</strong><span class="award-evidence">{{ 'This message' if ms.m.n == 1 else '{:,} messages'.format(ms.m.n) }} read, with nothing above the cut-offs.</span></div></div>{% endif %}
+<details><summary>How alerts work</summary><p class="vc-caveat">{{ ms.caveats.alerts }}</p>{% if not shown %}<p class="vc-caveat">{{ ms.caveats.empty }}</p>{% endif %}</details>
 {% if alert_notes %}<ul class="vc-quiet">{% for note in alert_notes %}<li>{{ note.text }}</li>{% endfor %}</ul>{% endif %}
 </section>
