@@ -16,7 +16,8 @@
 <section class="hcard alerts-card"><div class="hc-top"><span class="hc-ic bad">{{ icon('warning') }}</span><h3>Alerts (Areas to Review)</h3><span class="info" title="Alerts are prompts to look, not findings.">{{ icon('help') }}</span></div>
 {% if act.alerts %}<ul class="al-list">{% for al in act.alerts %}<li><details class="al lv-{{ al.level }}"><summary><span class="si">{{ icon(al.icon) }}</span><span class="al-text"><strong>{{ al.title }}</strong><small>{{ al.sub }}</small></span><span class="chip-lvl {{ 'tone-bad' if al.level == 'high' else 'tone-warn' }}">{{ al.chip }}</span><span class="chev">{{ icon('chevron') }}</span></summary>
 <div class="al-body"><p>{{ al.detail }}</p>{% if al.try %}<p class="al-try"><strong>Try this:</strong> {{ al.try }}</p>{% endif %}{% if al.base %}<p class="small-note">{{ al.base }}</p>{% endif %}</div></details></li>{% endfor %}</ul>
-{% else %}<p class="hc-none-l">Nothing needs a look right now.</p>{% endif %}</section></div>
+{% else %}<p class="hc-none-l">Nothing needs a look right now.</p>{% endif %}
+{% if vibe and vibe.flagged %}<a class="btn quiet fl-link" href="/analysis/{{ aid }}/flagged">{{ icon('chat') }} See every flagged message ({{ vibe.flagged|length }})</a>{% endif %}</section></div>
 <div class="act-two trends">
 <section class="hcard vc"><div class="hc-top"><span class="hc-ic">{{ icon('chart') }}</span><h3>Trend Comparison</h3>{% if act.trend.prev %}<ul class="tl"><li><i class="k-cur"></i>Current check</li><li><i class="k-prev"></i>{{ 'First' if act.compare == 'first' else 'Previous' }} check</li></ul>{% endif %}</div>
 {{ act.trend_html|safe }}{% if not act.trend.prev %}<p class="small-note">Run another check to compare with this one.</p>{% endif %}</section>

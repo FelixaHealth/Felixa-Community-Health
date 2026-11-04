@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Flagged messages{% endblock %}
+{% block content %}
+<div class="stage flagged-page">
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/workspace">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/results#tab-act">Results</a><span aria-hidden="true">/</span><span aria-current="page">Flagged messages</span></nav>
+<section class="results-head"><div class="rh-main"><div class="eyebrow">Latest Vibe Check</div><h1>Flagged messages</h1>
+<p class="lead">{{ view.total }} message{{ '' if view.total == 1 else 's' }} flagged{% if view.serious %}, {{ view.serious }} serious{% endif %}. Each one is copied from your upload, never paraphrased.</p></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/flagged.csv{% if query %}?{{ query|urlencode }}{% endif %}">{{ icon('file') }} CSV of this list</a><a class="btn quiet" href="/analysis/{{ aid }}/results#tab-act">{{ icon('back') }} Back to Badges &amp; Alerts</a></div></section>
+{% if view.total %}
+<form class="fl-filters panel" method="get" action="/analysis/{{ aid }}/flagged">
+<label>Kind<select name="kind" data-submit><option value="">All kinds</option>{% for k, label in view.kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Severity<select name="level" data-submit>{% for v, label in levels %}<option value="{{ v }}"{% if f.level == v %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+{% if view.sources|length > 1 %}<label>Source<select name="source" data-submit><option value="">All sources</option>{% for s in view.sources %}<option value="{{ s }}"{% if f.source == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>{% endif %}
+<label>Order<select name="sort" data-submit>{% for v, label in sorts %}<option value="{{ v }}"{% if f.sort == v %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label class="fl-q">Word<input type="search" name="q" value="{{ f.q }}" placeholder="Find a word in the messages"></label>
+<button class="btn" type="submit">Apply</button>{% if view.filtered %}<a class="btn quiet" href="/analysis/{{ aid }}/flagged">Clear</a>{% endif %}
+</form>
+{% if view.safety %}<p class="small-note">A model can be wrong. If a message describes a real risk to someone, follow your community's safety process or contact local emergency services.</p>{% endif %}
+<section class="panel"><div class="eyebrow">{{ view.matching }} of {{ view.total }} shown</div>
+{% if view.rows %}<ol class="fl-list">{% for r in view.rows %}<li class="fl lv-{{ r.level }}"><div class="fl-tag"><span class="fl-sev">{{ r.severity }}/10</span><strong>{{ r.kind }}</strong></div><p>“{{ r.message }}”</p>{% if r.meta %}<small>{{ r.meta }}</small>{% endif %}</li>{% endfor %}</ol>
+{% if view.pages > 1 %}<nav class="pager" aria-label="Pages">{% if view.page > 1 %}<a class="btn quiet" href="?{{ (query|dictsort + [('page', view.page - 1)])|urlencode }}">Previous</a>{% endif %}<span>Page {{ view.page }} of {{ view.pages }}</span>{% if view.page < view.pages %}<a class="btn quiet" href="?{{ (query|dictsort + [('page', view.page + 1)])|urlencode }}">Next</a>{% endif %}</nav>{% endif %}
+{% else %}<p class="small-note">No flagged message matches these filters.</p>{% endif %}</section>
+{% else %}<section class="panel"><p>Vibe Check did not flag any message in this check.</p></section>{% endif %}
+</div>{% endblock %}

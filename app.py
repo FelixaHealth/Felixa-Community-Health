@@ -38,6 +38,7 @@ import analysis
 import bei_charts
 import config
 import dashboard
+import flagged
 import detail
 import measures
 import pipeline
@@ -1647,6 +1648,27 @@ def report_pdf(aid: AnalysisId):
     data = report_export.pdf(ctx, BASE_DIR)
     return StreamingResponse(io.BytesIO(data), media_type='application/pdf',
                              headers={'Content-Disposition': f'attachment; filename="FelixaCommunityHealth_Report_{aid}.pdf"'})
+
+
+@app.get('/analysis/{aid}/flagged', response_class=HTMLResponse)
+def flagged_page(request: Request, aid: AnalysisId, kind: str = '', level: str = '', source: str = '', q: str = '', sort: str = 'severity', page: int = 1):
+    """Every message Vibe Check flagged, none cut off, with filters and a CSV of what the filters show."""
+    ctx = report_context(aid, 'list of flagged messages')
+    view = flagged.build(ctx['vibe'], kind=kind, level=level, source=source, q=q, sort=sort, page=page)
+    query = {k: v for k, v in (('kind', kind), ('level', level), ('source', source), ('q', q), ('sort', sort if sort != 'severity' else '')) if v}
+    return render(request, 'flagged.html', view=view, aid=aid, a=ctx['a'], f={'kind': kind, 'level': level, 'source': source, 'q': q, 'sort': sort}, query=query,
+                  levels=flagged.LEVELS, sorts=flagged.SORTS)
+
+
+@app.get('/analysis/{aid}/flagged.csv')
+def flagged_csv(aid: AnalysisId, kind: str = '', level: str = '', source: str = '', q: str = '', sort: str = 'severity'):
+    ctx = report_context(aid, 'list of flagged messages')
+    rows = flagged.csv_rows(flagged.build(ctx['vibe'], kind=kind, level=level, source=source, q=q, sort=sort)['all'])
+    safe = [[report.csv_safe(c) for c in row] for row in rows]
+    out = io.StringIO()
+    csv.writer(out).writerows(safe)
+    return StreamingResponse(io.BytesIO(out.getvalue().encode('utf-8-sig')), media_type='text/csv; charset=utf-8',
+                             headers={'Content-Disposition': f'attachment; filename="felixa_flagged_messages_{aid}.csv"'})
 
 
 @app.get('/analysis/{aid}/export')
