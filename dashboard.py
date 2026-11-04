@@ -131,8 +131,8 @@ def lines(series, *, title, desc, y_min=0.0, y_max=100.0, ticks=None, places=0, 
     t0, t1 = min(stamps), max(stamps)
     span = max(1.0, (t1 - t0).total_seconds())
     narrow = width < 600
-    height = 250 if narrow else 280
-    ml, mr, mt, mb = 44, 54, 16, 44
+    height = 168 if narrow else 190
+    ml, mr, mt, mb = 36, 44, 10, 30
     pw, ph = width - ml - mr, height - mt - mb
     ticks = ticks or [y_min + (y_max - y_min) * i / 4 for i in range(5)]
     X = lambda t: ml + (pw / 2 if t1 == t0 else pw * (t - t0).total_seconds() / span)       # noqa: E731
@@ -140,7 +140,7 @@ def lines(series, *, title, desc, y_min=0.0, y_max=100.0, ticks=None, places=0, 
     sc = Scene(width, height, title, desc)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == y_min else 'grid', 1)
-        sc.text(ml - 8, Y(t) + 4, _fmt(t, places), size=12, fill='ink2', anchor='end')
+        sc.text(ml - 6, Y(t) + 4, _fmt(t, places), size=11, fill='ink2', anchor='end')
     marks = sorted({t.date() for t in stamps})
     if len(marks) <= 1:
         shown = marks
@@ -149,18 +149,29 @@ def lines(series, *, title, desc, y_min=0.0, y_max=100.0, ticks=None, places=0, 
         shown = [marks[round(i * (len(marks) - 1) / (want - 1))] for i in range(want)] if len(marks) > want else marks
     for day in dict.fromkeys(shown):
         x = X(_dt.datetime.combine(day, _dt.time(12)) if t1 != t0 else t0)
-        sc.text(min(max(x, ml + 20), width - mr - 20), height - mb + 22, short_date(day.isoformat()), size=12, fill='ink2', anchor='middle')
-    for i, s in enumerate(series):
-        pts = [(X(t), Y(v)) for t, v in sorted(s['points'])]
-        if len(pts) > 1:
-            sc.poly(pts, stroke=s['role'], width=2)
-        for (x, y), (t, v) in zip(pts, sorted(s['points'])):
-            sc.circle(x, y, 5.5, 'surface')
-            sc.circle(x, y, 3.5, s['role'])
+        sc.text(min(max(x, ml + 20), width - mr - 20), height - mb + 18, short_date(day.isoformat()), size=11, fill='ink2', anchor='middle')
+    ends = []
+    for s in series:
+        ordered = sorted(s['points'])
+        pts = [(X(t), Y(v)) for t, v in ordered]
+        path = list(pts)
+        if path[0][0] > ml + 1:                                  # the line starts at the beginning of the graph and holds its value until the first check
+            path.insert(0, (ml, path[0][1]))
+        if path[-1][0] < width - mr - 1:                         # and carries on to the end: nothing changed since the last check
+            path.append((width - mr, path[-1][1]))
+        if len(path) > 1:
+            sc.poly(path, stroke=s['role'], width=2)
+        for (x, y), (t, v) in zip(pts, ordered):
+            sc.circle(x, y, 4.5, 'surface')
+            sc.circle(x, y, 3, s['role'])
             tip = {'t': f'{s["name"]} · {long_date(t.isoformat())}', 'r': [[title, f'{_fmt(v, places)}{unit}', s['role']]]}
             sc.hit(x - 12, mt, 24, ph, tip, x)
-        x, y = pts[-1]
-        sc.text(min(x + 9, width - 6), y + 4, _fmt(sorted(s['points'])[-1][1], places), size=12, fill='ink', weight=600)
+        ends.append([path[-1][1], _fmt(ordered[-1][1], places)])
+    ends.sort()
+    for i in range(1, len(ends)):                                 # end labels never sit on top of each other
+        ends[i][0] = max(ends[i][0], ends[i - 1][0] + 13)
+    for y, label in ends:
+        sc.text(width - mr + 6, y + 4, label, size=11.5, fill='ink', weight=600)
     sc.cross(mt, mt + ph)
     return sc
 
@@ -171,7 +182,7 @@ def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720):
     if not items:
         return None
     items.sort(key=lambda i: -i[1])
-    row_h, bar_h, top, label_w = 34, 18, 6, (190 if width >= 600 else 110)
+    row_h, bar_h, top, label_w = 28, 15, 4, (150 if width >= 600 else 100)
     x0, x1 = label_w + 14, width - 70
     mx = vmax or max(max(v for _l, v, _r in items), 1e-9)
     sc = Scene(width, top + row_h * len(items) + 4, title, desc)
@@ -251,9 +262,22 @@ def build(args, today=None) -> dict:
                     pts.append((_dt.datetime.combine(start, _dt.time(12)), sum(r[key] * r['n'] for r in same) / sum(r['n'] for r in same)))
             if pts:
                 behaviour.append({'name': label, 'role': role, 'points': pts})
-    bmax = nice_ticks(max([v for s in behaviour for _t, v in s['points']] + [10]), 4) if behaviour else [0, 10]
-    figs['behaviour'] = figure(lambda w: lines(behaviour, title='Messages per 100', desc='Messages per 100 that were openly hostile, caring, sarcastic or heated, at each check.',
-                                              y_max=bmax[-1], ticks=bmax, width=w)) if behaviour else ''
+    dates = {r['when'].date() for r in rows}
+    if len(dates) <= 2 or not behaviour:
+        base = [r for r in rows if str(r['aid']) == one] if one else rows
+        last = [r for r in _latest_per_workplace(base)]
+        items = []
+        for key, label, role in (('conflict', 'Openly hostile', 'cat4'), ('empathy', 'Caring', 'cat3'), ('passive', 'Sarcastic', 'cat2'), ('heated', 'Heated', 'cat5')):
+            vals = [(r[key], r['n']) for r in last if r[key] is not None]
+            if vals:
+                items.append((label, sum(v * n for v, n in vals) / sum(n for _v, n in vals), role))
+        figs['behaviour'] = figure(lambda w: hbars(items, title='Messages per 100', desc='Messages per 100 that were openly hostile, caring, sarcastic or heated in the latest checks.', places=1, width=w)) if items else ''
+        behaviour_bars = True
+    else:
+        behaviour_bars = False
+        bmax = nice_ticks(max([v for s in behaviour for _t, v in s['points']] + [10]), 4)
+        figs['behaviour'] = figure(lambda w: lines(behaviour, title='Messages per 100', desc='Messages per 100 that were openly hostile, caring, sarcastic or heated, at each check.',
+                                                  y_max=bmax[-1], ticks=bmax, width=w))
     figs['compare_health'] = figure(lambda w: hbars([(r['workplace'], r['health'], roles.get(r['workplace'], 'cat1')) for r in latest], title='Health score',
                                                     desc='Health score of the latest check of each workplace, out of 100.', vmax=100, width=w)) if len(latest) > 1 else ''
     figs['compare_vibe'] = figure(lambda w: hbars([(r['workplace'], r['vibe'], roles.get(r['workplace'], 'cat1')) for r in latest], title='Vibe Check score',
@@ -322,4 +346,4 @@ def build(args, today=None) -> dict:
         detail = {'aid': int(one), 'name': names.get(int(one), '')}
     return {'f': f, 'ranges': RANGES, 'kpis': kpis, 'figs': figs, 'tables': tables, 'latest': latest_rows, 'latest_head': ['Workplace', 'Platform', 'Kind', 'Last check', 'Messages', 'Members', 'Health', 'Vibe', 'Hostile /100', 'Care /100', 'Heated /100'],
             'checks_n': len(rows), 'shown_n': len(check_rows), 'legend': [(names[a], roles[names[a]]) for a in dict.fromkeys(r['aid'] for r in rows)][:MAX_LINES],
-            'detail': detail, 'empty': not everything, 'none_in_view': bool(everything) and not rows, 'esc': _html.escape}
+            'behaviour_bars': behaviour_bars, 'detail': detail, 'empty': not everything, 'none_in_view': bool(everything) and not rows, 'esc': _html.escape}

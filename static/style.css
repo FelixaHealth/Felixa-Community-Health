@@ -1011,3 +1011,11 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .dash-kpi{border-radius:18px;padding:14px 16px!important}.dash-kpi strong{font-size:34px!important;color:#0f4a2e}
 .dash-legend i.pos{background:#1f66bf}.dash-legend i.neu{background:#898781}.dash-legend i.neg{background:#c93838}.dash-legend i.forest{background:#0b4a2f}
 .dash-stack .dash-grid{gap:18px}
+
+/* Dashboard: compact cards, two or three across */
+.dash-charts,.dash-ov{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))!important;gap:14px!important}
+.dash-charts .dash-card,.dash-ov .dash-card{padding:14px 16px;border-radius:18px}
+.dash-charts .dash-card h2,.dash-ov .dash-card h2{font-size:17px;margin:0 0 2px}
+.dash-charts .small-note,.dash-ov .small-note{font-size:13px;margin:0 0 6px}
+.dash-charts .dash-legend{margin:2px 0}.dash-charts .dash-legend li{font-size:13px}
+.dash-sub{font-size:20px!important;margin:18px 0 10px!important}

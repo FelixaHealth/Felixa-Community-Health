@@ -15,22 +15,21 @@
 {% else %}
 <div class="dash-kpis">{% for k in kpis %}<div class="dash-kpi"><small>{{ k.label }}</small><strong>{{ k.value }}</strong><span>{{ k.sub }}{% if k.band %} · {{ k.band }}{% endif %}</span></div>{% endfor %}</div>
 {% if legend %}<ul class="dash-legend" aria-label="Workplaces">{% for name, role in legend %}<li><i class="{{ role }}"></i>{{ name }}</li>{% endfor %}</ul>{% endif %}
-<div class="dash-stack">
-{% if figs.health %}<section class="dash-card"><h2>Health score over time</h2><p class="small-note">How warm the conversations are, from 0 to 100. Around 50 is neutral; higher is warmer.{% if legend|length > 1 %} The thick line is the average of all workplaces.{% endif %}</p>{{ figs.health|safe }}</section>{% endif %}
-<div class="dash-grid">
-{% if figs.sent_mix %}<section class="dash-card"><h2>Sentiment</h2><p class="small-note">How the messages read in the latest check of each workplace.</p>{{ figs.sent_mix|safe }}</section>{% endif %}
-{% if figs.vibe %}<section class="dash-card"><h2>Vibe Check over time</h2><p class="small-note">The friendliness score out of 10 at each check.</p>{{ figs.vibe|safe }}</section>{% endif %}
-</div>
-{% if figs.sent_time %}<section class="dash-card"><h2>Sentiment over time</h2><p class="small-note">The share of friendly, neutral and unfriendly messages, week by week, across all workplaces in this view.</p><ul class="dash-legend"><li><i class="pos"></i>Friendly</li><li><i class="neu"></i>Neutral</li><li><i class="neg"></i>Unfriendly</li></ul>{{ figs.sent_time|safe }}</section>{% endif %}
-{% if figs.behaviour %}<section class="dash-card"><h2>How people spoke</h2><p class="small-note">Messages per 100 that were openly hostile, caring, sarcastic or heated{% if not f.workplace and not detail %}, averaged across the workplaces in this view{% endif %}.</p><ul class="dash-legend">{% for key, label, role in behaviour_keys %}<li><i class="{{ role }}"></i>{{ label }}</li>{% endfor %}</ul>{{ figs.behaviour|safe }}</section>{% endif %}
-{% if figs.members %}<section class="dash-card"><h2>Members over time</h2><p class="small-note">The number of members each check was made with.</p>{{ figs.members|safe }}</section>{% endif %}
-</div>
-<h2 class="dash-sub" id="compare">Compare your workplaces</h2>
-<div class="dash-grid dash-narrow">
+{% if figs.compare_health or figs.compare_vibe %}<h2 class="dash-sub" id="compare">Overview</h2>
+<div class="dash-grid dash-narrow dash-ov">
 {% if figs.compare_health %}<section class="dash-card"><h2>Latest health score</h2><p class="small-note">Latest check of each workplace.</p>{{ figs.compare_health|safe }}</section>{% endif %}
 {% if figs.compare_vibe %}<section class="dash-card"><h2>Latest Vibe Check</h2><p class="small-note">Latest check of each workplace, out of 10.</p>{{ figs.compare_vibe|safe }}</section>{% endif %}
-{% if figs.compare_conflict %}<section class="dash-card"><h2>Openly hostile, per 100 messages</h2><p class="small-note">Latest check of each workplace. Lower is calmer.</p>{{ figs.compare_conflict|safe }}</section>{% endif %}
-{% if figs.compare_empathy %}<section class="dash-card"><h2>Care, per 100 messages</h2><p class="small-note">Latest check of each workplace. Higher shows more care and understanding.</p>{{ figs.compare_empathy|safe }}</section>{% endif %}
+{% if figs.compare_conflict %}<section class="dash-card"><h2>Most Negative</h2><p class="small-note">Openly hostile messages per 100. Lower is calmer.</p>{{ figs.compare_conflict|safe }}</section>{% endif %}
+{% if figs.compare_empathy %}<section class="dash-card"><h2>Most Positive</h2><p class="small-note">Caring messages per 100. Higher shows more care and understanding.</p>{{ figs.compare_empathy|safe }}</section>{% endif %}
+</div>{% endif %}
+<h2 class="dash-sub">Over time</h2>
+<div class="dash-grid dash-narrow dash-charts">
+{% if figs.health %}<section class="dash-card"><h2>Health score</h2><p class="small-note">How warm the conversations are, from 0 to 100. Around 50 is neutral; higher is warmer.{% if legend|length > 1 %} The dark line is the average of all workplaces.{% endif %}</p>{% if legend|length > 1 %}<ul class="dash-legend"><li><i class="forest"></i>All workplaces</li>{% for name, role in legend %}<li><i class="{{ role }}"></i>{{ name }}</li>{% endfor %}</ul>{% endif %}{{ figs.health|safe }}</section>{% endif %}
+{% if figs.sent_time %}<section class="dash-card"><h2>Sentiment</h2><p class="small-note">Share of friendly, neutral and unfriendly messages, week by week.</p><ul class="dash-legend"><li><i class="pos"></i>Friendly</li><li><i class="neu"></i>Neutral</li><li><i class="neg"></i>Unfriendly</li></ul>{{ figs.sent_time|safe }}</section>{% endif %}
+{% if figs.sent_mix %}<section class="dash-card"><h2>Sentiment mix</h2><p class="small-note">How the messages read in the latest check of each workplace.</p>{{ figs.sent_mix|safe }}</section>{% endif %}
+{% if figs.vibe %}<section class="dash-card"><h2>Vibe Check</h2><p class="small-note">Friendliness out of 10 at each check.</p>{{ figs.vibe|safe }}</section>{% endif %}
+{% if figs.behaviour %}<section class="dash-card"><h2>How people spoke</h2><p class="small-note">{% if behaviour_bars %}Out of every 100 messages, how many were hostile, caring, sarcastic or heated.{% else %}Messages per 100 that were hostile, caring, sarcastic or heated.{% endif %}</p>{% if not behaviour_bars %}<ul class="dash-legend">{% for key, label, role in behaviour_keys %}<li><i class="{{ role }}"></i>{{ label }}</li>{% endfor %}</ul>{% endif %}{{ figs.behaviour|safe }}</section>{% endif %}
+{% if figs.members %}<section class="dash-card"><h2>Members</h2><p class="small-note">The number of members at each check.</p>{{ figs.members|safe }}</section>{% endif %}
 </div>
 {% if detail_ctx %}<section class="dash-card dash-detail" style="margin-top:18px"><div class="eyebrow">{{ detail.name }}</div><h2>Latest alerts and badges</h2>
 {% if detail_ctx.alerts %}<ul>{% for al in detail_ctx.alerts %}<li><strong>{{ detail_ctx.levels[al.level] }}:</strong> {{ al.title }}. {{ al.detail }}</li>{% endfor %}</ul>{% else %}<p>No alerts in the latest check.</p>{% endif %}

@@ -55,8 +55,8 @@ class Dashboard(DashboardCase):
         a = self.workplace('Dash Alpha', checks=[(self.day(60), 55.0, {'members': 100}), (self.day(30), 62.0, {'members': 110}), (self.day(2), 70.0, {'members': 130})])
         b = self.workplace('Dash Beta', 'Team', 'Slack', checks=[(self.day(40), 45.0, {}), (self.day(3), 52.0, {})])
         page = self.client.get('/dashboard').text
-        for needle in ('Health score over time', 'Vibe Check over time', 'How people spoke', 'Members over time', 'Latest health score', 'Latest Vibe Check',
-                       'Openly hostile, per 100 messages', 'Care, per 100 messages', 'Latest check of each workplace', 'All checks', 'Dash Alpha', 'Dash Beta'):
+        for needle in ('Overview', 'Over time', '<h2>Health score</h2>', '<h2>Vibe Check</h2>', 'How people spoke', '<h2>Members</h2>', 'Latest health score', 'Latest Vibe Check',
+                       'Most Negative', 'Most Positive', 'Latest check of each workplace', 'All checks', 'Dash Alpha', 'Dash Beta'):
             self.assertIn(needle, page, needle)
         self.assertGreaterEqual(page.count('<svg'), 8, 'the charts are drawn, in two layouts each')
         self.assertIn('<h2>Results dashboard</h2>' if False else 'Results dashboard', page)
@@ -66,7 +66,8 @@ class Dashboard(DashboardCase):
         self.assertGreaterEqual(int(tiles['Analytics']['value'].replace(',', '')), 5)
         for label in ('Workplaces', 'Comments analysed', 'Vibe Check', 'Health score', 'Sentiment'):
             self.assertIn(label, tiles)
-        self.assertIn('Sentiment over time', page)
+        self.assertIn('<h2>Sentiment</h2>', page)
+        self.assertLess(page.index('id="compare"'), page.index('<h2>Health score</h2>'), 'the overview comes first')
         self.assertIn('class="dash-filter"', page)
         self.assertNotIn('class="dash-filter" open', page, 'the filters start folded')
         # every check is a row of the table behind the charts
