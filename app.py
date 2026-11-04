@@ -577,9 +577,10 @@ def home_view(aid):
     if not ctx or not ctx['has_results']:
         return None
     ms, vibe = ctx.get('measures'), ctx['vibe'] if ctx['vibe'] and ctx['vibe'].get('status') == 'ok' else None
-    view = {'ctx': ctx, 'vibe': None, 'health': None, 'sentiment': None, 'modules': [], 'alerts': 0, 'badges': 0}
+    view = {'ctx': ctx, 'vibe': None, 'health': None, 'sentiment': None, 'modules': [], 'alerts': 0, 'badges': 0, 'flagged': 0, 'read': 0, 'sources': 0, 'model': ctx['a']['model_used'] or ''}
     if vibe:
         pct = (vibe.get('sentiment') or {}).get('pct') or {}
+        view['flagged'], view['read'], view['sources'] = len(vibe.get('flagged') or []), vibe.get('analyzed_n') or 0, len(vibe.get('sources') or [])
         view['vibe'] = {'percent': round(vibe['score'] * 10), 'label': vibe.get('label', ''), 'score': vibe['score']}
         view['sentiment'] = {'friendly': pct.get('friendly', 0), 'neutral': pct.get('neutral', 0), 'unfriendly': pct.get('unfriendly', 0)}
     if ms:

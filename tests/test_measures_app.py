@@ -3060,7 +3060,7 @@ class PageStructure(MeasuresCase):
         text = Page(main).human
         vibe = self.store.latest_vibe(aid)
         self.assertIn(f'Vibe Check {round(vibe["score"] * 10)} percent', main)
-        for needle in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Badges & Alerts', 'Ask Felixa'):
+        for needle in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Latest analysis', 'Flagged messages'):
             self.assertIn(needle, text, needle)
         for needle in ('High priority', 'Medium priority', 'Good news', 'Earned', 'Cools fast', 'No serious flags', 'The mood heated up fast', 'thing to look at'):
             self.assertNotIn(needle, text, needle)
