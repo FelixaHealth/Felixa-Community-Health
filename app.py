@@ -574,8 +574,12 @@ def sparkline(values, width=170, height=56):
 def home_view(aid):
     """What the Home page shows for one workplace: the Vibe Check, the health score, the sentiment, the four modules, and how many things want a look. None until it has results."""
     ctx = report.build(aid)
-    if not ctx or not ctx['has_results']:
+    if not ctx:
         return None
+    if not ctx['has_results']:                    # the same cards, empty, until the first analysis has run
+        return {'ctx': {'answers': [], 'families': None}, 'kpi': {}, 'vibe': None, 'health': None, 'sentiment': None, 'alerts': 0, 'badges': 0, 'flagged': 0, 'read': 0, 'sources': 0,
+                'model': '', 'empty': True, 'modules': [{'key': k, 'name': n, 'value': None, 'chip': '', 'tone': 'none', 'line': '', 'area': ''}
+                                                         for k, n in (('escalation', 'Escalation'), ('conflict', 'Conflict'), ('empathy', 'Empathy'), ('passive', 'Passive-aggressive'))]}
     ms, vibe = ctx.get('measures'), ctx['vibe'] if ctx['vibe'] and ctx['vibe'].get('status') == 'ok' else None
     kp = {}
     if ctx.get('measures'):

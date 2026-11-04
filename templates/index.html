@@ -9,9 +9,8 @@
 </div></div>
 {% if not cur %}
 <section class="hcard home-empty"><h2>See how people really communicate.</h2><p>Describe your workplace or community once, add messages, and get a clear picture of how healthy the conversation is and what to try next.</p><a class="btn-gold" href="/new">{{ icon('plus') }}<span>Create your first workplace</span></a></section>
-{% elif not home %}
-<section class="hcard home-empty"><h2>{{ cur.name }} has no results yet.</h2><p>Add messages and run your first analysis. Vibe Check, the health score and the four modules appear here.</p><a class="btn-gold" href="{{ ('/analysis/%d/analytics'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id)) }}">{{ icon('plus') }}<span>Run your first analysis</span></a></section>
 {% else %}
 {% set rid = cur.id %}{% include "_result_cards.html" %}
+{% if home.empty %}<section class="hcard home-cta"><div><h2>{{ cur.name }} has no results yet.</h2><p>Add messages and run your first analysis. Vibe Check, the health score and the four modules fill in here.</p></div><a class="btn-gold" href="{{ '/analysis/%d/analytics'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id) }}">{{ icon('plus') }}<span>Run your first analysis</span></a></section>{% endif %}
 {% endif %}
 </div>{% endblock %}
