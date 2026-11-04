@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — {{ a.person_name }} results{% endblock %}
 {% block content %}
-<div class="shell two">{% include "_rail.html" %}<div class="stage">
+<div class="shell"><div class="stage">
 {{ assets|safe }}
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Results</div><h1>{{ a.person_name }}</h1>
 <div class="chips">{% for f in facts %}<span class="chip">{{ f }}</span>{% endfor %}</div>{% if period_text %}<p class="small-note">{{ period_text }}</p>{% endif %}</div>

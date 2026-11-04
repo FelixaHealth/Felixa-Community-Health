@@ -22,9 +22,8 @@
 </div>
 <div class="home-row r4">{% for m in home.modules %}<a class="hcard module tone-{{ m.tone }}" href="/analysis/{{ cur.id }}/results#tab-track"><div class="hc-top"><span class="hc-ic">{{ icon({'escalation':'trend','conflict':'users','empathy':'heart','passive':'chat'}[m.key]) }}</span><h2>{{ m.name }}</h2></div>
 <div class="mod-body"><svg class="spark" viewBox="0 0 170 56" preserveAspectRatio="none" aria-hidden="true">{% if m.line %}<path class="sp-area" d="{{ m.area }}"/><polyline class="sp-line" points="{{ m.line }}"/>{% endif %}</svg><div class="mod-val"><strong>{{ m.value }}%</strong>{{ chip(m) }}</div></div></a>{% endfor %}</div>
-<div class="home-row r2">
+<div class="home-row r1">
 <a class="bar-dark" href="/analysis/{{ cur.id }}/results#tab-act"><span class="bd-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
-<a class="bar-light" href="/ask"><span class="bl-ic">{{ icon('chat') }}</span><strong>Ask Felixa</strong><span class="bd-go">{{ icon('chevron') }}</span></a>
 </div>
 {% endif %}
 </div>{% endblock %}

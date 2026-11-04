@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — {{ title }}{% endblock %}
 {% block content %}
-<div class="shell two">{% include "_rail.html" %}<div class="stage">
+<div class="shell"><div class="stage">
 {{ assets|safe }}
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/workspace">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/results#tab-understand">Results</a>{% if parent %}<span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/category/{{ parent }}">{{ parent }}</a>{% endif %}<span aria-hidden="true">/</span><span aria-current="page">{{ title }}</span></nav>
 <section class="results-head"><div class="rh-main"><div class="eyebrow">{{ kind }}</div><h1>{{ title }}</h1><p class="lead">{{ blurb }}</p></div>

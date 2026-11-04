@@ -746,3 +746,27 @@ body.app{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh
 .fl-tag{display:flex;gap:8px;align-items:flex-start}.fl-sev{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:700;font-size:13px;background:#fdf0c9;color:#8a5a08}.lv-serious .fl-sev{background:#fdeceb;color:#a1261b}.lv-mild .fl-sev{background:#e8f4ea;color:#1c6b3a}
 .pager{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:16px}@media(max-width:700px){.fl{grid-template-columns:1fr}.fl small{grid-column:1}}
 .fl-link{margin-top:14px}
+.home-row.r1{grid-template-columns:1fr}
+
+/* ---- Slick and elegant: one calm layer over everything above. Quiet cards, sans headings, one deep-green action, gold only as the accent. ---- */
+body{font-size:16px;line-height:1.6}
+.landing h1,.question-card h1,.results-head h1,.report-content h1,.panel h2,.welcome h2,.setup h2,.wp-list h2,.mini-h,.help-head h2,.help-body h3,.hcard h2,.hcard h3{font-family:inherit;letter-spacing:-.02em;font-weight:700}
+.results-head h1,.act-title h2{font-size:clamp(28px,2.6vw,36px);line-height:1.15;color:var(--forest,#0f4a2e)}
+.panel p,.lead,.results-head p{font-size:16px;line-height:1.65}.panel h2{font-size:22px}.panel h3{font-size:18px}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;font-weight:700;color:#a8780f}
+.panel,.hcard,.welcome{background:#fffefb;border:1px solid #efe7d6;border-radius:20px;box-shadow:0 1px 2px rgba(40,30,10,.04),0 14px 30px -18px rgba(40,30,10,.16);padding:26px 28px}
+.new-panel{background:#fffefb}
+.privacy-bar{background:transparent;border:0;box-shadow:none;padding:2px 4px;margin:4px 32px 0;color:var(--muted);font-size:13px}.privacy-bar .ic{width:15px;height:15px}.privacy-bar strong{font-weight:600}
+.btn{border-radius:12px;min-height:42px;font-weight:600;box-shadow:none;background:#fffefb;border:1px solid #e3d8c2;color:var(--forest,#0f4a2e)}.btn:hover{background:#f6f0e2}
+.btn.primary,.btn.primary.large{background:#0f4a2e;border-color:#0f4a2e;color:#fff;box-shadow:0 8px 18px -10px rgba(15,74,46,.7)}.btn.primary:hover{background:#0c3b25}
+.btn.quiet{background:transparent;border-color:transparent}.btn.quiet:hover{background:rgba(15,74,46,.07)}
+.sidebar .side-link.on{background:rgba(255,255,255,.13);background-image:none;box-shadow:inset 3px 0 0 #f6c453;color:#fff}
+.tabs-bar,.results-tabs{background:#fffefb;border:1px solid #efe7d6;box-shadow:none;border-radius:16px}
+.tab.on,.tabs-bar .on,[role="tab"][aria-selected="true"]{background:#0f4a2e!important;color:#fff!important;border-color:#0f4a2e!important;box-shadow:none!important}
+.chip{background:#f6efdf;border:0;font-weight:600;color:#6d4a07}
+.help-fab{box-shadow:0 14px 28px -12px rgba(160,100,10,.55)}
+.stage{max-width:1180px}
+.tabs{background:#fffefb;border:1px solid #efe7d6;box-shadow:none;border-radius:16px;padding:6px}.tabs .tab{border-radius:12px;border:0;background:transparent;color:var(--muted);box-shadow:none;font-weight:600}.tabs .tab.on{background:#0f4a2e;color:#fff}
+.stage{max-width:none}
+:root{--serif:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.vc-kpi strong,.dash-kpi strong,.hc-big strong{font-family:inherit;font-weight:700;letter-spacing:-.02em}
