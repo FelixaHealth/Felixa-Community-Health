@@ -1218,14 +1218,30 @@ async def analytics_run(request: Request, aid: AnalysisId):
         return redirect(here, 'Choose how sensitive the check should be.')
     fields['vibe_sensitivity'] = sens
     vol = str(form.get('volume', ''))
-    if vol == 'all':
+    typed = str(form.get('volume_custom', '')).strip().replace(',', '')
+    if typed:
+        top = config.max_units()
+        if not (typed.isdigit() and workplace.VOLUME_MIN <= int(typed) <= top):
+            return redirect(here, f'Type a whole number of messages from {workplace.VOLUME_MIN} to {top:,}.')
+        fields['check_volume'] = int(typed)
+    elif vol == 'all':
         fields['check_volume'] = 0
     elif vol.isdigit() and workplace.VOLUME_MIN <= int(vol) <= config.max_units():
         fields['check_volume'] = int(vol)
     else:
         return redirect(here, 'Choose how many messages to read.')
     period = str(form.get('period', 'all'))
-    if period == 'all':
+    day_from, day_to = str(form.get('period_start', '')).strip(), str(form.get('period_end', '')).strip()
+    if day_from or day_to:
+        try:
+            d1, d2 = store.parse_day(day_from), store.parse_day(day_to)
+        except ValueError:
+            return redirect(here, 'Enter the start and the end as dates, or leave them blank.')
+        start, end = utc_bound(d1, None, 0, False), utc_bound(d2, None, 0, True)
+        if start and end and store.period_of({'period_start': start, 'period_end': end}) == (None, None):
+            return redirect(here, 'The end cannot be before the start.')
+        fields.update(period_start=start, period_end=end, period_tz=0)
+    elif period == 'all':
         fields.update(period_start='', period_end='', period_tz=None)
     elif period != 'custom':
         chosen = next((delta for key, _l, delta in PRESETS if key == period), None)
@@ -1262,6 +1278,8 @@ def check_get(request: Request, aid: AnalysisId, step: int):
     a = store.get_analysis(aid)
     if not a:
         return not_found()
+    if step == 1:                                                       # adding messages is part of the Analytics page now
+        return redirect(f'/analysis/{aid}/analytics')
     if not 1 <= step <= CHECK_LAST:
         raise PageError(404, 'Step not found', f'There is no step {step}. A new check has steps 1 to {CHECK_LAST}.', back=(f'/analysis/{aid}/check/1', 'Go to step 1'))
     return render(request, 'check.html', **check_context(a, step))

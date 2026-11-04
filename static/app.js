@@ -145,3 +145,13 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
     ['dragleave', 'drop'].forEach((t) => row.addEventListener(t, () => row.classList.remove('drag')));
   });
 })();
+
+
+// Phone: the menu button slides the side menu in; the dark area, a link or Escape closes it.
+(() => {
+  const btn = document.querySelector('[data-menu]'); if (!btn) return;
+  const set = (open) => { document.body.classList.toggle('menu-open', open); btn.setAttribute('aria-expanded', String(open)); };
+  btn.addEventListener('click', () => set(!document.body.classList.contains('menu-open')));
+  document.querySelectorAll('[data-menu-close], .sidebar a').forEach((el) => el.addEventListener('click', () => set(false)));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
+})();

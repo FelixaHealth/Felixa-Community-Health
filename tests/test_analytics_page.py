@@ -52,6 +52,17 @@ class Analytics(AppCase):
         self.assertEqual(r.status_code, 303)
         self.assertEqual(self.client.post('/analysis/9999/source/remove', data={'label': 'x', 'kind': 'UPLOAD'}).status_code, 404)
 
+    def test_a_typed_number_and_typed_dates_are_used_and_checked(self):
+        aid = self.with_chat()
+        self.run_job(aid, path='analytics', incognito='off', period='all', volume='all', volume_custom='50', period_start='2026-03-01', period_end='2026-03-10',
+                     vibe_sensitivity='medium', engine=rules.ENGINE)
+        a = self.store.get_analysis(aid)
+        self.assertEqual(a['check_volume'], 50)
+        self.assertTrue(a['period_start'].startswith('2026-03-01') and a['period_end'].startswith('2026-03-10'))
+        for data in ({'volume_custom': '2'}, {'volume_custom': 'many'}, {'period_start': '2026-03-10', 'period_end': '2026-03-01'}, {'period_start': 'soon'}):
+            r = self.client.post(f'/analysis/{aid}/analytics', data={'vibe_sensitivity': 'low', 'volume': 'all', 'engine': rules.ENGINE, **data})
+            self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/analytics'), data)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,7 +7,8 @@
 </head><body class="app">
 <a class="skip" href="#main">Skip to content</a>
 {% set path = request.url.path %}
-<aside class="sidebar no-print" aria-label="Main">
+<div class="menu-scrim no-print" data-menu-close></div>
+<aside class="sidebar no-print" id="side" aria-label="Main">
 <a class="side-logo" href="/"><img src="/static/logo_side.png" alt="Felixa Community Health" width="150" height="144"></a>
 <nav class="side-nav" aria-label="Site">
 <a class="side-link{% if path == '/' %} on{% endif %}" href="/"{% if path == '/' %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Home</span></a>
@@ -21,13 +22,13 @@
 </aside>
 <div class="main-col">
 <header class="appbar no-print">
+<button class="menu-btn mob-only" type="button" data-menu aria-label="Open the menu" aria-expanded="false" aria-controls="side">{{ icon('menu') }}</button>
 {% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label>{{ icon('building') }}<span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>
 {% if not cur %}<option value="" disabled selected>Choose a workplace…</option>{% endif %}
 {% for w in top_workplaces %}<option value="{{ w.id }}"{% if cur and cur.id == w.id %} selected{% endif %}>{{ w.name }}</option>{% endfor %}
 <option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>
 <a class="icon-pill add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
 <form class="search" method="get" action="/search" role="search"><label>{{ icon('search') }}<span class="sr-only">Search</span><input type="search" name="q" placeholder="Search analyses, messages or reports…" autocomplete="off" value="{{ search_q or '' }}"></label></form>
-<a class="icon-pill mob-only" href="/settings" title="Settings" aria-label="Settings">{{ icon('gear') }}</a>
 <a class="icon-pill bell" href="{{ ('/analysis/%d/results/alerts'|format(cur.id)) if cur and cur.has_results else '/' }}" title="Badges and alerts" aria-label="Badges and alerts">{{ icon('bell') }}{% if alert_count %}<i class="dot" aria-hidden="true"></i>{% endif %}</a>
 {% if top_workplaces %}<a class="dash-link" href="/dashboard"{% if request.url.path == '/dashboard' %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>{% endif %}
 </header>
