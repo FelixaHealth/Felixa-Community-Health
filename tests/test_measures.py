@@ -3136,7 +3136,7 @@ class BuildTests(unittest.TestCase):
 
     def test_the_context_has_every_block(self):
         ctx = build_with(lively(neutral(96)))
-        self.assertEqual(sorted(ctx), sorted(['m', 'cards', 'health', 'alerts', 'alert_counts', 'notes', 'badges', 'badges_earned', 'badge_note', 'trail', 'since', 'comparison',
+        self.assertEqual(sorted(ctx), sorted(['m', 'cards', 'health', 'alerts', 'alert_counts', 'alert_catalog', 'notes', 'badges', 'badges_earned', 'badge_note', 'trail', 'since', 'comparison',
                                               'record', 'basis_text', 'chart_key', 'caveats', 'texts', 'all_clear', 'members']))
         self.assertIsInstance(ctx['chart_key'], str)
         self.assertEqual(len(ctx['cards']), 4)
