@@ -2,8 +2,8 @@
 {% block content %}
 <div class="shell"><div class="stage results-hub">
 {{ assets|safe }}
-{% include "_rnav.html" %}
+{% if rnav %}{% include "_rnav.html" %}{% endif %}
 {% if home %}{% include "_result_cards.html" %}
 {% endif %}
-<p class="hub-downloads">Download <a href="/analysis/{{ aid }}/report.pdf">PDF</a> · <a href="/analysis/{{ aid }}/export">CSV</a> · <a href="/analysis/{{ aid }}/report">Full report</a></p>
+{% if home and home.empty %}<section class="hcard home-cta"><div><h2>{{ a.person_name or 'This workplace' }} has no results yet.</h2><p>Add messages and run your first analysis. Vibe Check, the health score and the four modules fill in here.</p></div><a class="btn-gold" href="/analysis/{{ aid }}/analytics">{{ icon('plus') }}<span>Run your first analysis</span></a></section>{% else %}<p class="hub-downloads">Download <a href="/analysis/{{ aid }}/report.pdf">PDF</a> · <a href="/analysis/{{ aid }}/export">CSV</a> · <a href="/analysis/{{ aid }}/report">Full report</a></p>{% endif %}
 </div></div>{% endblock %}

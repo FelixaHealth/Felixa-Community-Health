@@ -73,6 +73,19 @@ class Analytics(AppCase):
         r = self.client.post(f'/analysis/{aid}/source/remove', data={'back': 'workspace', 'label': first['source_label'], 'kind': first['source_type']})
         self.assertEqual(r.headers['location'], f'/analysis/{aid}/workspace')
 
+    def test_results_opens_results_even_before_the_first_analysis(self):
+        aid = self.with_chat()
+        page = self.client.get(f'/analysis/{aid}/results')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('has no results yet', page.text)
+        self.assertIn(f'href="/analysis/{aid}/analytics"', page.text)
+        self.assertIn(f'href="/analysis/{aid}/results"', page.text.split('</aside>', 1)[0], 'the menu leads to the results, not the workplace')
+        self.run_job(aid, path='analytics', incognito='off', period='all', volume='all', vibe_sensitivity='medium', engine=rules.ENGINE)
+        done = self.client.get(f'/analysis/{aid}/results')
+        self.assertEqual(done.status_code, 200)
+        self.assertNotIn('has no results yet', done.text)
+        self.assertIn('Download', done.text)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1758,8 +1758,13 @@ def results_context(aid, what='page of results'):
 @app.get('/analysis/{aid}/results', response_class=HTMLResponse)
 def results_page(request: Request, aid: AnalysisId):
     """The results of a workplace: the headline of each kind of result as a card. Each card opens its own screen."""
-    ctx = results_context(aid)
+    a = store.get_analysis(aid)
+    if not a or a['status'] == 'draft':
+        return not_found()
     home = home_view(aid)
+    if home and home.get('empty'):                 # nothing analysed yet: the same cards, empty, and the way to the first analysis
+        return render(request, 'results.html', home=home, rid=aid, aid=aid, a=a, rnav=[], assets='', flagged_n=0, answers_n=0, units_n=store.count_units(aid))
+    ctx = results_context(aid)
     flagged_n = len((ctx['vibe'] or {}).get('flagged') or []) if ctx.get('vibe') and ctx['vibe'].get('status') == 'ok' else 0
     return render(request, 'results.html', home=home, rid=aid, flagged_n=flagged_n, answers_n=len(ctx.get('answers') or []), rnav=results_nav(aid, ctx, 'overview'), **ctx)
 
