@@ -1002,3 +1002,12 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .an-ev input:focus-visible+span{outline:3px solid #a8780f;outline-offset:2px}
 @media(max-width:900px){.an-evals{padding-left:0;grid-template-columns:1fr 1fr}}
 .rnav>.rn-more{margin:0!important;align-self:stretch}.rn-more>summary{height:100%;box-sizing:border-box}
+
+/* Results dashboard: folded filters, soft stat tiles */
+.dash-filter{margin:0 0 14px}.dash-filter>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;padding:9px 16px;border:1px solid #e3d8c0;border-radius:999px;background:#fffefb;font-weight:650;font-size:14.5px;color:#0f4a2e}
+.dash-filter>summary::-webkit-details-marker{display:none}.dash-filter>summary small{font-size:13px;color:var(--muted);font-weight:500}
+.dash-filter[open]>summary{margin-bottom:12px;background:#f1f7f2;border-color:#0f4a2e}
+.dash-kpis{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))!important;gap:12px!important}
+.dash-kpi{border-radius:18px;padding:14px 16px!important}.dash-kpi strong{font-size:34px!important;color:#0f4a2e}
+.dash-legend i.pos{background:#1f66bf}.dash-legend i.neu{background:#898781}.dash-legend i.neg{background:#c93838}.dash-legend i.forest{background:#0b4a2f}
+.dash-stack .dash-grid{gap:18px}

@@ -12,7 +12,7 @@ import html as _html
 import measures
 import store
 from vibe_check import data_table, figure
-from vibe_check.charts import Scene, nice_ticks
+from vibe_check.charts import Scene, nice_ticks, sentiment_bar
 from vibe_check.common import long_date, parse_ts, short_date
 
 RANGES = (('30', 'Last 30 days', 30), ('90', 'Last 90 days', 90), ('365', 'Last year', 365), ('all', 'All time', None))
@@ -263,6 +263,34 @@ def build(args, today=None) -> dict:
     figs['compare_empathy'] = figure(lambda w: hbars([(r['workplace'], r['empathy'], roles.get(r['workplace'], 'cat1')) for r in latest], title='Care per 100',
                                                      desc='Messages per 100 that showed care in the latest check of each workplace.', places=1, width=w)) if len(latest) > 1 else ''
 
+    # all workplaces together, by week: the average health score and the share of friendly, neutral and unfriendly messages
+    week = lambda r: r['when'].date() - _dt.timedelta(days=r['when'].weekday())      # noqa: E731
+    weeks = sorted({week(r) for r in rows})
+    noon = lambda d: _dt.datetime.combine(d, _dt.time(12))      # noqa: E731
+    if multiple:
+        pts = []
+        for start in weeks:
+            same = [r for r in rows if week(r) == start and r['health'] is not None]
+            if same:
+                pts.append((noon(start), sum(r['health'] * r['n'] for r in same) / sum(r['n'] for r in same)))
+        if pts:
+            health = [{'name': 'All workplaces', 'role': 'forest', 'points': pts}] + health[:MAX_LINES - 1]
+            figs['health'] = figure(lambda w: lines(health, title='Health score', desc='Health score over time out of 100: the average of all workplaces and one line for each workplace.',
+                                                    y_max=100, ticks=[0, 25, 50, 75, 100], width=w))
+    shares = {'friendly': [], 'neutral': [], 'unfriendly': []}
+    for start in weeks:
+        same = [r for r in rows if week(r) == start and r['friendly'] is not None]
+        total = sum((r['friendly'] or 0) + (r['neutral'] or 0) + (r['unfriendly'] or 0) for r in same)
+        if total:
+            for k in shares:
+                shares[k].append((noon(start), 100.0 * sum(r[k] or 0 for r in same) / total))
+    sent_series = [{'name': label, 'role': role, 'points': shares[k]} for k, label, role in (('friendly', 'Friendly', 'pos'), ('neutral', 'Neutral', 'neu'), ('unfriendly', 'Unfriendly', 'neg')) if shares[k]]
+    figs['sent_time'] = figure(lambda w: lines(sent_series, title='Share of messages', desc='Share of friendly, neutral and unfriendly messages at each point in time, in percent.',
+                                              y_max=100, ticks=[0, 25, 50, 75, 100], unit='%', width=w)) if sent_series else ''
+    mix = [sum((r[k] or 0) for r in latest) for k in ('friendly', 'neutral', 'unfriendly')]
+    figs['sent_mix'] = figure(lambda w: sentiment_bar(*mix, width=w)) if sum(mix) else ''
+    sent_total = sum(mix)
+
     checks = list(reversed(rows))[:MAX_ROWS]
     check_rows = [[long_date(r['when'].isoformat()), r['workplace'], r['platform'] or '–', f'{r["n"]:,}', _cell(r['members']), _cell(r['health']), _cell(r['vibe'], 1),
                    _cell(r['conflict'], 1), _cell(r['empathy'], 1), _cell(r['passive'], 1), _cell(r['heated'], 1), _cell(r['episodes'])] for r in checks]
@@ -278,12 +306,14 @@ def build(args, today=None) -> dict:
         if len(mine) > 1:
             first_last = mine[-1]['health'] - mine[0]['health']
     members_now = sum(r['members'] or 0 for r in latest) if any(r['members'] for r in latest) else None
+    friendly_pct = round(100.0 * mix[0] / sent_total) if sent_total else None
     kpis = [{'label': 'Workplaces', 'value': f'{len({r["aid"] for r in rows}):,}', 'sub': 'in this view'},
-            {'label': 'Checks', 'value': f'{len(rows):,}', 'sub': f'{sum(r["n"] for r in rows):,} messages rated'},
-            {'label': 'Health score', 'value': _cell(health_now) if health_now is None else f'{round(health_now)}', 'sub': ('average of the latest checks' if len(latest) > 1 else 'latest check')
-             + ('' if first_last is None else f', {"up" if first_last > 0 else "down" if first_last < 0 else "no change"}{"" if first_last == 0 else f" {abs(round(first_last))}"} since the first'), 'band': measures.health_status(health_now) if health_now is not None else ''},
+            {'label': 'Analytics', 'value': f'{len(rows):,}', 'sub': 'checks run'},
+            {'label': 'Comments analysed', 'value': f'{sum(r["n"] for r in rows):,}', 'sub': 'messages rated'},
             {'label': 'Vibe Check', 'value': '–' if vibe_now is None else f'{vibe_now:.1f}', 'sub': 'out of 10, latest checks'},
-            {'label': 'Members', 'value': '–' if members_now is None else f'{members_now:,}', 'sub': 'across the latest checks'}]
+            {'label': 'Health score', 'value': '–' if health_now is None else f'{round(health_now)}', 'sub': ('average of the latest checks' if len(latest) > 1 else 'latest check')
+             + ('' if first_last is None else f', {"up" if first_last > 0 else "down" if first_last < 0 else "no change"}{"" if first_last == 0 else f" {abs(round(first_last))}"} since the first'), 'band': measures.health_status(health_now) if health_now is not None else ''},
+            {'label': 'Sentiment', 'value': '–' if friendly_pct is None else f'{friendly_pct}%', 'sub': 'of messages read as friendly'}]
 
     latest_rows = [[r['workplace'], r['platform'] or '–', r['kind'] or '–', long_date(r['when'].isoformat()), f'{r["n"]:,}', _cell(r['members']), _cell(r['health']),
                     _cell(r['vibe'], 1), _cell(r['conflict'], 1), _cell(r['empathy'], 1), _cell(r['heated'], 1)] for r in latest]

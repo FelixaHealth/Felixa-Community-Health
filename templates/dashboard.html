@@ -3,23 +3,27 @@
 <div class="shell"><div class="stage vc">
 {{ assets|safe }}
 <section class="dash-head"><div class="eyebrow">Results</div><h1>Results dashboard</h1>
-<p class="lead">Every check of every workplace in one place. Choose a workplace, a kind of community, a platform or a period to switch the view.</p></section>
+<p class="lead">All your workplaces together: how healthy they are, how that changes over time, and how friendly the conversation feels.</p></section>
 {% if empty %}<section class="panel dash-empty"><h2>No results yet</h2><p>Run your first analytics in a workplace, and its numbers appear here. Each later check adds a point to the lines.</p>{% if top_workplaces %}<p><a class="btn primary" href="/analysis/{{ top_workplaces[0].id }}/workspace">{{ icon('plus') }} Open {{ top_workplaces[0].name }}</a></p>{% else %}<p><a class="btn primary" href="/new">{{ icon('plus') }} Create a workplace</a></p>{% endif %}</section>
 {% else %}
-<section class="panel"><form method="get" action="/dashboard" class="dash-form" id="dash-form"><div class="dash-filters">
+<details class="dash-filter"><summary><span>Filters</span><small>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}Active{% else %}All workplaces · all time{% endif %}</small></summary><section class="panel"><form method="get" action="/dashboard" class="dash-form" id="dash-form"><div class="dash-filters">
 <label class="field">Workplace<select name="workplace" data-auto><option value="">All workplaces</option>{% for aid, name in f.workplaces %}<option value="{{ aid }}"{% if f.workplace == aid|string %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
 <label class="field">Kind of community<select name="kind" data-auto><option value="">All kinds</option>{% for k in f.kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
 <label class="field">Platform<select name="platform" data-auto><option value="">All platforms</option>{% for p in f.platforms %}<option value="{{ p }}"{% if f.platform == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
 <label class="field">From<input type="date" name="from" value="{{ f['from'] }}"></label>
 <label class="field">To<input type="date" name="to" value="{{ f['to'] }}"></label></div>
-<div class="dash-ranges" role="group" aria-label="Period">{% for key, label, days in ranges %}<button class="chip-btn{% if f.range == key %} on{% endif %}" name="range" value="{{ key }}" type="submit">{{ label }}</button>{% endfor %}<button class="btn" type="submit">{{ icon('check') }} Apply dates</button>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}<a class="btn quiet" href="/dashboard">Clear filters</a>{% endif %}</div></form></section>
+<div class="dash-ranges" role="group" aria-label="Period">{% for key, label, days in ranges %}<button class="chip-btn{% if f.range == key %} on{% endif %}" name="range" value="{{ key }}" type="submit">{{ label }}</button>{% endfor %}<button class="btn" type="submit">{{ icon('check') }} Apply dates</button>{% if f.workplace or f.kind or f.platform or f.range != 'all' %}<a class="btn quiet" href="/dashboard">Clear filters</a>{% endif %}</div></form></section></details>
 {% if none_in_view %}<section class="panel dash-empty"><h2>Nothing in this view</h2><p>No check matches these filters. Widen the period or choose All workplaces.</p></section>
 {% else %}
 <div class="dash-kpis">{% for k in kpis %}<div class="dash-kpi"><small>{{ k.label }}</small><strong>{{ k.value }}</strong><span>{{ k.sub }}{% if k.band %} · {{ k.band }}{% endif %}</span></div>{% endfor %}</div>
 {% if legend %}<ul class="dash-legend" aria-label="Workplaces">{% for name, role in legend %}<li><i class="{{ role }}"></i>{{ name }}</li>{% endfor %}</ul>{% endif %}
 <div class="dash-stack">
-{% if figs.health %}<section class="dash-card"><h2>Health score over time</h2><p class="small-note">One number from 0 to 100 that adds up all 13 tones. 50 is neutral and higher is warmer.</p>{{ figs.health|safe }}</section>{% endif %}
+{% if figs.health %}<section class="dash-card"><h2>Health score over time</h2><p class="small-note">One number from 0 to 100. 50 is neutral and higher is warmer.{% if legend|length > 1 %} The thick line is the average of all workplaces.{% endif %}</p>{{ figs.health|safe }}</section>{% endif %}
+<div class="dash-grid">
+{% if figs.sent_mix %}<section class="dash-card"><h2>Sentiment</h2><p class="small-note">How the messages read in the latest check of each workplace.</p>{{ figs.sent_mix|safe }}</section>{% endif %}
 {% if figs.vibe %}<section class="dash-card"><h2>Vibe Check over time</h2><p class="small-note">The friendliness score out of 10 at each check.</p>{{ figs.vibe|safe }}</section>{% endif %}
+</div>
+{% if figs.sent_time %}<section class="dash-card"><h2>Sentiment over time</h2><p class="small-note">The share of friendly, neutral and unfriendly messages, week by week, across all workplaces in this view.</p><ul class="dash-legend"><li><i class="pos"></i>Friendly</li><li><i class="neu"></i>Neutral</li><li><i class="neg"></i>Unfriendly</li></ul>{{ figs.sent_time|safe }}</section>{% endif %}
 {% if figs.behaviour %}<section class="dash-card"><h2>How people spoke</h2><p class="small-note">Messages per 100 that were openly hostile, caring, sarcastic or heated{% if not f.workplace and not detail %}, averaged across the workplaces in this view{% endif %}.</p><ul class="dash-legend">{% for key, label, role in behaviour_keys %}<li><i class="{{ role }}"></i>{{ label }}</li>{% endfor %}</ul>{{ figs.behaviour|safe }}</section>{% endif %}
 {% if figs.members %}<section class="dash-card"><h2>Members over time</h2><p class="small-note">The number of members each check was made with.</p>{{ figs.members|safe }}</section>{% endif %}
 </div>

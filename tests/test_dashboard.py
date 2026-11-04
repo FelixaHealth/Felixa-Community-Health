@@ -63,8 +63,12 @@ class Dashboard(DashboardCase):
         ctx = dashboard.build({}, TODAY)
         self.assertEqual(ctx['checks_n'] >= 5, True)
         tiles = {k['label']: k for k in ctx['kpis']}
-        self.assertGreaterEqual(int(tiles['Checks']['value'].replace(',', '')), 5)
-        self.assertEqual(tiles['Members']['value'] != '–', True)
+        self.assertGreaterEqual(int(tiles['Analytics']['value'].replace(',', '')), 5)
+        for label in ('Workplaces', 'Comments analysed', 'Vibe Check', 'Health score', 'Sentiment'):
+            self.assertIn(label, tiles)
+        self.assertIn('Sentiment over time', page)
+        self.assertIn('class="dash-filter"', page)
+        self.assertNotIn('class="dash-filter" open', page, 'the filters start folded')
         # every check is a row of the table behind the charts
         rows = [r for r in dashboard.all_checks() if r['aid'] in (a, b)]
         self.assertEqual(len(rows), 5)
