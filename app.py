@@ -1158,6 +1158,22 @@ def check_new(aid: AnalysisId):
     return redirect(f'/analysis/{aid}/analytics')
 
 
+@app.post('/analysis/{aid}/source/remove')
+async def source_remove(aid: AnalysisId, request: Request):
+    """Removes one added file, recording or pasted text from the analysis."""
+    if not store.get_analysis(aid):
+        return not_found()
+    where = f'/analysis/{aid}/analytics'
+    if store.active_job(aid):
+        return redirect(where, 'Wait for the current task to finish before removing messages.')
+    form = await request.form()
+    label, kind = str(form.get('label', '')), str(form.get('kind', ''))
+    n = store.remove_source(aid, label, kind)
+    if not n:
+        return redirect(where, 'That source was not found. It may already be removed.')
+    return redirect(where, f'Removed {label}: {n:,} message{"" if n == 1 else "s"}. The results made from it were cleared; run the analysis again.')
+
+
 @app.get('/analysis/{aid}/analytics', response_class=HTMLResponse)
 def analytics_page(request: Request, aid: AnalysisId):
     """Setting up a new analysis on one page: the six choices of the check in a column, then Run Analysis."""

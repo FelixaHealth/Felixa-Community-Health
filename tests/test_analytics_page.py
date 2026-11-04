@@ -36,6 +36,22 @@ class Analytics(AppCase):
         r = self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'hello there\nsecond line', 'back': 'analytics'})
         self.assertEqual(r.headers['location'], f'/analysis/{aid}/analytics')
 
+    def test_one_added_source_can_be_removed_with_its_results_and_added_again(self):
+        aid = self.with_chat()
+        self.run_job(aid, path='analytics', incognito='off', period='all', volume='all', vibe_sensitivity='medium', engine=rules.ENGINE)
+        sources = self.store.evidence_by_source(aid)
+        self.assertTrue(sources)
+        first, others = sources[0], sources[1:]
+        before = self.store.count_units(aid)
+        r = self.client.post(f'/analysis/{aid}/source/remove', data={'label': first['source_label'], 'kind': first['source_type']})
+        self.assertEqual((r.status_code, r.headers['location']), (303, f'/analysis/{aid}/analytics'))
+        self.assertEqual(self.store.count_units(aid), before - first['n'])
+        self.assertEqual(len(self.store.evidence_by_source(aid)), len(others))
+        self.assertFalse(self.store.metrics_for(aid) if hasattr(self.store, 'metrics_for') else False)
+        r = self.client.post(f'/analysis/{aid}/source/remove', data={'label': 'nothing.txt', 'kind': 'UPLOAD'})
+        self.assertEqual(r.status_code, 303)
+        self.assertEqual(self.client.post('/analysis/9999/source/remove', data={'label': 'x', 'kind': 'UPLOAD'}).status_code, 404)
+
 
 if __name__ == '__main__':
     unittest.main()

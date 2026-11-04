@@ -455,6 +455,26 @@ def clear_evidence(aid):
     empty_log()
 
 
+def remove_source(aid, label, source_type) -> int:
+    """Takes one uploaded file, pasted text or recording out of the analysis: its messages, and the record of the file, so it can be added again.
+    Every result quotes the messages it was made from, so the results of this check go too (the numbers of earlier checks stay). Returns how many
+    messages were removed; 0 when nothing matched."""
+    with UPLOAD_LOCK, db() as c:
+        ids = [r[0] for r in c.execute('SELECT id FROM communication_units WHERE analysis_id=? AND source_label=? AND source_type=?', (aid, label, source_type))]
+        if not ids:
+            return 0
+        marks = ','.join('?' * len(ids))
+        c.execute(f'DELETE FROM unit_ratings WHERE unit_id IN ({marks})', ids)
+        c.execute(f'DELETE FROM communication_units WHERE id IN ({marks})', ids)
+        c.execute("DELETE FROM sources WHERE analysis_id=? AND label=? AND source_type IN ('raw_csv','upload_units')", (aid, label))
+        for table in ('behavior_metrics', 'findings', 'vibe_runs'):
+            c.execute(f'DELETE FROM {table} WHERE analysis_id=?', (aid,))
+        c.execute("DELETE FROM jobs WHERE analysis_id=? AND status NOT IN ('queued','running')", (aid,))
+    update_analysis(aid, ai_summary=None, ai_recommendations=None, rated_units_total=None, status='ready')
+    empty_log()
+    return len(ids)
+
+
 def search_messages(text, limit=40) -> list:
     """Stored messages that contain `text` (any case), newest workplace first: [{'analysis_id', 'workplace', 'text', 'timestamp'}]."""
     like = '%' + str(text).replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'

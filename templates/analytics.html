@@ -8,17 +8,20 @@
 <span class="an-i">{{ icon('upload') }}</span><div class="an-t"><h2>1. Upload Data</h2><p>Drop files, record or paste. Chats, spreadsheets, Word, PDF, text, subtitles, zip archives and voice recordings.{% if units_n %} <strong>{{ '{:,}'.format(units_n) }}</strong> message{{ '' if units_n == 1 else 's' }} added from {{ evidence|length }} source{{ '' if evidence|length == 1 else 's' }}.{% endif %}</p></div>
 <div class="an-c"><span class="an-btn">{{ icon('folder') }}<span>Upload</span><span class="an-caret">{{ icon('chevron') }}</span></span></div></summary>
 <div class="an-drawer">
+{% if evidence %}<div class="an-added"><h3>Added so far</h3><ul>{% for e in evidence %}<li><span><strong>{{ e.source_label }}</strong><small>{{ '{:,}'.format(e.n) }} message{{ '' if e.n == 1 else 's' }}{% if e.first_ts %} · {{ e.first_ts[:10] }}{% if e.last_ts and e.last_ts[:10] != e.first_ts[:10] %} to {{ e.last_ts[:10] }}{% endif %}{% endif %}</small></span>
+<details class="an-rm"><summary class="btn quiet">{{ icon('trash') }} Remove</summary><form method="post" action="/analysis/{{ a.id }}/source/remove"><input type="hidden" name="label" value="{{ e.source_label }}"><input type="hidden" name="kind" value="{{ e.source_type }}"><p>Removes these messages and clears the results made from them.</p><button class="btn danger-outline">Yes, remove</button></form></details></li>{% endfor %}</ul></div>{% endif %}
+<p class="an-pick">How do you want to add messages?</p>
+<details class="an-method" name="upmethod"><summary>{{ icon('folder') }}<span>Upload files</span><small>Drag and drop or choose</small></summary>
 <form class="an-drop" data-drop method="post" action="/analysis/{{ a.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="back" value="analytics">
-{{ dropzone(title='Drop files here, or click to choose') }}</form>
-<div class="an-two">
+{{ dropzone(title='Drop files here, or click to choose') }}</form></details>
+<details class="an-method" name="upmethod"><summary>{{ icon('mic') }}<span>Transcribe a voice recording</span><small>{% if voice_ok %}Speech-to-text is ready{% else %}Needs faster-whisper{% endif %}</small></summary>
 <form class="an-voicebox" data-drop method="post" action="/analysis/{{ a.id }}/add-voice" enctype="multipart/form-data"><input type="hidden" name="back" value="analytics">
-<h3>{{ icon('mic') }} Transcribe a voice recording</h3>
 <label class="an-btn wide"><span>Choose a recording</span><input type="file" name="files" accept="{{ audio }}" multiple data-submit></label>
-<p>{% if voice_ok %}<strong>Speech-to-text is ready.</strong> The recording is turned into text on this computer (the speech model downloads the first time). MP3, WAV, M4A, OGG, FLAC, MP4.{% else %}Needs the add-on <code>faster-whisper</code>, which is not installed here.{% endif %}</p></form>
+<p>{% if voice_ok %}The recording is turned into text on this computer (the speech model downloads the first time). MP3, WAV, M4A, OGG, FLAC, MP4.{% else %}Needs the add-on <code>faster-whisper</code>, which is not installed here.{% endif %}</p></form></details>
+<details class="an-method" name="upmethod"><summary>{{ icon('file') }}<span>Paste text</span><small>One message per line</small></summary>
 <form class="an-pastebox" method="post" action="/analysis/{{ a.id }}/add-text"><input type="hidden" name="back" value="analytics">
-<h3>{{ icon('file') }} Paste text</h3>
-<textarea name="raw_text" rows="4" placeholder="Paste a chat, comments or replies, one message per line" required></textarea><button class="btn">Add text</button></form>
-</div></div></details>
+<textarea name="raw_text" rows="4" placeholder="Paste a chat, comments or replies, one message per line" required></textarea><button class="btn">Add text</button></form></details>
+</div></details>
 <form class="an-main" method="post" action="/analysis/{{ a.id }}/analytics">
 <div class="an-row"><span class="an-i">{{ icon('lock') }}</span><div class="an-t"><h2>2. Incognito</h2><p>Remove names from the messages before they are read.</p></div>
 <div class="an-c"><div class="an-seg"><label><input type="radio" name="incognito" value="on"{% if incognito %} checked{% endif %}><span>On (Recommended)</span></label><label><input type="radio" name="incognito" value="off"{% if not incognito %} checked{% endif %}><span>Off</span></label></div></div></div>
@@ -35,5 +38,4 @@
 <p class="an-note">{{ price_note }}</p></div>
 <div class="an-actions">{% if busy %}<button class="an-run" disabled>{{ icon('play') }} A check is running…</button>{% else %}<button class="an-run" {% if not units_n %}disabled{% endif %}>{{ icon('play') }} Run Analysis</button>{% endif %}{% if not units_n %}<span class="an-hint">Add messages first.</span>{% endif %}</div>
 </form></div>
-{% if evidence %}<details class="an-added"><summary>Added so far ({{ evidence|length }})</summary><div class="table-wrap"><table><thead><tr><th scope="col">Source</th><th scope="col">Messages</th><th scope="col">Dates</th></tr></thead><tbody>{% for e in evidence %}<tr><td>{{ e.source_label }}</td><td>{{ '{:,}'.format(e.n) }}</td><td>{% if e.first_ts %}{{ e.first_ts[:10] }}{% if e.last_ts and e.last_ts[:10] != e.first_ts[:10] %} – {{ e.last_ts[:10] }}{% endif %}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div></details>{% endif %}
 </div>{% endblock %}
