@@ -484,8 +484,8 @@ def health_tile(m) -> dict:
     tone = 'info' if m['n'] < MIN_VERDICT or is_silent(m) else HEALTH_TONE[status]       # too few messages, or no tone found: a neutral mark
     return {'key': 'health', 'name': 'Health score', 'score': m['health'], 'status': status, 'tone': tone, 'tone_word': TONE_WORDS[tone], 'trend': trend,
             'series': [s['health'] for s in m['stretches']],
-            'caption': "One number that adds up all 13 tones. 50 means neutral and higher is warmer. Vibe Check's score is a separate read of how friendly the chat "
-                       'feels, so the two can differ.'}
+            'caption': 'The health score shows how warm your conversations are, from 0 to 100. Around 50 is neutral, higher means warmer and lower means colder. '
+                       'Vibe Check measures friendliness separately, so the two can differ.'}
 
 
 # ---- numbers kept after each check --------------------------------------------------------------
@@ -895,11 +895,8 @@ CAVEAT_ALERTS = ('Alerts are prompts to look, not findings. A language model rat
                  'A handful of messages can move a figure, so every alert says how many messages stand behind it. They describe wording in part of a chat, never a person or '
                  'a team. High priority and Medium priority show how large a figure is. They are not a ruling on any person. The cut-offs are our own starting choice.')
 CAVEAT_EMPTY = 'No alerts this time. That does not mean nothing happened: the model reads wording only, and a short or sampled check can miss things.'
-CAVEAT_MEASURES = ("These four measures come only from the model's 13 tone ratings. A message counts when the model rated the tone 2 or 3. Conflict counts wording rated "
-                   'aggressive, rude, disrespectful or judgmental. Passive-aggressive counts sarcasm that was not also rated one of those. Friendly banter can count too, '
-                   'and the model cannot know what anyone meant. A heated message is one rated hostile, agitated or sarcastic, so friendly teasing can count. '
-                   'Rare, Some and Often are our own starting cut-offs, not norms. In a small group a part of the chat may come '
-                   "from one or two people. Read it as wording, not as anyone's behaviour.")
+CAVEAT_MEASURES = ('A language model rated each message and people have not checked the ratings, so treat these as prompts to look, not findings. They describe wording, never a person. '
+                   'Friendly teasing can look heated to a model, and Rare, Some and Often are our own starting cut-offs, not norms.')
 CAVEAT_BADGES = ('Badges describe the wording in this check only. They are not awards to people, not a ranking of teams, and not for performance reviews. A language model '
                  'rated the messages and people have not checked the ratings. A badge never cancels an alert. The cut-offs are our own starting choice.')
 CAVEAT_SINCE = 'A change counts only when the two checks were made alike and the difference is bigger than chance would give. It describes wording, not people.'

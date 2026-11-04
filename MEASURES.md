@@ -19,7 +19,7 @@ All the rules, and the wording of the cards, alerts, notes and badges, live in `
 | **Conflict** | How much of the talk is openly hostile. | down |
 | **Empathy** | How much of the talk shows care and understanding. | up |
 | **Passive-aggressive** | Sarcasm without open hostility. Friendly banter can count too. | down |
-| **Health score** | One number that adds up all 13 tones. 50 means neutral and higher is warmer. | up |
+| **Health score** | How warm the conversations are, from 0 to 100. Around 50 is neutral, higher is warmer. | up |
 
 ## How a message is counted
 
