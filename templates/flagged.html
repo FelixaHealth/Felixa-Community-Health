@@ -5,6 +5,15 @@
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Latest Vibe Check</div><h1>Flagged messages</h1>
 <p class="lead">{{ view.total }} message{{ '' if view.total == 1 else 's' }} flagged{% if view.serious %}, {{ view.serious }} serious{% endif %}. Each one is copied from your upload, never paraphrased.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/flagged.csv{% if query %}?{{ query|urlencode }}{% endif %}">{{ icon('file') }} CSV of this list</a><a class="btn quiet" href="/analysis/{{ aid }}/results/alerts">{{ icon('back') }} Back to Badges &amp; Alerts</a></div></section>
+{% if felixa_flags and felixa_flags.rows %}<section class="panel ff-panel"><div class="eyebrow">Flags by tone</div><h2>{{ felixa_flags.total_high }} high severity, {{ felixa_flags.total_medium }} medium severity</h2>
+<p class="small-note">High severity: Aggressive, Judgmental, Disrespectful, Rude, Hate Speech or Violence. Medium severity, when no high flag applies: Profanity, Sarcasm or Agitated. A tone counts when it is rated 2 or 3.</p>
+<div class="ff-row ff-high"><span class="ff-sev">High</span>{% for name, n in felixa_flags.high %}<span class="ff-chip">{{ name }} <b>{{ n }}</b></span>{% else %}<span class="ff-none">None</span>{% endfor %}</div>
+<div class="ff-row ff-med"><span class="ff-sev">Medium</span>{% for name, n in felixa_flags.medium %}<span class="ff-chip">{{ name }} <b>{{ n }}</b></span>{% else %}<span class="ff-none">None</span>{% endfor %}</div>
+{% macro ff_item(it) %}<li class="fl lv-{{ 'serious' if it.severity == 'high' else 'moderate' }}"><div class="fl-tag"><span class="fl-sev">{{ 'High' if it.severity == 'high' else 'Medium' }}</span></div><p>“{{ it.text }}”</p><small>{% for name in it.flags %}<span class="ff-chip tiny">{{ name }}</span> {% endfor %}{% if it.source %}· {{ it.source }}{% endif %}{% if it.when %} · {{ it.when }}{% endif %}</small></li>{% endmacro %}
+<ol class="fl-list">{% for it in felixa_flags.rows[:10] %}{{ ff_item(it) }}{% endfor %}</ol>
+{% if felixa_flags.rows|length > 10 %}<details><summary>Show the other {{ felixa_flags.rows|length - 10 }} flagged by tone</summary><ol class="fl-list">{% for it in felixa_flags.rows[10:] %}{{ ff_item(it) }}{% endfor %}</ol></details>{% endif %}
+</section>
+{% endif %}
 {% if view.total %}
 <form class="fl-filters panel" method="get" action="/analysis/{{ aid }}/flagged">
 <label>Kind<select name="kind" data-submit><option value="">All kinds</option>{% for k, label in view.kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

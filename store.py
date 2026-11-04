@@ -430,6 +430,21 @@ def add_upload(aid, name: str, units, digest: str):
     return stored
 
 
+def rated_text_units(aid) -> list:
+    """The rated messages with their text, for the flags: [{'id', 'text', 'source', 'timestamp', 'ratings': {signal: 0..3}}], in upload order."""
+    with db() as c:
+        rows = c.execute('SELECT cu.id, cu.text, cu.source_label, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
+                         'JOIN unit_ratings ur ON ur.unit_id=cu.id WHERE cu.analysis_id=? ORDER BY cu.id', (aid,)).fetchall()
+    units, by_id = [], {}
+    for row in rows:
+        unit = by_id.get(row['id'])
+        if unit is None:
+            unit = by_id[row['id']] = {'id': row['id'], 'text': row['text'] or '', 'source': row['source_label'] or '', 'timestamp': row['timestamp'] or '', 'ratings': {}}
+            units.append(unit)
+        unit['ratings'][row['attribute']] = row['rating']
+    return units
+
+
 def evidence_by_source(aid) -> list:
     with db() as c:
         return [dict(r) for r in c.execute(

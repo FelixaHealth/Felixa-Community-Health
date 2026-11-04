@@ -33,7 +33,7 @@ FLAG_MIN = 2                                        # a tone is clearly shown wh
 OVERT = ('Aggressive', 'Rude', 'Disrespectful', 'Judgmental')        # open hostility
 POSITIVE_WEIGHTS = {'Polite': 3, 'Empathetic': 3, 'Encouraging': 2, 'Funny': 1}      # the weights of the Felixa backend
 NEGATIVE_WEIGHTS = {'Ignorant': 1, 'Egocentric': 1, 'Neurotic': 1, 'Sarcastic': 2, 'Agitated': 2, 'Aggressive': 3, 'Judgmental': 3, 'Disrespectful': 3, 'Rude': 3}
-HEALTH_DIVISOR = 4.5       # the backend divides by 9 (every positive tone present). A tone has about half its full strength when it is present, so 4.5 keeps its scale.
+HEALTH_DIVISOR = 9         # as in the Felixa backend (community_health.py): score = 50 + 50 x (positive - negative) / (messages x 9), where a tone counts when it is present
 HEALTH_STATUS = ((80, 'Excellent'), (60, 'Good'), (40, 'Fair'), (0, 'Needs attention'))
 HEALTH_TONE = {'Excellent': 'good', 'Good': 'good', 'Fair': 'info', 'Needs attention': 'bad'}
 TONE_WORDS = {'good': 'A good sign', 'info': 'Neutral', 'warn': 'Worth a look', 'bad': 'Look at this first'}      # the icon in words, for the PDF and the CSV
@@ -137,7 +137,7 @@ def message_flags(ratings) -> dict:
     return {'hostile': int(hostile), 'care': int(r['Empathetic'] >= FLAG_MIN), 'dig': int(dig),
             'heated': int(hostile or r['Agitated'] >= FLAG_MIN or dig),
             'polite': int(r['Polite'] >= FLAG_MIN), 'encouraging': int(r['Encouraging'] >= FLAG_MIN), 'funny': int(r['Funny'] >= FLAG_MIN),
-            'pos': sum(w * r[a] / 3 for a, w in POSITIVE_WEIGHTS.items()), 'neg': sum(w * r[a] / 3 for a, w in NEGATIVE_WEIGHTS.items()),
+            'pos': sum(w for a, w in POSITIVE_WEIGHTS.items() if r[a] >= FLAG_MIN), 'neg': sum(w for a, w in NEGATIVE_WEIGHTS.items() if r[a] >= FLAG_MIN),     # present = rated 2 or 3, as the Felixa backend counts a tone present or not
             'silent': int(not any(r.values()))}
 
 

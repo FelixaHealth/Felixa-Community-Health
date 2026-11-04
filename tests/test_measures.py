@@ -231,8 +231,8 @@ def clears(k, n, cut):
 
 
 def expected_health(pos, neg):
-    """MEASURES.md: clamp(50 + 50 x (mean positive - mean negative) / 4.5, 0, 100)."""
-    return min(100.0, max(0.0, 50 + 50 * (pos - neg) / 4.5))
+    """MEASURES.md, as in the Felixa backend: clamp(50 + 50 x (mean positive - mean negative) / 9, 0, 100), a tone counting when it is rated 2 or 3."""
+    return min(100.0, max(0.0, 50 + 50 * (pos - neg) / 9))
 
 
 def expected_flags(r):
@@ -353,7 +353,7 @@ class FlagTests(unittest.TestCase):
 
 # =============================================================================================================================================
 class HealthTests(unittest.TestCase):
-    """The 0 to 100 health score: weights, the divisor 4.5, the clamp, the bands."""
+    """The 0 to 100 health score: weights, the divisor 9 of the Felixa backend, the clamp, the bands."""
 
     def score(self, *messages):
         return an([unit(i, **tones) for i, tones in enumerate(messages)])['health']
@@ -364,26 +364,27 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(measures.health_of(0, 0), 50.0)
         self.assertEqual(an(chat(96))['health'], 50.0)
 
-    def test_each_tone_moves_the_score_by_its_weight_times_rating_over_3(self):
+    def test_each_tone_moves_the_score_by_its_weight_when_it_is_present(self):
+        """The Felixa backend counts a tone present or not; here a tone is present when it is rated 2 or 3."""
         for tone, weight in {**POSITIVE, **NEGATIVE}.items():
             for rating in (1, 2, 3):
-                x = rating / 3
-                pos, neg = (weight * x, 0) if tone in POSITIVE else (0, weight * x)
+                present = rating >= 2
+                pos, neg = ((weight if present else 0), 0) if tone in POSITIVE else (0, (weight if present else 0))
                 with self.subTest(tone=tone, rating=rating):
-                    # e.g. Polite 3: 50 + 50 x 3 / 4.5 = 83.33; Rude 2: 50 - 50 x (3 x 2/3) / 4.5 = 27.78
-                    self.assertAlmostEqual(self.score({tone: rating}), expected_health(pos, neg), places=2)      # analyse() rounds the score to 3 places, once
+                    # e.g. Polite 2 or 3: 50 + 50 x 3 / 9 = 66.67; Rude 2 or 3: 50 - 50 x 3 / 9 = 33.33; a rating of 1 is not present: 50
+                    self.assertAlmostEqual(self.score({tone: rating}), expected_health(pos, neg), places=2)
 
-    def test_the_divisor_is_4_5_so_polite_3_alone_is_83_33_not_66_67(self):
-        self.assertAlmostEqual(self.score({'Polite': 3}), 83.3333333, places=2)         # 50 + 50 x 3 / 4.5
-        self.assertAlmostEqual(self.score({'Rude': 2}), 27.7777778, places=2)           # 50 - 50 x 2 / 4.5
-        self.assertEqual(measures.health_of(2.25, 0), 75.0)                             # 50 + 50 x 2.25 / 4.5
-        self.assertEqual(measures.health_of(0, 2.25), 25.0)
-        self.assertEqual(measures.health_of(4.5, 0), 100.0)                             # the divisor itself reaches the top exactly
-        self.assertEqual(measures.health_of(0, 4.5), 0.0)
+    def test_the_divisor_is_9_as_in_the_felixa_backend(self):
+        self.assertAlmostEqual(self.score({'Polite': 3}), 66.6666667, places=2)         # 50 + 50 x 3 / 9
+        self.assertAlmostEqual(self.score({'Rude': 2}), 33.3333333, places=2)           # 50 - 50 x 3 / 9
+        self.assertEqual(measures.health_of(4.5, 0), 75.0)                              # 50 + 50 x 4.5 / 9
+        self.assertEqual(measures.health_of(0, 4.5), 25.0)
+        self.assertEqual(measures.health_of(9, 0), 100.0)                               # the divisor itself reaches the top exactly
+        self.assertEqual(measures.health_of(0, 9), 0.0)
 
     def test_the_score_is_clamped_at_0_and_100(self):
-        warm = {'Polite': 3, 'Empathetic': 3, 'Encouraging': 3, 'Funny': 3}             # positive = 3 + 3 + 2 + 1 = 9, so 50 + 50 x 9 / 4.5 = 150
-        cold = dict.fromkeys(NEGATIVE, 3)                                               # negative = 1+1+1+2+2+3+3+3+3 = 19, so 50 - 50 x 19 / 4.5 < 0
+        warm = {'Polite': 3, 'Empathetic': 3, 'Encouraging': 3, 'Funny': 3}             # positive = 3 + 3 + 2 + 1 = 9, so 50 + 50 x 9 / 9 = 100
+        cold = dict.fromkeys(NEGATIVE, 3)                                               # negative = 1+1+1+2+2+3+3+3+3 = 19, so 50 - 50 x 19 / 9 < 0
         self.assertEqual(self.score(warm), 100.0)
         self.assertEqual(self.score(cold), 0.0)
         self.assertEqual(measures.health_of(9, 0), 100.0)
@@ -394,23 +395,23 @@ class HealthTests(unittest.TestCase):
     def test_the_group_score_uses_the_mean_of_the_messages(self):
         # mean positive = 3/2 = 1.5 and mean negative = 3/2 = 1.5, so exactly 50
         self.assertEqual(self.score({'Polite': 3}, {'Rude': 3}), 50.0)
-        # [Polite 3, Polite 3, Rude 3]: mean positive 6/3 = 2.0, mean negative 3/3 = 1.0, so 50 + 50 x 1.0 / 4.5 = 61.11
-        self.assertAlmostEqual(self.score({'Polite': 3}, {'Polite': 3}, {'Rude': 3}), 61.1111111, places=2)
-        # one warm message among nine that have no tone: mean positive 3/10, so 50 + 50 x 0.3 / 4.5 = 53.33
-        self.assertAlmostEqual(self.score({'Polite': 3}, *[{}] * 9), 53.3333333, places=2)
+        # [Polite 3, Polite 3, Rude 3]: mean positive 6/3 = 2.0, mean negative 3/3 = 1.0, so 50 + 50 x 1.0 / 9 = 55.56
+        self.assertAlmostEqual(self.score({'Polite': 3}, {'Polite': 3}, {'Rude': 3}), 55.5555556, places=2)
+        # one warm message among nine that have no tone: mean positive 3/10, so 50 + 50 x 0.3 / 9 = 51.67
+        self.assertAlmostEqual(self.score({'Polite': 3}, *[{}] * 9), 51.6666667, places=2)
 
     def test_each_stretch_has_the_health_score_of_its_own_messages(self):
-        # six stretches of 8: all Polite 3 -> 83.33; no tone -> 50; all Rude 3 -> 16.67; Polite 3 on every other message (mean positive 1.5) -> 66.67;
-        # all Funny 3 -> 50 + 50 x 1 / 4.5 = 61.11; all Empathetic 2 -> 50 + 50 x 2 / 4.5 = 72.22
+        # six stretches of 8: all Polite 3 -> 66.67; no tone -> 50; all Rude 3 -> 33.33; Polite 3 on every other message (mean positive 1.5) -> 58.33;
+        # all Funny 3 -> 50 + 50 x 1 / 9 = 55.56; all Empathetic 2 -> 50 + 50 x 3 / 9 = 66.67
         plans = [{'Polite': 3}, {}, {'Rude': 3}, 'half', {'Funny': 3}, {'Empathetic': 2}]
         units = [unit(j * 8 + t, **(({'Polite': 3} if t % 2 == 0 else {}) if plan == 'half' else plan)) for j, plan in enumerate(plans) for t in range(8)]
         m = an(units)
-        want = [83.3333333, 50.0, 16.6666667, 66.6666667, 61.1111111, 72.2222222]
+        want = [66.6666667, 50.0, 33.3333333, 58.3333333, 55.5555556, 66.6666667]
         self.assertEqual(len(m['stretches']), 6)
         for got, expected in zip([s['health'] for s in m['stretches']], want):
             self.assertAlmostEqual(got, expected, places=5)
         self.assertAlmostEqual(m['health'], sum(want) / 6, places=2, msg='equal stretches: the whole is the mean of the parts')
-        self.assertAlmostEqual(measures.health_tile(m)['series'][0], 83.33, delta=0.01)
+        self.assertAlmostEqual(measures.health_tile(m)['series'][0], 66.67, delta=0.01)
 
     def test_the_status_bands_are_judged_on_the_whole_number_printed(self):
         want = [(0, 'Needs attention'), (12.3, 'Needs attention'), (39.49, 'Needs attention'), (39.4999, 'Needs attention'),
@@ -427,11 +428,11 @@ class HealthTests(unittest.TestCase):
                 self.assertEqual(measures.whole(value), shown)
 
     def test_every_band_can_be_reached_by_some_chat(self):
-        self.assertEqual(measures.health_status(self.score({'Polite': 3})), 'Excellent')        # 50 + 50 x 3 / 4.5 = 83.3
-        self.assertEqual(measures.health_status(self.score({'Polite': 2})), 'Good')             # 50 + 50 x 2 / 4.5 = 72.2
-        self.assertEqual(measures.health_status(self.score({'Ignorant': 2})), 'Fair')           # 50 - 50 x (2/3) / 4.5 = 42.6
-        self.assertEqual(measures.health_status(self.score({})), 'Fair')                        # 50
-        self.assertEqual(measures.health_status(self.score({'Rude': 3})), 'Needs attention')    # 50 - 50 x 3 / 4.5 = 16.7
+        self.assertEqual(measures.health_status(self.score({'Polite': 3, 'Empathetic': 3})), 'Excellent')   # 50 + 50 x 6 / 9 = 83.3
+        self.assertEqual(measures.health_status(self.score({'Polite': 3})), 'Good')                           # 50 + 50 x 3 / 9 = 66.7
+        self.assertEqual(measures.health_status(self.score({'Ignorant': 2})), 'Fair')                         # 50 - 50 x 1 / 9 = 44.4
+        self.assertEqual(measures.health_status(self.score({})), 'Fair')                                      # 50
+        self.assertEqual(measures.health_status(self.score({'Rude': 3})), 'Needs attention')                  # 50 - 50 x 3 / 9 = 33.3
 
     def test_the_tile_shows_the_same_score_status_and_says_it_can_differ_from_vibe_check(self):
         m = an(chat(96, lambda i: {'Polite': 3} if i % 2 else {'Rude': 2}))
@@ -445,7 +446,7 @@ class HealthTests(unittest.TestCase):
 
     def test_the_tile_mark_is_neutral_below_48_messages_and_the_band_and_the_score_stay(self):
         """MEASURES.md: the health tile's mark is neutral below 48 messages (too few to call the score good or bad). The status word and the score are not touched."""
-        for tones, status, mark in [({'Polite': 3}, 'Excellent', ('good', 'A good sign')), ({'Polite': 2}, 'Good', ('good', 'A good sign')),
+        for tones, status, mark in [({'Polite': 3, 'Empathetic': 3}, 'Excellent', ('good', 'A good sign')), ({'Polite': 3}, 'Good', ('good', 'A good sign')),
                                     ({'Ignorant': 2}, 'Fair', ('info', 'Neutral')), ({'Rude': 3}, 'Needs attention', ('bad', 'Look at this first'))]:
             for n in (1, 10, 24, 40, 47):
                 with self.subTest(status=status, n=n):
@@ -466,17 +467,17 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(measures.health_tile(m)['tone'], 'good')
 
     def test_the_tile_mark_is_neutral_when_almost_no_tone_was_found_and_the_band_stays(self):
-        """MEASURES.md: the health tile's mark is neutral ... when no tone was found (19 in 20 messages rated all 0). One message in 20 can still pull the score into the
-        lowest band, so the band is told apart from the mark here: 5 maximally negative messages in 100 score 39.4, and a 6th makes the chat not silent."""
-        worst = dict.fromkeys(NEGATIVE, 3)                                              # negative = 19: 5 in 100 give 50 - 50 x 0.95 / 4.5 = 39.44
+        """MEASURES.md: the health tile's mark is neutral ... when no tone was found (19 in 20 messages rated all 0). With the Felixa backend's divisor of 9, a chat that
+        is silent this way cannot reach the lowest band: 5 maximally negative messages in 100 score 44.7, and a 6th makes the chat not silent (43.7), still Fair."""
+        worst = dict.fromkeys(NEGATIVE, 3)                                              # negative = 19: 5 in 100 give 50 - 50 x 0.95 / 9 = 44.72
         for n, hot in [(60, 3), (100, 5), (200, 10)]:                                   # 57 of 60, 95 of 100 and 190 of 200 silent: the fewest that trip it
             for count, silent in [(hot, True), (hot + 1, False)]:
                 with self.subTest(n=n, hot=count):
                     m = an(chat(n, lambda i: dict(worst) if i < count else None))
                     self.assertEqual(measures.is_silent(m), silent)
                     tile = measures.health_tile(m)
-                    self.assertEqual(tile['status'], 'Needs attention', 'the band does not depend on the silence')
-                    self.assertEqual((tile['tone'], tile['tone_word']), ('info', 'Neutral') if silent else ('bad', 'Look at this first'))
+                    self.assertEqual(tile['status'], 'Fair')
+                    self.assertEqual((tile['tone'], tile['tone_word']), ('info', 'Neutral'))
         for n in (48, 96, 300):                                                         # nothing at all: score 50, a Fair chat, grey either way
             tile = measures.health_tile(an(chat(n)))
             self.assertEqual((tile['score'], tile['status'], tile['tone'], tile['tone_word']), (50.0, 'Fair', 'info', 'Neutral'))
@@ -785,10 +786,10 @@ class TallyTests(unittest.TestCase):
         t = measures.tally([measures.message_flags(ratings(**g)) for g in groups])
         self.assertEqual({k: t[k] for k in KINDS}, {'hostile': 1, 'care': 1, 'dig': 1, 'heated': 2, 'polite': 1, 'encouraging': 1, 'funny': 1})
         self.assertEqual((t['n'], t['silent']), (6, 1))
-        # positive: Polite 2 -> 3 x 2/3 = 2.0, Funny 3 -> 1.0, Empathetic 2 -> 2.0, Encouraging 3 -> 2 x 3/3 = 2.0: 7.0.  negative: Rude 3 -> 3.0, Sarcastic 2 -> 2 x 2/3: 4.333
-        # health = 50 + 50 x (7.0 - 4.3333) / 6 / 4.5 = 54.938
-        self.assertAlmostEqual(measures.health_mean(t), 50 + 50 * (7.0 - 13 / 3) / 6 / 4.5, places=9)
-        self.assertAlmostEqual(measures.health_mean(t), 54.9382716, places=6)
+        # positive (a tone counts when rated 2 or 3): Polite 2 -> 3, Funny 3 -> 1, Empathetic 2 -> 3, Encouraging 3 -> 2: 9.  negative: Rude 3 -> 3, Sarcastic 2 -> 2: 5
+        # health = 50 + 50 x (9 - 5) / 6 / 9 = 53.704
+        self.assertAlmostEqual(measures.health_mean(t), 50 + 50 * (9 - 5) / 6 / 9, places=9)
+        self.assertAlmostEqual(measures.health_mean(t), 53.7037037, places=6)
 
     def test_merging_tallies_is_the_tally_of_all_their_messages(self):
         first = [measures.message_flags(ratings(**({'Rude': 2} if i < 3 else {'Empathetic': 3} if i < 5 else {}))) for i in range(10)]
@@ -944,24 +945,24 @@ class ChangeTests(unittest.TestCase):
             """n messages that are all Polite 3 (+3), of which the first `extra_every_n` also carry `extra`."""
             return measures.tally([measures.message_flags(ratings(Polite=3, **(extra if i < extra_every_n else {}))) for i in range(n)])
 
-        warm = group(1000, 0, {})                                                   # d = +3 for everyone: 83.33
-        # 36% also rated Aggressive 3 (d = 0): mean d = 3 x 0.64 = 1.92, so 50 + 50 x 1.92 / 4.5 = 71.33: down 12.0, a chance test passed with ease
-        down12 = measures.health_change(warm, group(1000, 360, {'Aggressive': 3}))
+        warm = group(1000, 0, {})                                                   # d = +3 for everyone: 66.67
+        # 72% also rated Aggressive 3 (d = 0): mean d = 3 x 0.28 = 0.84, so 50 + 50 x 0.84 / 9 = 54.67: down 12.0, a chance test passed with ease
+        down12 = measures.health_change(warm, group(1000, 720, {'Aggressive': 3}))
         self.assertEqual((down12['call'], down12['strong']), ('falling', True))
         self.assertAlmostEqual(down12['delta'], -12.0, places=6)
-        # 36% also rated Neurotic 3 (d = -1 for them): mean d = 2.64, so 79.33: down 4.0 -- under the 5-point floor even though z is about 24
-        down4 = measures.health_change(warm, group(1000, 360, {'Neurotic': 3}))
+        # 72% also rated Neurotic 3 (d = -1 for them): mean d = 2.28, so 62.67: down 4.0 -- under the 5-point floor even though z is large
+        down4 = measures.health_change(warm, group(1000, 720, {'Neurotic': 3}))
         self.assertAlmostEqual(down4['delta'], -4.0, places=6)
         self.assertGreater(abs(down4['delta']) / down4['se'], 5)
         self.assertEqual((down4['call'], down4['strong']), ('steady', False))
-        # up 6.0 : from "all Polite 3 and Neurotic 3" (d = 2) to 54% without the Neurotic rating
-        cool = group(1000, 1000, {'Neurotic': 3})
-        up6 = measures.health_change(cool, group(1000, 460, {'Neurotic': 3}))
+        # up 6.0 : from "all Polite 3 and Sarcastic 3" (d = 1) to 54% without the Sarcastic rating
+        cool = group(1000, 1000, {'Sarcastic': 3})
+        up6 = measures.health_change(cool, group(1000, 460, {'Sarcastic': 3}))
         self.assertAlmostEqual(up6['delta'], 6.0, places=6)
         self.assertEqual(up6['call'], 'rising')
-        # either side of the 5-point floor: 49.5% of the messages without the Neurotic rating is up 5.5 (a call); 40.5% is up 4.5 (no call); z is large for both
+        # either side of the 5-point floor: 49.5% of the messages without the Sarcastic rating is up 5.5 (a call); 40.5% is up 4.5 (no call); z is large for both
         for share, delta, call in [(495, 5.5, 'rising'), (405, 4.5, 'steady')]:
-            got = measures.health_change(cool, group(1000, 1000 - share, {'Neurotic': 3}))
+            got = measures.health_change(cool, group(1000, 1000 - share, {'Sarcastic': 3}))
             self.assertAlmostEqual(got['delta'], delta, places=6)
             self.assertGreater(got['delta'] / got['se'], 5)
             self.assertEqual(got['call'], call, delta)
@@ -1744,7 +1745,7 @@ class CardTests(unittest.TestCase):
         self.assertEqual(seen, {'good', 'info', 'warn', 'bad'}, 'the chats above show every mark')
 
     def test_the_health_tile_says_a_good_sign_neutral_or_look_at_this_first_by_its_band(self):
-        for tones, status, tone, word in [({'Polite': 3}, 'Excellent', 'good', 'A good sign'), ({'Polite': 2}, 'Good', 'good', 'A good sign'),
+        for tones, status, tone, word in [({'Polite': 3, 'Empathetic': 3}, 'Excellent', 'good', 'A good sign'), ({'Polite': 2}, 'Good', 'good', 'A good sign'),
                                           ({'Ignorant': 2}, 'Fair', 'info', 'Neutral'), ({}, 'Fair', 'info', 'Neutral'),
                                           ({'Rude': 3}, 'Needs attention', 'bad', 'Look at this first')]:
             with self.subTest(status=status):
@@ -3076,10 +3077,10 @@ class TrailAndRecordTests(unittest.TestCase):
         self.assertEqual(store.clean_measure_snapshot(rec), rec, 'the store keeps it exactly as it is')
 
     def test_the_record_keeps_the_spread_of_the_health_score(self):
-        # half the messages Polite 3 (+3), half Rude 3 (-3): the spread of the per-message score is 3 x 50 / 4.5 = 33.3 points (a little more with the n-1 estimate)
+        # half the messages Polite 3 (+3), half Rude 3 (-3): the spread of the per-message score is 3 x 50 / 9 = 16.7 points (a little more with the n-1 estimate)
         rec = measures.record(an(chat(96, lambda i: {'Polite': 3} if i % 2 else {'Rude': 3})))
         self.assertAlmostEqual(rec['health'], 50.0, places=3)
-        self.assertAlmostEqual(rec['health_sd'], 100 / 3, delta=0.5)
+        self.assertAlmostEqual(rec['health_sd'], 50 / 3, delta=0.5)
         self.assertEqual(measures.record(an(chat(96, lambda i: {'Polite': 3})))['health_sd'], 0.0)
         self.assertEqual(measures.record(an(chat(96)))['health_sd'], 0.0)
 
@@ -3379,7 +3380,7 @@ class AllClearTests(unittest.TestCase):
         self.assertEqual([c['key'] for c in ctx['cards'] if c['tone'] in ('warn', 'bad')], [])
         self.assertTrue(ctx['all_clear'])
         # a health score that needs attention is marked as well
-        ctx = build_with(lively(chat(100, lambda i: {'Ignorant': 3, 'Egocentric': 3, 'Neurotic': 3} if i % 2 else None)))
+        ctx = build_with(lively(chat(100, lambda i: {'Ignorant': 3, 'Egocentric': 3, 'Neurotic': 3, 'Agitated': 3, 'Sarcastic': 3} if i % 2 else None)))
         self.assertEqual(ctx['health']['tone'], 'bad')
         self.assertFalse(ctx['all_clear'])
 

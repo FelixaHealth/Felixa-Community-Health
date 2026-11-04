@@ -9,6 +9,7 @@ import bei_charts
 import measures
 import measures_export
 import measures_view
+import flags
 import store
 from vibe_check import assets_html, data_table, figure, render_html
 from vibe_check.common import fmt_int, long_date
@@ -30,7 +31,7 @@ def build(aid):
     scope_n = period['kept'] if period else units_n        # the units a run reads: those inside the review period, if one is set
     rated_total = (a['rated_units_total'] or scope_n) if metrics else scope_n       # the units there were when the signals were rated
     ctx = {
-        'aid': aid, 'a': a, 'metrics': metrics, 'guidance': guidance, 'vibe': vibe, 'vibe_notice': notice,
+        'aid': aid, 'a': a, 'metrics': metrics, 'guidance': guidance, 'vibe': vibe, 'vibe_notice': notice, 'felixa_flags': flags.build(aid, vibe) if metrics else None,
         'units_n': units_n, 'scope_n': scope_n, 'rated_n': rated_n, 'rated_total': rated_total,
         'sampled': bool(metrics) and rated_n < rated_total, 'added_since': max(0, scope_n - rated_total) if metrics else 0,
         'period': period, 'period_text': period_text(period),

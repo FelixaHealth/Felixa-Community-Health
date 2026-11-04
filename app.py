@@ -1859,7 +1859,7 @@ def flagged_page(request: Request, aid: AnalysisId, kind: str = '', level: str =
     ctx = report_context(aid, 'list of flagged messages')
     view = flagged.build(ctx['vibe'], kind=kind, level=level, source=source, q=q, sort=sort, page=page)
     query = {k: v for k, v in (('kind', kind), ('level', level), ('source', source), ('q', q), ('sort', sort if sort != 'severity' else '')) if v}
-    return render(request, 'flagged.html', view=view, aid=aid, a=ctx['a'], f={'kind': kind, 'level': level, 'source': source, 'q': q, 'sort': sort}, query=query,
+    return render(request, 'flagged.html', view=view, aid=aid, a=ctx['a'], felixa_flags=ctx.get('felixa_flags'), f={'kind': kind, 'level': level, 'source': source, 'q': q, 'sort': sort}, query=query,
                   levels=flagged.LEVELS, sorts=flagged.SORTS)
 
 

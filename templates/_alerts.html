@@ -11,6 +11,10 @@
 {% if look == 1 %}<p class="vc-trendline vc-count">1 thing to look at first.</p>
 {% elif look > 1 %}<p class="vc-trendline vc-count">{{ look }} things worth a look.</p>
 {% elif ms.all_clear %}<p class="vc-trendline vc-count">Nothing needs urgent attention in {{ 'this message' if ms.m.n == 1 else 'these {:,} messages'.format(ms.m.n) }}.</p>{% endif %}
+{% if felixa_flags and (felixa_flags.high or felixa_flags.medium) %}<div class="ff-box"><h3>Flags</h3>
+<div class="ff-row ff-high"><span class="ff-sev">High severity <b>{{ felixa_flags.total_high }}</b></span>{% for name, n in felixa_flags.high %}<span class="ff-chip">{{ name }} <b>{{ n }}</b></span>{% else %}<span class="ff-none">None</span>{% endfor %}</div>
+<div class="ff-row ff-med"><span class="ff-sev">Medium severity <b>{{ felixa_flags.total_medium }}</b></span>{% for name, n in felixa_flags.medium %}<span class="ff-chip">{{ name }} <b>{{ n }}</b></span>{% else %}<span class="ff-none">None</span>{% endfor %}</div>
+<a class="ff-link" href="/analysis/{{ aid }}/flagged">See every flagged message</a></div>{% endif %}
 {% if shown %}<ul class="vc-flags vc-alerts">{% for al in shown[:5] %}{{ row(al) }}{% endfor %}</ul>
 {% if shown|length > 5 %}<details><summary>Show {{ shown|length - 5 }} more</summary><ul class="vc-flags vc-alerts">{% for al in shown[5:] %}{{ row(al) }}{% endfor %}</ul></details>{% endif %}
 {% else %}<div class="vc-awards"><div class="award award-clear"><span class="award-tag">{{ icons.good|safe }}Clear</span><strong class="award-name">No alerts this time</strong><span class="award-evidence">{{ 'This message' if ms.m.n == 1 else '{:,} messages'.format(ms.m.n) }} read, with nothing above the cut-offs.</span></div></div>{% endif %}
