@@ -86,6 +86,15 @@ class Analytics(AppCase):
         self.assertNotIn('has no results yet', done.text)
         self.assertIn('Download', done.text)
 
+    def test_a_running_analysis_is_followed_to_the_results_when_it_completes(self):
+        aid = self.with_chat()
+        job = self.store.create_job(aid, 'full')
+        self.addCleanup(self.store.job_update, job, 'cancelled', 'test cleanup')
+        page = self.client.get(f'/analysis/{aid}/workspace').text
+        self.assertIn(f'data-results-url="/analysis/{aid}/results"', page)
+        js = (self.app.BASE_DIR / 'static' / 'run.js').read_text()
+        self.assertIn('location.href = results', js)
+
 
 if __name__ == '__main__':
     unittest.main()

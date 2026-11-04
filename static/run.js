@@ -29,8 +29,9 @@
         title.textContent = job.status === 'complete' ? 'Done' : job.status === 'cancelled' ? 'Stopped' : 'This did not finish';
         dialog.classList.add(job.status === 'complete' ? 'ok' : 'bad');
         openBtn.hidden = false; openBtn.textContent = job.status === 'complete' ? 'Open the results' : 'Close';
-        openBtn.onclick = () => location.reload();
-        if (job.status === 'complete') setTimeout(() => location.reload(), 1800);
+        const results = dialog.dataset.resultsUrl;
+        openBtn.onclick = () => { if (job.status === 'complete' && results) location.href = results; else location.reload(); };
+        if (job.status === 'complete') setTimeout(() => { if (results) location.href = results; else location.reload(); }, 1200);
         return;
       }
     }
