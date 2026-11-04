@@ -1689,7 +1689,7 @@ def track_views(ms, only=None):
 
 
 RESULT_SCREENS = {'vibe': ('Vibe Check', 'users'), 'health': ('Health Score', 'pulse'), 'sentiment': ('Sentiment', 'chart'), 'passive': ('Passive-aggressive', 'chat'),
-                  'alerts': ('Badges & Alerts', 'shield'), 'questions': ('Your questions', 'check')}
+                  'alerts': ('Badges & Alerts', 'shield'), 'questions': ('Insights', 'check')}
 
 
 def results_nav(aid, ctx, current):
@@ -1697,7 +1697,7 @@ def results_nav(aid, ctx, current):
     vibe_ok = bool(ctx.get('vibe') and ctx['vibe'].get('status') == 'ok')
     ms = ctx.get('measures')
     has = {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms or ctx.get('guidance')), 'questions': bool(ctx.get('answers'))}
-    out = [('overview', 'Overview', 'home', f'/analysis/{aid}/results', current == 'overview')]
+    out = []
     for key in ('vibe', 'health', 'sentiment'):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
@@ -1705,7 +1705,7 @@ def results_nav(aid, ctx, current):
         for key, icon_name in (('escalation', 'trend'), ('conflict', 'users'), ('empathy', 'heart')):
             out.append((key, track.NAMES[key], icon_name, f'/analysis/{aid}/track/{key}', current == key))
         out.append(('passive', 'Passive-aggressive', 'chat', f'/analysis/{aid}/results/passive', current == 'passive'))
-    for key in ('alerts', 'questions'):
+    for key in ('alerts',):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
     return out

@@ -12,3 +12,11 @@
 </div>
 <div class="home-row r4">{% for m in home.modules %}<a class="hcard module tone-{{ m.tone }}" href="{{ '/analysis/%d/results/passive'|format(rid) if m.key == 'passive' else '/analysis/%d/track/%s'|format(rid, m.key) }}"><div class="hc-top"><span class="hc-ic">{{ icon({'escalation':'trend','conflict':'users','empathy':'heart','passive':'chat'}[m.key]) }}</span><h2>{{ m.name }}</h2></div>
 <div class="mod-body"><svg class="spark" viewBox="0 0 170 56" preserveAspectRatio="none" aria-hidden="true">{% if m.line %}<path class="sp-area" d="{{ m.area }}"/><polyline class="sp-line" points="{{ m.line }}"/>{% endif %}</svg><div class="mod-val"><strong>{{ m.value }}%</strong>{{ chip(m) }}</div></div>{{ vs(home.kpi.get(m.key)) }}</a>{% endfor %}</div>
+{% set flagged_n = home.flagged %}{% set answers_n = (home.ctx.answers or [])|length %}{% set families = home.ctx.families %}
+<div class="home-row r3 links">
+<a class="bar-light" href="/analysis/{{ rid }}/results/alerts"><span class="bl-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count soft">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
+{% if flagged_n %}<a class="bar-light" href="/analysis/{{ rid }}/flagged"><span class="bl-ic">{{ icon('warning') }}</span><strong>Flagged messages</strong><span class="bd-count soft">{{ flagged_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
+{% if answers_n %}<a class="bar-light" href="/analysis/{{ rid }}/results/questions"><span class="bl-ic">{{ icon('check') }}</span><strong>Insights</strong><span class="bd-count soft">{{ answers_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
+</div>
+{% if families %}<section class="hcard tones"><div class="hc-top"><span class="hc-ic">{{ icon('chat') }}</span><h2>Tones</h2><a class="more" href="/analysis/{{ rid }}/results/sentiment">All 13 {{ icon('chevron') }}</a></div>
+<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ rid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }}</span><small>Strongest: {{ f.top }}</small></a>{% endfor %}</div></section>{% endif %}
