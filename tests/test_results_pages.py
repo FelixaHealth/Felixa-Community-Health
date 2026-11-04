@@ -33,11 +33,21 @@ class Pages(AppCase):
         self.assertNotIn('id="over-time"', work, 'the parts of the results are on the results page, not here')
         page = self.client.get(f'/analysis/{aid}/results').text
         bar = page.split('data-tabs>', 1)[1].split('</nav>', 1)[0]
-        for tab in ('Overview', 'Alerts', 'Measures over time', 'Badges', 'Signal profile'):
+        self.assertEqual(bar.count('role="tab"'), 4, 'four tabs, no more')
+        for tab in ('Overview', 'Track', 'Understand', 'Act'):
             self.assertIn(f'<span>{tab}</span>', bar, tab)
-        for panel in ('tab-overview', 'tab-alerts', 'tab-measures', 'tab-badges', 'tab-signals'):
+        for panel in ('tab-overview', 'tab-track', 'tab-understand', 'tab-act'):
             self.assertIn(f'id="{panel}"', page, panel)
             self.assertIn(f'href="#{panel}"', bar, panel)
+        where = lambda marker: page.index(marker)      # noqa: E731
+        panels = [where(f'id="{p}"') for p in ('tab-overview', 'tab-track', 'tab-understand', 'tab-act')]
+        self.assertEqual(panels, sorted(panels))
+        inside = lambda p: page[where(f'id="{p}"'):(page.index('class="tabpanel"', where(f'id="{p}"')) if 'class="tabpanel"' in page[where(f'id="{p}"'):] else len(page))]      # noqa: E731
+        # every part of the results lives in exactly the tab the map gives it
+        for marker, tab in (('id="summary"', 'tab-overview'), ('id="answers"', 'tab-overview'), ('id="track"', 'tab-track'), ('id="over-time"', 'tab-track'),
+                            ('id="behaviour"', 'tab-understand'), ('id="vibe-check"', 'tab-understand'), ('id="alerts"', 'tab-act'), ('id="badges"', 'tab-act'), ('id="guidance"', 'tab-act')):
+            if marker in page:
+                self.assertIn(marker, inside(tab), f'{marker} belongs in {tab}')
         self.assertIn(f'href="/analysis/{aid}/category/Positive"', page)
         self.assertEqual(self.client.get('/analysis/999999/results').status_code, 404)
 

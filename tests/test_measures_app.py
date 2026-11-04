@@ -2834,7 +2834,8 @@ class PageStructure(MeasuresCase):
         aid = self.flare()
         for what in ('results', 'report'):
             html = self.page(aid, what)
-            ids = ('summary', 'alerts', 'over-time', 'badges', 'behaviour', 'guidance', 'vibe-check')
+            # the report keeps one long page in this order; the results page puts each part in its tab: Overview, Track, Understand, then Act
+            ids = ('summary', 'alerts', 'over-time', 'badges', 'behaviour', 'guidance', 'vibe-check') if what == 'report' else ('summary', 'over-time', 'behaviour', 'vibe-check', 'alerts', 'badges', 'guidance')
             places = [html.index(f'id="{sid}"') for sid in ids]
             self.assertEqual(places, sorted(places), what)
             self.assertEqual(len(set(places)), len(ids))
@@ -3015,7 +3016,7 @@ class PageStructure(MeasuresCase):
         """The Summary strip links to the Content categories of Vibe Check by the address #vc-toxicity, and the class names of the markup hold words such as warn.
         Neither is something a person reads, so the scans for the words that stay out and for punitive wording look at the visible text (and the words a screen
         reader or a hover adds) with every tag, address, id and class name stripped first."""
-        html = self.page(self.flare(), 'results')
+        html = self.page(self.flare(), 'report')                                                    # the report keeps the strip of links; the results page has tabs instead
         summary = section(html, 'summary')
         self.assertIn('href="#vc-toxicity"', summary)                                               # the word is in the markup of the strip ...
         markup = measures_markup(html)

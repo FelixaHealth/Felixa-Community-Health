@@ -165,7 +165,7 @@ class Pages(AppCase):
         aid = self.new_analysis(name='Short')
         self.client.post(f'/analysis/{aid}/add-text', data={'raw_text': 'thanks\nyou idiot\nnice work'})
         self.assertIn(self.run_job(aid)['status'], ('complete', 'failed'))
-        self.assertNotIn('id="tab-track"', self.client.get(f'/analysis/{aid}/results').text)
+        self.assertNotIn('<section class="panel vc" id="track"', self.client.get(f'/analysis/{aid}/results').text)
         self.assertEqual(self.client.get(f'/analysis/{aid}/track/escalation').status_code, 404)
 
 

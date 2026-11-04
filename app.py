@@ -1503,7 +1503,7 @@ def results_page(request: Request, aid: AnalysisId):
     """The results on a page of their own, with tabs along the top."""
     ctx = report_context(aid, 'page of results')
     ctx['track_view'] = track_views(ctx['measures']) if ctx.get('measures') else None
-    return render(request, 'results.html', **ctx)
+    return render(request, 'results.html', tabs_page=True, **ctx)
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)

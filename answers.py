@@ -112,7 +112,7 @@ def communicate(ctx, m, ms):
     lead = top[0]['attribute'].lower() if top else ''
     hostile = _rate(m, 'hostile')
     verdict = (f'Mostly {lead}. Openly hostile wording is ' + ('rare.' if hostile < 5 else 'present in some messages.' if hostile < 12 else 'common.')) if top else 'See the tones below.'
-    return {'verdict': verdict, 'points': pts, 'links': _tone_links(ctx, [x['attribute'] for x in top]) + [('Open the signal profile', f'/analysis/{ctx["aid"]}/results#tab-signals')],
+    return {'verdict': verdict, 'points': pts, 'links': _tone_links(ctx, [x['attribute'] for x in top]) + [('Open the signal profile', f'/analysis/{ctx["aid"]}/results#tab-understand')],
             'caution': 'These are the shares of messages that show each tone, from the wording alone.'}
 
 
@@ -156,6 +156,6 @@ def build(ctx):
         pts = [g['summary']] if g.get('summary') else []
         pts += [f'{r.get("action")}' for r in (g.get('recommendations') or [])[:3] if r.get('action')]
         out.append({'question': own, 'standard': False, 'verdict': 'Here is what the evidence says that bears on it.' if pts else 'Run the full check to get guidance on it.',
-                    'points': pts or ['The written guidance is made when the full check runs. It is written for your goals, including this one.'], 'links': [('Open the guidance', f'/analysis/{ctx["aid"]}/results#tab-guidance')],
+                    'points': pts or ['The written guidance is made when the full check runs. It is written for your goals, including this one.'], 'links': [('Open the guidance', f'/analysis/{ctx["aid"]}/results#tab-act')],
                     'caution': 'This comes from the written guidance, which a language model wrote from the same measured numbers.'})
     return out

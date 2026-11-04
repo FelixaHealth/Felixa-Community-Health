@@ -582,3 +582,14 @@ a.family-tile.ft-good{border-top-color:var(--green)}a.family-tile.ft-warn{border
 .navlink.nl-gear .ic{color:var(--teal)}
 .set-form .actions{margin:6px 0 0;padding:0;border:0;background:none}
 .est-note{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:var(--blue-s);color:var(--ink);font-size:14.5px}
+
+.tab-intro{margin:0 0 18px}.tab-intro h2{margin:0;font-family:var(--serif);font-size:clamp(26px,3.4vw,34px);letter-spacing:-.01em}.tab-intro p{margin:4px 0 0;color:var(--muted);font-size:16px}
+.vc-summary-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:900px){.vc-summary-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.vc-summary-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:700px){.vc-summary-kpis{grid-template-columns:1fr}}
+.health-verdict{display:flex;gap:24px;align-items:center}
+.hv-score{flex:none;display:flex;align-items:baseline;gap:6px;padding-right:24px;border-right:1px solid var(--line)}.hv-score strong{font:600 54px/1 var(--serif);letter-spacing:-.02em}.hv-score span{color:var(--muted);font-size:18px}
+.hv-text h2{margin:2px 0 6px}.hv-text p{margin:0;color:var(--muted);max-width:64ch}
+@media(max-width:700px){.health-verdict{flex-direction:column;align-items:flex-start}.hv-score{border:0;padding:0}}

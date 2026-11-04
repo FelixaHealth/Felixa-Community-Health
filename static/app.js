@@ -99,6 +99,8 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
   document.documentElement.classList.add('js-tabs'); let current = null;
   const route = () => {
     let id = ''; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { id = ''; }
+    const alias = { 'tab-alerts': 'tab-act', 'tab-badges': 'tab-act', 'tab-guidance': 'tab-act', 'tab-signals': 'tab-understand', 'tab-vibe': 'tab-understand' };   // the names of the tabs before they were merged
+    if (alias[id]) id = alias[id];
     const el = id && document.getElementById(id);
     const inside = el && el.closest('.tabpanel');
     if (!inside && current) return;                                  // #main, a stray fragment: leave the tab that is open
