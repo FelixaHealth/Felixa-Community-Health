@@ -10,8 +10,6 @@
 {% include "_health_verdict.html" %}
 {% set only = 'health' %}{% include "_over_time.html" %}
 {% elif screen == 'sentiment' %}
-{% if families %}<section class="panel"><div class="eyebrow">Categories</div><h2>Positive, tense and toxic wording</h2><p class="small-note">Open a category to read every message in it and see how it moves over time.</p>
-<div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ aid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }} · average FAS</span><small>Strongest: {{ f.top }}</small><em>See the messages</em></a>{% endfor %}</div></section>{% endif %}
 {% if metrics %}{% include "_signals.html" %}{% endif %}
 {% elif screen == 'passive' %}
 {% set only = 'passive' %}{% include "_over_time.html" %}
