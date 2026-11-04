@@ -14,9 +14,10 @@
 {% set only = 'passive' %}{% include "_over_time.html" %}
 {% elif screen == 'alerts' %}
 <div class="act-top">{% if act %}{% include "_act_dashboard.html" %}{% endif %}{% if measures %}{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}</div>
-{% if guidance %}{% include "_guidance.html" %}{% endif %}
 {% elif screen == 'questions' %}
+<section class="ins-hero"><span class="ins-ic">{{ icon('check') }}</span><div><h2>Insights</h2><p>Your questions, answered from the numbers, and the guidance for what to do next.</p></div></section>
 {% include "_answers.html" %}
 {% for title, reason in gaps %}<section class="panel"><div class="eyebrow">Not available</div><h2>{{ title }}</h2><p>{{ reason }}</p></section>{% endfor %}
+{% if guidance %}{% set guidance_eyebrow = 'Guidance' %}{% set guidance_title = 'Where to go from here' %}{% include "_guidance.html" %}{% endif %}
 {% endif %}
 </div></div>{% endblock %}

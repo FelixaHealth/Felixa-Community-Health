@@ -1737,7 +1737,7 @@ def screens_with_results(ctx) -> dict:
     """Which results screens this check has something for."""
     vibe_ok = bool(ctx.get('vibe') and ctx['vibe'].get('status') == 'ok')
     ms = ctx.get('measures')
-    return {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms or ctx.get('guidance')), 'questions': bool(ctx.get('answers'))}
+    return {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms), 'questions': bool(ctx.get('answers') or ctx.get('guidance'))}
 
 
 def results_nav(aid, ctx, current):

@@ -954,3 +954,7 @@ a.hcard{text-decoration:none;color:inherit;transition:transform .15s,box-shadow 
 .ff-chip{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600}.ff-chip b{font-weight:800}
 .ff-high .ff-chip{background:#fdeceb;color:#a1261b}.ff-med .ff-chip{background:#fdf0c9;color:#8a5a08}.ff-none{font-size:13px;color:var(--muted)}.ff-link{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;color:#a8780f;text-decoration:none}
 .ff-chip.tiny{padding:1px 8px;font-size:12px}.ff-panel details{margin-top:8px}.ff-panel summary{cursor:pointer;font-weight:600;color:#6d4a07}
+.ins-hero{display:flex;align-items:center;gap:16px;padding:20px 22px;margin-bottom:14px;border-radius:20px;color:#fff;background:linear-gradient(135deg,#0f4a2e 0%,#17623d 60%,#2a7a4b 100%);box-shadow:0 14px 30px -18px rgba(15,74,46,.7)}
+.ins-hero h2{margin:0;font-size:26px;letter-spacing:-.02em;color:#fff}.ins-hero p{margin:4px 0 0;color:rgba(255,255,255,.85);font-size:15px}
+.ins-ic{width:52px;height:52px;border-radius:16px;background:rgba(246,196,83,.18);color:#f6c453;display:grid;place-items:center;flex:none}.ins-ic .ic{width:26px;height:26px}
+.guidance h2{font-size:24px;letter-spacing:-.02em;color:#0f4a2e}

@@ -16,7 +16,7 @@
 <div class="home-row r3 links">
 <a class="bar-light" href="/analysis/{{ rid }}/results/alerts"><span class="bl-ic">{{ icon('shield') }}</span><strong>Badges &amp; Alerts</strong>{% if home.alerts + home.badges %}<span class="bd-count soft">{{ home.alerts + home.badges }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>
 {% if flagged_n %}<a class="bar-light" href="/analysis/{{ rid }}/flagged"><span class="bl-ic">{{ icon('warning') }}</span><strong>Flagged messages</strong><span class="bd-count soft">{{ flagged_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
-{% if answers_n %}<a class="bar-light" href="/analysis/{{ rid }}/results/questions"><span class="bl-ic">{{ icon('check') }}</span><strong>Insights</strong><span class="bd-count soft">{{ answers_n }}</span><span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
+{% if answers_n or home.ctx.guidance %}<a class="bar-light" href="/analysis/{{ rid }}/results/questions"><span class="bl-ic">{{ icon('check') }}</span><strong>Insights</strong>{% if answers_n %}<span class="bd-count soft">{{ answers_n }}</span>{% endif %}<span class="bd-go">{{ icon('chevron') }}</span></a>{% endif %}
 </div>
 {% if families %}<section class="hcard tones"><div class="hc-top"><span class="hc-ic">{{ icon('chat') }}</span><h2>Tones</h2><a class="more" href="/analysis/{{ rid }}/results/sentiment">All 13 {{ icon('chevron') }}</a></div>
 <div class="family-tiles">{% for f in families %}<a class="family-tile ft-{{ f.tone }}" href="/analysis/{{ rid }}/category/{{ f.name }}"><strong>{{ '%.1f'|format(f.avg_fas) }}</strong><span>{{ f.name }}</span><small>Strongest: {{ f.top }}</small></a>{% endfor %}</div></section>{% endif %}

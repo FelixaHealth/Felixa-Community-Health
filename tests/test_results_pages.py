@@ -233,6 +233,16 @@ class Questions(AppCase):
         self.assertEqual(block.count('<article class="answer">'), 1)
         self.assertIn('Are people engaged?', block)
 
+    def test_the_guidance_is_part_of_the_insights_with_its_own_title(self):
+        aid = self.ready()
+        insights = self.client.get(f'/analysis/{aid}/results/questions').text
+        self.assertIn('Where to go from here', insights)
+        self.assertIn('id="guidance"', insights)
+        self.assertLess(insights.index('id="answers"'), insights.index('id="guidance"'), 'the answers come first, then the guidance')
+        alerts = self.client.get(f'/analysis/{aid}/results/alerts').text
+        self.assertNotIn('id="guidance"', alerts)
+        self.assertIn(f'href="/analysis/{aid}/results/questions#guidance"', alerts, 'the Key Insight card leads to it')
+
     def test_the_answers_use_the_numbers_of_the_results(self):
         import report
         aid = self.ready()
