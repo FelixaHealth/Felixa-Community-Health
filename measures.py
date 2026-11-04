@@ -592,6 +592,31 @@ def _alert(level, key, title, detail, step, base, when='') -> dict:
     return {'level': level, 'key': key, 'title': title, 'detail': detail, 'try': step, 'base': base, 'when': when}
 
 
+def alert_catalog() -> list:
+    """Every alert and flag this app can raise, in groups, for the folded list on the Alerts screen: [(group, [(name, level, how)])]."""
+    import flags
+    return [
+        ('Flags on single messages', [(n, 'High', 'A message rated 2 or 3 for this tone.' if n in flags.HIGH_TONES else 'A message Vibe Check marked as this kind.') for n in flags.HIGH_NAMES]
+         + [(n, 'Medium', 'A message with this tone or wording, and no high flag.') for n in flags.MEDIUM_NAMES]),
+        ('What Vibe Check can flag', [(n, '', 'Messages quoted under Flagged messages, each with a severity from 1 to 10.')
+                                      for n in ('Insults', 'Harassment', 'Threats', 'Hate speech', 'Bullying', 'Profanity', 'Spam')]),
+        ('Alerts about the whole chat', [
+            ('Vibe Check flagged serious messages', 'High or Medium', 'Messages scored 7 or more out of 10, or several flagged ones.'),
+            ('The mood heated up fast', 'High or Medium', 'A part of the chat where heated messages climbed well above the usual level.'),
+            ('Many messages were openly hostile', 'High', 'A large share of messages were aggressive, rude, disrespectful or judgmental.'),
+            ('Some messages were openly hostile', 'Medium', 'A noticeable share of hostile messages.'),
+            ('Sarcastic wording is common', 'Medium', 'A noticeable share of messages with sarcasm.'),
+            ('Hostile wording is picking up', 'Medium', 'Hostile messages grew from the start to the end of the chat.'),
+            ('Sarcastic wording is growing', 'Medium', 'Sarcasm grew from the start to the end of the chat.'),
+            ('Fewer messages show care', 'Medium', 'Care and understanding faded over the chat.'),
+            ('The overall mood slipped since your last check', 'Medium', 'The health score fell clearly compared with your last check.'),
+            ('Hostile wording is higher than at your last check', 'Medium', 'More hostile messages than last time.')]),
+        ('Good news', [
+            ('Care is growing', 'Good', 'More messages show care and understanding.'),
+            ('Hostility is easing', 'Good', 'Fewer hostile messages.'),
+            ('The overall mood improved since your last check', 'Good', 'The health score rose clearly.')])]
+
+
 def _flag_count(vibe, kind) -> int:
     """Messages Vibe Check counted for a kind of toxicity: its tally or the flagged messages of that type, whichever is more."""
     tally_n = int(((vibe or {}).get('toxicity_types') or {}).get(kind) or 0)
@@ -937,7 +962,7 @@ def build(aid, a=None, vibe=None, cov=None) -> dict | None:
     return {'members': members_view(trail), 'm': m, 'cards': card_list, 'health': tile, 'alerts': found, 'alert_counts': counts, 'notes': notes, 'badges': earned, 'badge_note': badge_note,
             'badges_earned': sum(1 for b in earned if b['earned']), 'trail': trail, 'since': since_table(comparison, live), 'comparison': comparison, 'record': live,
             'basis_text': basis_text(m, cov, vibe), 'chart_key': chart_key(m), 'all_clear': all_clear,
-            'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES, 'since': CAVEAT_SINCE},
+            'alert_catalog': alert_catalog(), 'caveats': {'alerts': CAVEAT_ALERTS, 'empty': CAVEAT_EMPTY, 'measures': CAVEAT_MEASURES, 'badges': CAVEAT_BADGES, 'since': CAVEAT_SINCE},
             'texts': {'first_check': FIRST_CHECK, 'no_badges': NO_BADGES}}
 
 
