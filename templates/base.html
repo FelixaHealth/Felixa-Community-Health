@@ -4,28 +4,40 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#F27435">
 <script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
-</head><body>
+</head><body class="app">
 <a class="skip" href="#main">Skip to content</a>
-<header class="topbar">
-<a class="brand" href="/"><img class="brand-logo" src="/static/logo_wide.png" alt="Felixa Community Health" width="146" height="52"></a>
-<nav class="topnav" aria-label="Site">
-<a class="navlink nl-blue{% if request.url.path.startswith('/dashboard') %} on{% endif %}" href="/dashboard"{% if request.url.path.startswith('/dashboard') %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>
-{% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label><span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>
-{% if a is not defined or not a %}<option value="" disabled selected>Choose a workplace…</option>{% endif %}
-{% for w in top_workplaces %}<option value="{{ w.id }}"{% if a is defined and a and a.id == w.id %} selected{% endif %}>{{ w.name }}</option>{% endfor %}
-<option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>{% endif %}
-{% if top_workplaces %}<a class="navlink add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
-<button class="navlink nl-violet" type="button" data-help-open>{{ icon('help') }}<span>How to read this</span></button>
-<a class="navlink nl-gear{% if request.url.path.startswith('/settings') %} on{% endif %}" href="/settings"{% if request.url.path.startswith('/settings') %} aria-current="page"{% endif %}>{{ icon('gear') }}<span>Settings</span></a>
-<button class="navlink" type="button" id="theme-toggle" aria-pressed="false">{{ icon('moon') }}<span>Theme</span></button>
+{% set path = request.url.path %}
+<aside class="sidebar no-print" aria-label="Main">
+<a class="side-logo" href="/"><img src="/static/logo_side.png" alt="Felixa Community Health" width="150" height="144"></a>
+<nav class="side-nav" aria-label="Site">
+<a class="side-link{% if path == '/' %} on{% endif %}" href="/"{% if path == '/' %} aria-current="page"{% endif %}>{{ icon('home') }}<span>Home</span></a>
+<a class="side-link{% if cur and (path.endswith('/workspace') or '/step/' in path) or path == '/new' %} on{% endif %}" href="{{ '/analysis/%d/workspace'|format(cur.id) if cur else '/new' }}">{{ icon('building') }}<span>Workplace</span></a>
+<a class="side-link{% if '/check/' in path %} on{% endif %}" href="{{ ('/analysis/%d/check/1'|format(cur.id) if not cur.units else '/analysis/%d/workspace#new'|format(cur.id)) if cur else '/new' }}">{{ icon('plussq') }}<span>Analyze</span></a>
+<a class="side-link{% if path.endswith('/results') or '/track/' in path or '/tone/' in path or '/category/' in path %} on{% endif %}" href="{{ ('/analysis/%d/results'|format(cur.id) if cur.has_results else '/analysis/%d/workspace'|format(cur.id)) if cur else '/new' }}">{{ icon('chart') }}<span>Results</span></a>
+<a class="side-link{% if path.endswith('/report') %} on{% endif %}" href="{{ ('/analysis/%d/report'|format(cur.id) if cur.has_results else '/analysis/%d/workspace'|format(cur.id)) if cur else '/new' }}">{{ icon('file') }}<span>Reports</span></a>
 </nav>
+<div class="side-foot"><a class="side-link small{% if path.startswith('/settings') %} on{% endif %}" href="/settings"{% if path.startswith('/settings') %} aria-current="page"{% endif %}>{{ icon('gear') }}<span>Settings</span></a>
+<button class="side-link small" type="button" data-help-open>{{ icon('help') }}<span>Help</span></button></div>
+</aside>
+<div class="main-col">
+<header class="appbar no-print">
+{% if top_workplaces %}<form class="wp-pick" method="get" action="/go"><label>{{ icon('building') }}<span class="sr-only">Workplace</span><select name="to" id="wp-pick" data-nav>
+{% if not cur %}<option value="" disabled selected>Choose a workplace…</option>{% endif %}
+{% for w in top_workplaces %}<option value="{{ w.id }}"{% if cur and cur.id == w.id %} selected{% endif %}>{{ w.name }}</option>{% endfor %}
+<option value="compare">Compare all workplaces</option></select></label><noscript><button class="navlink" type="submit">Go</button></noscript></form>
+<a class="icon-pill add-wp" href="/new" title="Add a workplace" aria-label="Add a workplace">{{ icon('plus') }}</a>{% else %}<a class="navlink add-wp text" href="/new">{{ icon('plus') }}<span>Create a workplace</span></a>{% endif %}
+<form class="search" method="get" action="/search" role="search"><label>{{ icon('search') }}<span class="sr-only">Search</span><input type="search" name="q" placeholder="Search analyses, messages or reports…" autocomplete="off" value="{{ search_q or '' }}"></label></form>
+<a class="icon-pill bell" href="{{ ('/analysis/%d/results#tab-act'|format(cur.id)) if cur and cur.has_results else '/' }}" title="Badges and alerts" aria-label="Badges and alerts">{{ icon('bell') }}{% if alert_count %}<i class="dot" aria-hidden="true"></i>{% endif %}</a>
+<a class="avatar" href="/settings" title="Settings" aria-label="Your settings">{{ cur.initial if cur else 'F' }}</a>
+{% if top_workplaces %}<a class="dash-link" href="/dashboard"{% if request.url.path == '/dashboard' %} aria-current="page"{% endif %}>{{ icon('chart') }}<span>Results dashboard</span></a>{% endif %}
 </header>
 <div class="privacy-bar no-print">{{ icon('lock') }}<span><strong>Runs on your computer.</strong> Nothing leaves it unless you choose a cloud engine and tick the box.</span></div>
 <main class="page" id="main">
 {% if msg %}<div class="flash" id="flash" role="alert" tabindex="-1">{{ msg }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
-<button class="help-fab no-print" type="button" data-help-open>{{ icon('chat') }}<span>Help</span></button>
+</div>
+<a class="help-fab ask-fab no-print" href="/ask" aria-label="Ask Felixa">{{ icon('chat') }}<span>Ask Felixa</span></a>
 <dialog class="help-dialog no-print" id="help-dialog" aria-labelledby="help-title">
 <div class="help-head"><h2 id="help-title">How to read this</h2><button class="icon-btn" type="button" data-help-close aria-label="Close">{{ icon('close') }}</button></div>
 <div class="help-body">

@@ -123,3 +123,16 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
     if (r.value === 'system') delete root.dataset.theme; else root.dataset.theme = r.value;
   }); });
 })();
+
+// Badges and alerts: the Dashboard / Trends switch, and the "Compare to" menu that reloads with its choice.
+(() => {
+  document.querySelectorAll('select[data-submit]').forEach((s) => s.addEventListener('change', () => s.form.submit()));
+  document.querySelectorAll('[data-act]').forEach((box) => {
+    const buttons = [...box.querySelectorAll('[data-act-view]')];
+    buttons.forEach((b) => b.addEventListener('click', () => {
+      const trends = b.dataset.actView === 'trends';
+      buttons.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      document.querySelectorAll('.act-dash').forEach((el) => { el.hidden = trends; });
+    }));
+  });
+})();

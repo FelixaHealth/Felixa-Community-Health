@@ -2145,21 +2145,21 @@ class Layout(AppCase):
 
     def test_the_front_page_has_one_plain_headline_and_leads_back_to_each_workplace(self):
         page = self.client.get('/').text
-        self.assertEqual(page.split('<h1>', 1)[1].split('</h1>', 1)[0], 'See how people really communicate.')
+        self.assertEqual(page.split('<h1 class="sr-only">', 1)[1].split('</h1>', 1)[0], 'Home')
+        self.assertIn('See how people really communicate.', page)
         self.assertIn('Create a workplace', page)
         draft = int(self.client.get('/new').headers['location'].split('/')[2])               # started, never given a name: not a workplace yet
         aid = self.with_chat(name='Night <b>Owls</b> & Co')
         listing = self.client.get('/').text
-        self.assertIn('Your workplaces', listing)
-        self.assertIn(f'href="/analysis/{aid}/workspace"', listing)
-        self.assertNotIn(f'href="/analysis/{draft}/workspace"', listing)
+        self.assertIn(f'<option value="{aid}"', listing)                                       # the workplace picker in the top bar
+        self.assertNotIn(f'<option value="{draft}"', listing)
         self.assertIn('Night &lt;b&gt;Owls&lt;/b&gt; &amp; Co', listing)                        # a name a person typed is text, never markup
         self.assertNotIn('<b>Owls</b>', listing)
-        self.assertIn('No check yet', listing)
+        self.assertIn('has no results yet', listing)
         self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')
         listing = self.client.get('/').text
-        self.assertRegex(listing, r'<b>\d+(\.\d+)?</b><small>/ 10 vibe</small>')
-        self.assertIn('Online community · Gaming · Discord', listing)
+        self.assertIn('Vibe Check', listing)
+        self.assertRegex(listing, r'Vibe Check \d+ percent')
         self.assertEqual([w['id'] for w in self.store.workplaces()][:1], [aid])
 
 
@@ -4795,7 +4795,7 @@ class Workplaces(AppCase):
     def test_the_logo_names_the_product_and_has_no_background(self):
         from PIL import Image
         page = self.client.get('/').text
-        self.assertIn('src="/static/logo_wide.png"', page)
+        self.assertIn('src="/static/logo_side.png"', page)
         self.assertIn('alt="Felixa Community Health"', page)
         for name in ('logo_stacked.png', 'logo_wide.png'):
             image = Image.open(self.app.BASE_DIR / 'static' / name).convert('RGBA')
@@ -4906,8 +4906,8 @@ class WorkplaceManagement(AppCase):
         self.assertEqual(self.post(gone, 'delete').status_code, 404, 'twice is a not found, not a crash')
         self.assertGreater(self.store.count_units(keep), 0, 'the other workplace is untouched')
         home = self.client.get('/').text
-        self.assertNotIn('<strong>Delete Me</strong>', home)
-        self.assertIn('<strong>Keep Me</strong>', home)
+        self.assertNotIn('>Delete Me</option>', home)
+        self.assertIn('>Keep Me</option>', home)
 
     def test_the_edit_page_explains_what_deleting_does_before_it_does_it(self):
         aid = self.new_analysis()
@@ -4923,23 +4923,22 @@ class WorkplaceManagement(AppCase):
             home = self.client.get('/').text
         self.assertIn('Create your first workplace', home)
         self.assertIn('Create a workplace', home.split('</header>', 1)[0], 'the top bar offers it only while there is none')
-        self.assertNotIn('class="wp-card', home)
         one = self.new_analysis(name='Alpha Team')
         row = next(w for w in self.store.workplaces() if w['id'] == one)
-        with mock.patch.object(self.store, 'workplaces', return_value=[row]):
+        name_row = next(w for w in self.store.workplace_names() if w['id'] == one)
+        with mock.patch.object(self.store, 'workplaces', return_value=[row]), mock.patch.object(self.store, 'workplace_names', return_value=[name_row]):
             home = self.client.get('/').text
         self.assertNotIn('Create your first workplace', home)
-        self.assertIn('Ready for new analytics?', home)
-        self.assertIn(f'href="/analysis/{one}/check/1"', home, 'no messages yet: it starts at step 1')
+        self.assertIn('Alpha Team has no results yet.', home)
+        self.assertIn(f'href="/analysis/{one}/check/1"', home, 'no messages yet: New Analysis starts at step 1')
         top = home.split('</header>', 1)[0]
         self.assertIn('aria-label="Add a workplace"', top)
         self.assertNotIn('Create a workplace', top, 'once a workplace exists the top bar has only the + button')
         two = self.with_chat(name='Beta Crew')
         home = self.client.get('/').text
-        self.assertIn('Which workplace do you want to check?', home)
-        self.assertEqual(home.count('New analytics</a>'), len(self.store.workplaces()), 'one New analytics button per workplace')
-        self.assertIn(f'href="/analysis/{two}/workspace#new"', home, 'a workplace with messages asks before replacing them')
-        self.assertIn('Add a workplace', home.split('class="how"', 1)[0])
+        self.assertIn('>Beta Crew</option>', home)
+        self.assertIn('>Alpha Team</option>', home)
+        self.assertRegex(home, r'href="/analysis/\d+/(workspace#new|check/1)"', 'New Analysis leads to the current workplace')
 
     def test_both_deletions_sit_together_in_a_small_danger_zone_inside_the_workplace_settings(self):
         aid = self.with_chat()

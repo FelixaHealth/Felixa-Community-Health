@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Search{% endblock %}
+{% block content %}
+<div class="stage search-page">
+<section class="dash-head"><div class="eyebrow">Search</div><h1>{% if q %}Results for “{{ q }}”{% else %}Search{% endif %}</h1>
+<p class="lead">Workplaces, their reports and the messages stored for them. Everything is searched on this computer.</p></section>
+{% if not q %}<section class="panel"><p>Type a word in the box at the top and press Enter.</p></section>
+{% else %}
+<section class="panel"><div class="eyebrow">Workplaces and reports</div>
+{% if found_wp %}<ul class="srch-list">{% for w in found_wp %}<li><div><strong>{{ w.person_name }}</strong><small>{{ [w.subject_type, w.person_role, w.channel]|select|join(' · ') }}</small></div><div class="srch-links"><a class="btn" href="/analysis/{{ w.id }}/workspace">Open workplace</a>{% if w.score is not none %}<a class="btn" href="/analysis/{{ w.id }}/results">Results</a><a class="btn" href="/analysis/{{ w.id }}/report">Report</a>{% endif %}</div></li>{% endfor %}</ul>
+{% else %}<p class="small-note">No workplace matches.</p>{% endif %}</section>
+<section class="panel"><div class="eyebrow">Messages</div>
+{% if found_msgs %}<ol class="comment-list">{% for m in found_msgs %}<li class="comment lv0"><p>{{ m.snippet }}</p><div class="comment-meta"><a href="/analysis/{{ m.analysis_id }}/workspace">{{ m.workplace }}</a>{% if m.timestamp %}<span>{{ m.timestamp[:10] }}</span>{% endif %}</div></li>{% endfor %}</ol>{% if found_msgs|length >= 40 %}<p class="small-note">Showing the first 40 matches. Add a word to narrow it.</p>{% endif %}
+{% else %}<p class="small-note">No stored message contains “{{ q }}”.</p>{% endif %}</section>
+{% endif %}
+</div>{% endblock %}

@@ -486,3 +486,49 @@ def track_compare(stretches, *, width=W):
         sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
+
+
+def compare_chart(cats, cur, prev, *, width=W):
+    """The same headline numbers for two checks side by side: one point per number (0 to 100), the current check in dark green with a soft fill, the earlier one in gold.
+    `prev` is None when there is no earlier check, and only the current line is drawn. A hover target for every number."""
+    n = len(cats)
+    if n < 2:
+        return None
+    narrow = width < 600
+    tick_size, _end = _sizes(width)
+    height = 300 if narrow else 290
+    ml, mr, mt, mb = 52, 20, 18, 40
+    pw, ph = width - ml - mr, height - mt - mb
+    X = lambda i: ml + pw * (i + 0.5) / n                           # noqa: E731
+    Y = lambda v: mt + ph * (1 - min(max(v, 0.0), 100.0) / 100.0)   # noqa: E731
+    desc = 'The headline numbers of this check' + (' and the earlier one' if prev else '') + ': ' + ', '.join(f'{c} {_whole(v)}%' for c, v in zip(cats, cur)) + '.'
+    sc = Scene(width, height, 'Trend comparison', desc)
+    for t in (0, 20, 40, 60, 80, 100):
+        sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
+        sc.text(ml - 8, Y(t) + tick_size * 0.33, f'{t}%', size=tick_size, fill='ink2', anchor='end')
+    for i, c in enumerate(cats):
+        sc.text(X(i), height - mb + tick_size + 9, c, size=tick_size, fill='ink2', anchor='middle')
+    pts = [(X(i), Y(v)) for i, v in enumerate(cur)]
+    sc.poly(pts + [(pts[-1][0], Y(0)), (pts[0][0], Y(0))], fill='good', fill_opacity=0.12, close=True)
+    if prev:
+        run = []                                                    # the earlier check may lack some numbers: a line is drawn through each unbroken run of them
+        for i, v in enumerate(list(prev) + [None]):
+            if v is not None:
+                run.append((X(i), Y(v)))
+                continue
+            if len(run) > 1:
+                sc.poly(run, stroke='gold', width=2.6)
+            for x, y in run:
+                sc.circle(x, y, 5.5, 'surface')
+                sc.circle(x, y, 3.5, 'gold')
+            run = []
+    sc.poly(pts, stroke='forest', width=2.6)
+    for x, y in pts:
+        sc.circle(x, y, 5.5, 'surface')
+        sc.circle(x, y, 3.5, 'forest')
+    step = pw / n
+    for i, c in enumerate(cats):
+        rows = [['Current', f'{_whole(cur[i])}%', 'forest']] + ([['Earlier', f'{_whole(prev[i])}%', 'gold']] if prev and prev[i] is not None else [])
+        sc.hit(ml + step * i, mt, step, ph, {'t': c, 'r': rows}, X(i))
+    sc.cross(mt, mt + ph)
+    return sc

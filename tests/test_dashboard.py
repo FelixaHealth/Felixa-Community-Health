@@ -131,7 +131,7 @@ class SideBar(DashboardCase):
         for path in (f'/analysis/{aid}/workspace', f'/analysis/{aid}/check/1', '/dashboard'):
             self.assertIn('href="/dashboard"', self.client.get(path).text.split('</header>', 1)[0], path)
         top = self.client.get('/dashboard').text.split('</header>', 1)[0]
-        self.assertIn('aria-current="page"', top.split('href="/dashboard"', 1)[1].split('</a>', 1)[0])
+        self.assertIn('aria-current="page"', top.split('href="/dashboard"', 1)[1].split('>', 1)[0])
         self.assertNotIn('aria-current="page"', self.client.get(f'/analysis/{aid}/workspace').text.split('</header>', 1)[0])
 
 

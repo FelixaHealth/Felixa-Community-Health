@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Felixa Community Health">
-<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="14" y1="6" x2="116" y2="124"><stop offset="0" stop-color="#FFC247"/><stop offset=".55" stop-color="#F6872F"/><stop offset="1" stop-color="#E4502E"/></linearGradient>
+<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="14" y1="6" x2="116" y2="124"><stop offset="0" stop-color="#F8D26A"/><stop offset=".55" stop-color="#EBA823"/><stop offset="1" stop-color="#C77B0B"/></linearGradient>
 <linearGradient id="s" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="128"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
 <path d="M38 6h52a32 32 0 0 1 32 32v38a32 32 0 0 1-32 32H62L30 124c3-9 4-15 4-21A32 32 0 0 1 6 76V38A32 32 0 0 1 38 6z" fill="url(#g)"/>
 <path d="M38 6h52a32 32 0 0 1 32 32v38a32 32 0 0 1-32 32H62L30 124c3-9 4-15 4-21A32 32 0 0 1 6 76V38A32 32 0 0 1 38 6z" fill="url(#s)"/>

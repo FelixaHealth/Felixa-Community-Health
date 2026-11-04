@@ -2835,7 +2835,7 @@ class PageStructure(MeasuresCase):
         for what in ('results', 'report'):
             html = self.page(aid, what)
             # the report keeps one long page in this order; the results page puts each part in its tab: Overview, Track, Understand, then Act
-            ids = ('summary', 'alerts', 'over-time', 'badges', 'behaviour', 'guidance', 'vibe-check') if what == 'report' else ('summary', 'over-time', 'behaviour', 'vibe-check', 'alerts', 'badges', 'guidance')
+            ids = ('summary', 'alerts', 'over-time', 'badges', 'behaviour', 'guidance', 'vibe-check') if what == 'report' else ('summary', 'over-time', 'behaviour', 'vibe-check', 'guidance', 'alerts', 'badges')
             places = [html.index(f'id="{sid}"') for sid in ids]
             self.assertEqual(places, sorted(places), what)
             self.assertEqual(len(set(places)), len(ids))
@@ -3051,15 +3051,17 @@ class PageStructure(MeasuresCase):
             self.assertNotRegex(measures_markup(response.text), r'(?i)(?:src|href)="(?:https?:)?//')
             self.assertNotRegex(measures_markup(response.text), r'<script|<iframe|javascript:')
 
-    def test_the_home_list_shows_the_vibe_score_and_no_health_score_alert_or_badge(self):
+    def test_the_home_dashboard_shows_four_headline_cards_and_none_of_the_result_sections(self):
+        """Home is a glance: Vibe Check, health score, sentiment, the four modules, then the two doors. The detail stays on the results page."""
         aid = self.flare()
         html = self.client.get('/').text
         main = html[html.index('<main'):html.index('</main>')]
         text = Page(main).human
         vibe = self.store.latest_vibe(aid)
-        self.assertIn(f'{vibe["score"]:g} / 10 vibe', text)
-        for needle in ('Health score', '/ 100', 'High priority', 'Medium priority', 'Good news', 'Earned', 'Cools fast', 'No serious flags', 'The mood heated up fast',
-                       'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'thing to look at'):
+        self.assertIn(f'Vibe Check {round(vibe["score"] * 10)} percent', main)
+        for needle in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Badges & Alerts', 'Ask Felixa'):
+            self.assertIn(needle, text, needle)
+        for needle in ('High priority', 'Medium priority', 'Good news', 'Earned', 'Cools fast', 'No serious flags', 'The mood heated up fast', 'thing to look at'):
             self.assertNotIn(needle, text, needle)
         for sid in SECTIONS:
             self.assertNotIn(f'id="{sid}"', html)

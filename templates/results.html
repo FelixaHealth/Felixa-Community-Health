@@ -30,8 +30,9 @@
 {% if vibe_html %}{{ vibe_html|safe }}{% endif %}
 </div>{% endif %}
 {% if measures or guidance %}<div class="tabpanel" id="tab-act" role="tabpanel">
-<header class="tab-intro"><h2>What should I do?</h2><p>What to look at first, what is going well, and what to try next.</p></header>
-{% if measures %}{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}
+{% if act %}{% include "_act_dashboard.html" %}{% endif %}
 {% if guidance %}{% include "_guidance.html" %}{% endif %}
+{% if measures %}<header class="tab-intro act-dash"><h2>Every alert and badge, in full</h2><p>The complete lists, with what each one needs.</p></header>
+{% include "_alerts.html" %}{% include "_badges.html" %}{% endif %}
 </div>{% endif %}
 </div></div>{% endblock %}

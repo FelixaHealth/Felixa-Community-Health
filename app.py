@@ -33,6 +33,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
+import actview
 import analysis
 import bei_charts
 import config
@@ -444,13 +445,28 @@ def check_steps_rail(a):
     return {'steps': steps, 'foot': None, 'setup': False}
 
 
+def current_workplace(row, names):
+    """The workplace the side bar and the top bar are about: the one on the page, else the most recently touched. None before the first one exists."""
+    if row is not None and row['status'] != 'draft' and row['id'] in {w['id'] for w in names}:
+        wid = row['id']
+    elif names:
+        wid = names[0]['id']
+    else:
+        return None
+    a = store.get_analysis(wid)
+    name = next(w['name'] for w in names if w['id'] == wid)
+    return {'id': wid, 'name': name, 'units': store.count_units(wid), 'has_results': report.has_results(analysis.metrics_for(wid), store.latest_vibe(wid)),
+            'initial': ((a['user_name'] or name or 'F').strip()[:1] or 'F').upper()}
+
+
 def render(request, name, **context):
     flash = request.cookies.get('flash')
     row = context.get('a')
     if 'rail' not in context:
         context['rail'] = check_steps_rail(row) if row is not None and row['status'] != 'draft' else {'steps': [], 'foot': None, 'setup': False}
+    names = store.workplace_names()
     response = templates.TemplateResponse(request=request, name=name, context={'request': request, 'msg': unquote(flash) if flash else None,
-                                                                              'top_workplaces': store.workplace_names(), **context})
+                                                                              'top_workplaces': names, 'cur': current_workplace(row, names), **context})
     if flash:
         response.delete_cookie('flash')
     return response
@@ -538,11 +554,58 @@ def setup_context(a, step):
                                 foot={'icon': 'eye', 'label': 'Workplace', 'href': f'/analysis/{a["id"]}/workspace'} if a['status'] != 'draft' else None)}
 
 
+CHIP_WORDS = {'none': 'Low', 'small': 'Low', 'clear': 'Moderate', 'steep': 'High', 'early': 'Early', 'Rare': 'Low', 'Some': 'Moderate', 'Often': 'High'}
+
+
+def sparkline(values, width=170, height=56):
+    """A small line with a soft fill under it, as inline SVG points: (line points, area path). Empty when there is nothing to draw."""
+    vals = [float(v) for v in values]
+    if len(vals) < 2:
+        return '', ''
+    top = max(max(vals), 10.0)
+    pts = [(2 + (width - 4) * i / (len(vals) - 1), height - 4 - (height - 10) * v / top) for i, v in enumerate(vals)]
+    line = ' '.join(f'{x:.1f},{y:.1f}' for x, y in pts)
+    area = f'M{pts[0][0]:.1f},{height} L' + ' L'.join(f'{x:.1f},{y:.1f}' for x, y in pts) + f' L{pts[-1][0]:.1f},{height} Z'
+    return line, area
+
+
+def home_view(aid):
+    """What the Home page shows for one workplace: the Vibe Check, the health score, the sentiment, the four modules, and how many things want a look. None until it has results."""
+    ctx = report.build(aid)
+    if not ctx or not ctx['has_results']:
+        return None
+    ms, vibe = ctx.get('measures'), ctx['vibe'] if ctx['vibe'] and ctx['vibe'].get('status') == 'ok' else None
+    view = {'ctx': ctx, 'vibe': None, 'health': None, 'sentiment': None, 'modules': [], 'alerts': 0, 'badges': 0}
+    if vibe:
+        pct = (vibe.get('sentiment') or {}).get('pct') or {}
+        view['vibe'] = {'percent': round(vibe['score'] * 10), 'label': vibe.get('label', ''), 'score': vibe['score']}
+        view['sentiment'] = {'friendly': pct.get('friendly', 0), 'neutral': pct.get('neutral', 0), 'unfriendly': pct.get('unfriendly', 0)}
+    if ms:
+        h = ms['health']
+        view['health'] = {'score': round(h['score']), 'status': h['status'], 'tone': h['tone']}
+        o = ms['m']['overall']
+        n = o['n'] or 1
+        for card in ms['cards']:
+            rate_pct = round(100.0 * o[card['kind']] / n)
+            line, area = sparkline(card['series'])
+            view['modules'].append({'key': card['key'], 'name': card['name'], 'value': rate_pct, 'chip': CHIP_WORDS.get(card.get('word') or card['level'], card['level']), 'tone': card['tone'],
+                                    'line': line, 'area': area})
+        view['alerts'] = sum(1 for x in ms['alerts'] if x['level'] != 'good')
+        view['badges'] = ms['badges_earned']
+    return view
+
+
+@app.get('/ask', response_class=HTMLResponse)
+def ask_page(request: Request):
+    return render(request, 'ask.html')
+
+
 @app.get('/', response_class=HTMLResponse)
 def index(request: Request):
-    return render(request, 'index.html', workplaces=[{**w, 'when': long_date(w['updated_at']), 'facts': [x for x in (w['subject_type'], w['person_role'], w['channel']) if x],
-                                                      'new_href': f'/analysis/{w["id"]}/check/1' if not store.count_units(w['id']) else f'/analysis/{w["id"]}/workspace#new'}
-                                                     for w in store.workplaces()])
+    names = store.workplace_names()
+    cur = current_workplace(None, names)
+    home = home_view(cur['id']) if cur else None
+    return render(request, 'index.html', home=home, alert_count=home['alerts'] if home else 0)
 
 
 @app.get('/new')
@@ -773,6 +836,22 @@ def wizard_rail(aid, steps, base, current, foot=None):
     """The left-hand list of steps: each with a state (on, done or todo), and the item below the rule."""
     items = [{'num': n, 'label': label, 'href': f'{base}/{n}', 'state': 'on' if n == current else 'done' if n < current else 'todo'} for n, label in steps]
     return {'steps': items, 'foot': foot, 'setup': base.endswith('/step')}      # the steps of setting a workplace up (once) do not carry the list of workplaces
+
+
+@app.get('/search', response_class=HTMLResponse)
+def search_page(request: Request, q: str = ''):
+    """One box for workplaces, their reports and the messages stored for them. Everything is searched on this computer."""
+    q = ' '.join(q.split())[:100]
+    found_wp, found_msgs = [], []
+    if q:
+        low = q.lower()
+        found_wp = [w for w in store.workplaces() if low in (w['person_name'] or '').lower() or low in ' '.join(str(x) for x in (w['subject_type'], w['person_role'], w['channel']) if x).lower()]
+        found_msgs = store.search_messages(q)
+        for m in found_msgs:
+            at = m['text'].lower().find(low)
+            start = max(0, at - 60)
+            m['snippet'] = ('…' if start else '') + m['text'][start:start + 220] + ('…' if len(m['text']) > start + 220 else '')
+    return render(request, 'search.html', q=q, search_q=q, found_wp=found_wp, found_msgs=found_msgs)
 
 
 @app.get('/go')
@@ -1499,11 +1578,15 @@ def track_views(ms, only=None):
 
 
 @app.get('/analysis/{aid}/results', response_class=HTMLResponse)
-def results_page(request: Request, aid: AnalysisId):
+def results_page(request: Request, aid: AnalysisId, compare: str = 'previous'):
     """The results on a page of their own, with tabs along the top."""
     ctx = report_context(aid, 'page of results')
     ctx['track_view'] = track_views(ctx['measures']) if ctx.get('measures') else None
-    return render(request, 'results.html', tabs_page=True, **ctx)
+    act = actview.build(ctx, compare) if ctx.get('measures') else None
+    if act:
+        t = act['trend']
+        act['trend_html'] = vibe_check.figure(lambda w: bei_charts.compare_chart(t['cats'], t['cur'], t['prev'], width=w)) if len(t['cats']) >= 2 else ''
+    return render(request, 'results.html', tabs_page=True, act=act, **ctx)
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)

@@ -455,6 +455,15 @@ def clear_evidence(aid):
     empty_log()
 
 
+def search_messages(text, limit=40) -> list:
+    """Stored messages that contain `text` (any case), newest workplace first: [{'analysis_id', 'workplace', 'text', 'timestamp'}]."""
+    like = '%' + str(text).replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+    with db() as c:
+        rows = c.execute("SELECT cu.analysis_id, a.person_name, cu.text, cu.timestamp FROM communication_units cu JOIN analyses a ON a.id=cu.analysis_id "
+                         "WHERE a.status != 'draft' AND cu.text LIKE ? ESCAPE '\\' ORDER BY cu.analysis_id DESC, cu.id LIMIT ?", (like, limit)).fetchall()
+    return [{'analysis_id': r['analysis_id'], 'workplace': r['person_name'] or 'Workplace', 'text': r['text'], 'timestamp': r['timestamp'] or ''} for r in rows]
+
+
 def delete_everything() -> tuple:
     """Deletes every workplace with everything saved for it. Returns (workplaces deleted, workplaces left because a task was running for them)."""
     with db() as c:
