@@ -1,0 +1,16 @@
+{
+  "name": "Felixa Community Health",
+  "short_name": "Felixa",
+  "description": "How healthy your communication is, at a glance.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f4e9",
+  "theme_color": "#0f4a2e",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "maskable"}
+  ]
+}

@@ -387,7 +387,8 @@ class BodyLimit:
 app.add_middleware(BodyLimit)
 
 
-PUBLIC_ICONS = {'/favicon.ico': 'favicon.ico', '/favicon.svg': 'favicon.svg', '/apple-touch-icon.png': 'apple-touch-icon.png', '/logo.png': 'logo_wide.png'}
+PUBLIC_ICONS = {'/favicon.ico': 'favicon.ico', '/favicon.svg': 'favicon.svg', '/apple-touch-icon.png': 'apple-touch-icon.png', '/logo.png': 'logo_wide.png',
+                '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/manifest.webmanifest': 'manifest.webmanifest'}
 
 
 @app.middleware('http')
@@ -396,7 +397,7 @@ async def protect_online_workspace(request: Request, call_next):
     if path == '/health':
         return harden(await call_next(request), path, request)
     if path in PUBLIC_ICONS:                                            # the tab icon and the logo must load on the sign-in page too
-        return harden(FileResponse(BASE_DIR / 'static' / PUBLIC_ICONS[path], headers={'Cache-Control': 'public, max-age=86400'}), '/static/', request)
+        return harden(FileResponse(BASE_DIR / 'static' / PUBLIC_ICONS[path], media_type='application/manifest+json' if path.endswith('.webmanifest') else None, headers={'Cache-Control': 'public, max-age=86400'}), '/static/', request)
     if cross_site(request):
         return harden(HTMLResponse('Invalid request origin.', status_code=403), path, request)
     password = os.getenv('FELIXA_PASSWORD', '')
