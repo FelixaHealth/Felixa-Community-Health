@@ -137,7 +137,7 @@ def _measure_rows(ms) -> list:
     rows = [['Measures over time'], [HOW, ms['caveats']['measures']], ['Basis', ms['basis_text']]]
     rows += [['Note', text] for text in _notes(ms, 'measures')]
     rows.append(['Measure', 'Level', 'Count (messages; heated moments for Escalation)', 'Out of (messages rated)', 'Trend', 'What we saw', 'Note', 'What it means',
-                 'Level in the latest part' if m['basis'] == 'time' else 'Level in the last part', MARK])
+                 'Level in the last third', MARK])
     for c in ms['cards']:           # a card that could not be judged has no count (None): an empty cell, never a 0 that a spreadsheet would read as 'none'
         rows.append([c['name'], c['level'], _blank(c.get('count')), _blank(c.get('of')), c.get('trend') or '', c['headline'], c.get('note') or '', c['meaning'],
                      c.get('latest') or '', _tone(c)])

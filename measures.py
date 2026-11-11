@@ -454,7 +454,7 @@ def cards(m) -> list:
             card['trend'] = ''
             hottest = max((s['rates']['heated'] for s in stretches), default=0.0)
             card['note'] = ('The mood was already tense when the messages start. Escalation only counts a rise.' if m['opening_heated'] and m['verdicts'] else
-                            'Some parts were heated, but not by more than chance alone would give.' if m['verdicts'] and not eps and whole(hottest) >= 30 else '')
+                            'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.' if m['verdicts'] and not eps and whole(hottest) >= 30 else '')
             card['count'] = len(eps) if m['verdicts'] else None
             if m['opening_heated'] and m['verdicts'] and not eps:       # hot from the first part: a rise could not be seen, so no green mark
                 card['tone'] = 'info'
@@ -467,7 +467,7 @@ def cards(m) -> list:
                 card['tone'] = 'info'
             if m['last3'] and m['verdicts']:
                 card['latest'] = level_word(kind, rate(m['last3'], kind), m['scale'])
-                card['latest_label'] = 'Latest part' if m['basis'] == 'time' else 'Last part'
+                card['latest_label'] = 'Last third'
         if is_silent(m):                                             # almost no tone found: nothing here is good news
             card['tone'] = 'info'
         card['tone_word'] = TONE_WORDS[card['tone']]

@@ -62,7 +62,7 @@ CHART_KEY = 'Lines show messages per 100. Shaded bands show where Rare, Some and
 SAMPLED = 'A short flare-up can fall between the samples. Choose "all of them" for the volume to see every message.'                  # the note about a sample
 HELD_BACK = 'Held back while an alert about serious flags or a High priority alert stands.'                                                  # why No serious flags is not given
 TENSE_NOTE = r'(?i)\balready tense\b'                                                                                                 # the card note for a tense start (a pattern: the spec quotes no wording)
-CHANCE_NOTE = 'Some parts were heated, but not by more than chance alone would give.'                                                  # the card note for a hot part that chance could give
+CHANCE_NOTE = 'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.'                                                  # the card note for a hot part that chance could give
 REMOVED_NOTES = ('not_alike', 'opening')                                                                                              # notes that no longer exist
 
 
@@ -1701,7 +1701,7 @@ class CardTests(unittest.TestCase):
 
     def test_the_card_note_says_when_a_hot_part_could_be_chance_and_only_then(self):
         """MEASURES.md: when a part of the chat has 30 or more heated messages in 100 but no heated moment passed the chance test, the card says it."""
-        said = 'Some parts were heated, but not by more than chance alone would give.'
+        said = 'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.'
         busy = [2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3]            # 12 parts of 8: the first is at 25 in 100, the seventh at 75, the rest at 38: a community that is often heated
         m = an(part_chat(busy, 8, HEAT))
         self.assertEqual((m['episodes'], m['opening_heated'], m['verdicts']), ([], False, True), 'the precondition: a hot part, no heated moment, no tense start')

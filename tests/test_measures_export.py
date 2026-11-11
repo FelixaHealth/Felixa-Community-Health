@@ -36,7 +36,7 @@ CLOCK = re.compile(r'\b\d{1,2}:\d{2}\b')
 BANNED = (r'\bFAS\b', r'(?i)\bstretch', r'(?i)\bepisode', r'(?i)\bbaseline', r'(?i)\bpeak', r'(?i)\btoxic', r'(?i)communication unit', r'(?i)standard error', r'(?i)z-score')
 BLOCKS = ('Alerts', 'Measures over time', 'Since your last check', 'Badges')
 MEASURE_HEAD = ['Measure', 'Level', 'Count (messages; heated moments for Escalation)', 'Out of (messages rated)', 'Trend', 'What we saw', 'Note', 'What it means',
-                'Level in the latest part', 'Mark']
+                'Level in the last third', 'Mark']
 PARTS_HEAD = ['Part of the chat', 'Messages', 'Conflict per 100 messages', 'Empathy per 100 messages', 'Passive-aggressive per 100 messages', 'Heated per 100 messages',
               'Counted as a heated moment', 'Health score']
 SINCE_HEAD = ['Measure', 'Last check', 'Last check: out of', 'This check', 'This check: out of', 'Change']
@@ -304,7 +304,7 @@ class MeasuresExport(AppCase):
         self.assertEqual(head, MEASURE_HEAD)
         self.assertIn('messages', head[2])
         self.assertIn('heated moments', head[2])
-        self.assertEqual(head[8], 'Level in the latest part')
+        self.assertEqual(head[8], 'Level in the last third')
         self.assertEqual(head[9], 'Mark')                                                              # the last column: the icon of the page, in words
         self.assertTrue({r[8] for r in table_after(rows, MEASURE_HEAD)} <= {'', 'Rare', 'Some', 'Often'})
 
@@ -345,15 +345,15 @@ class MeasuresExport(AppCase):
         self.assertEqual(ms['m']['basis'], 'order')
         shown = [c for c in ms['cards'] if c.get('latest')]
         self.assertTrue(shown)
-        self.assertEqual({c['latest_label'] for c in shown}, {'Last part'})
+        self.assertEqual({c['latest_label'] for c in shown}, {'Last third'})
         head = next(r for r in block(self.csv('undated'), 'Measures over time') if r[:1] == ['Measure'])
-        self.assertEqual(head[8], 'Level in the last part')
+        self.assertEqual(head[8], 'Level in the last third')
         data, texts = self.pdf('undated')
         text = ' '.join(our_pages(texts))
         for c in shown:
-            self.assertIn(f'Last part: {c["latest"]}', text, c['key'])
+            self.assertIn(f'Last third: {c["latest"]}', text, c['key'])
         self.assertNotIn('Latest part', text)
-        self.assertEqual({c['latest_label'] for c in self.ms('three')['cards'] if c.get('latest')}, {'Latest part'})
+        self.assertEqual({c['latest_label'] for c in self.ms('three')['cards'] if c.get('latest')}, {'Last third'})
 
     def test_the_pdf_prints_the_level_of_the_latest_part_as_the_page_and_the_csv_do(self):
         ms = self.ms('three')
@@ -361,7 +361,7 @@ class MeasuresExport(AppCase):
         self.assertEqual([c['key'] for c in shown], ['conflict', 'empathy', 'passive'])
         text = ' '.join(our_pages(self.pdf('three')[1]))
         for c in shown:
-            self.assertIn(f'Latest part: {c["latest"]}', text, c['key'])
+            self.assertIn(f'Last third: {c["latest"]}', text, c['key'])
         self.assertNotIn('Latest part: None', text)
 
     def test_every_card_and_the_health_score_say_their_mark_in_words_in_the_csv(self):
