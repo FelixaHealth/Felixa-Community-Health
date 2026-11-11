@@ -1172,3 +1172,12 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .views a.on,.views a.back{background:#16251d;color:#fff;border-color:#16251d}.views a .ic{width:16px;height:16px}.views-crumb{color:#6b7a72;font-size:14px;margin-left:6px}
 .flag.green{background:#2e9e5b;color:#fff}.track-legend .lg.pos{background:#2e9e5b}.dash-kpi.kpi-green{border-left:4px solid #2e9e5b}
 .inc-flag.b{color:#1f7a45}.inc-kpis .dash-kpi.kpi-green{border-left:4px solid #2e9e5b}
+
+/* Badges and alerts: stacked, full width, in tables */
+.act-top{grid-template-columns:1fr!important}
+.ab-h{font-size:15px;margin:14px 0 6px;color:#0f4a2e}
+.ab-table{width:100%;border-collapse:collapse}.ab-table th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#6b7a72;padding:8px 10px;border-bottom:1px solid #e6e2d4}
+.ab-table td{padding:10px;border-bottom:1px solid #f0ebdc;vertical-align:top;font-size:14px}.ab-table td:first-child{width:56px}.ab-table strong{display:block}
+.ab-sub{display:block;color:#4b5c53;font-size:13px;margin-top:2px}.ab-try summary{cursor:pointer;color:#6d4a07;font-weight:600;font-size:13px;margin-top:4px}.ab-try p{margin:4px 0 0;font-size:13px}
+.flag.grey{background:#d8d4c6;color:#4b5c53}.ab-off td{color:#6b7a72}
+@media(max-width:640px){.ab-table thead{display:none}.ab-table tr{display:block;padding:8px 0;border-bottom:1px solid #f0ebdc}.ab-table td{display:flex;gap:10px;border:0;padding:3px 4px;width:auto!important}.ab-table td::before{content:attr(data-label);flex:0 0 78px;font-size:11px;text-transform:uppercase;color:#6b7a72;letter-spacing:.04em;padding-top:2px}}
