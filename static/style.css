@@ -1095,3 +1095,23 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .to-top{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:40;width:46px;height:46px;border-radius:50%;border:1px solid #e3d8c0;background:#fffefb;color:#0f4a2e;display:grid;place-items:center;box-shadow:0 6px 18px rgba(15,74,46,.18);cursor:pointer;padding:0}
 .to-top[hidden]{display:none}.to-top .ic{width:22px;height:22px}.to-top:hover{background:#f1f7f2}.to-top:focus-visible{outline:3px solid #a8780f;outline-offset:2px}
 @media print{.to-top{display:none!important}}
+
+/* Escalation by incident */
+.inc-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+.inc-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #efe7d6;border-radius:14px;background:#fffefb;text-decoration:none;color:inherit}
+.inc-card:hover{background:#faf6ea}.inc-card strong{display:block;font-size:15px}.inc-card span{display:block;font-size:13px;color:var(--muted)}.inc-card em{margin-left:auto;color:#a8780f;display:grid}
+.inc-card .flag{flex:none}
+.inc-gap,.inc-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0 8px}
+.inc-lab{font-size:13px;color:var(--muted);font-weight:650;margin-right:4px}.inc-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.inc-controls .chip-btn{text-decoration:none}
+.track-legend .lg.calm{background:#d8d4c6}
+.inc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+@media(min-width:900px){.inc-kpis{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+.inc-rows{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.inc-row{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;padding:8px 10px;border-radius:12px;background:#fffefb;border:1px solid #efe7d6}
+.inc-row.hot{background:#fdf6dc;border-color:#f1dca0}.inc-row.hostile{background:#fdeceb;border-color:#f0c4c0}.inc-row.outside{opacity:.6}
+.inc-time{font-weight:700;font-size:13px;color:#6d4a07;font-variant-numeric:tabular-nums}
+.inc-msg p{margin:2px 0;font-size:14.5px;line-height:1.45;overflow-wrap:anywhere}
+.inc-flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin:0 8px 2px 0}
+.inc-tags{display:flex;flex-wrap:wrap;gap:4px}.inc-tags em{font-style:normal;font-size:11.5px;padding:1px 8px;border-radius:999px;background:#f4efe1;color:#6d4a07;font-weight:650}
+.inc-nav{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}

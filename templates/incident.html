@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Incident {{ item.n }}{% endblock %}
+{% block content %}
+<div class="shell"><div class="stage">
+{{ assets|safe }}
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/track/escalation">Escalation</a><span aria-hidden="true">/</span><span aria-current="page">Incident {{ item.n }}</span></nav>
+{% include "_rnav.html" %}
+<section class="results-head"><div class="rh-main"><h1>Incident {{ item.n }} of {{ found|length }}</h1><p class="lead">{{ item.range }}{% if item.minutes is not none %} · {{ item.minutes }} min{% endif %} · {{ item.messages }} message{{ '' if item.messages == 1 else 's' }}</p></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/track/escalation">{{ icon('back') }} All incidents</a></div></section>
+
+<div class="dash-kpis inc-kpis">
+<div class="dash-kpi kpi-yellow"><small>Escalation starts</small><strong>{{ item.start.when.strftime('%H:%M') if item.timed else 'Message ' ~ (item.start.i + 1) }}</strong><span>{{ item.start.tags|join(', ') or 'a heated message' }}</span></div>
+{% if item.turn %}<div class="dash-kpi kpi-red"><small>Turns into conflict</small><strong>{{ item.turn.when.strftime('%H:%M') if item.timed else 'Message ' ~ (item.turn.i + 1) }}</strong><span>{% if item.minutes_to_conflict is not none %}{{ item.minutes_to_conflict }} min after it started{% else %}{{ item.messages_to_conflict }} message{{ '' if item.messages_to_conflict == 1 else 's' }} after it started{% endif %}</span></div>
+{% else %}<div class="dash-kpi"><small>Turns into conflict</small><strong>Not here</strong><span>It stayed short of open hostility</span></div>{% endif %}
+<div class="dash-kpi"><small>Heated messages</small><strong>{{ item.heated }}</strong><span>of {{ item.messages }} in the incident</span></div>
+<div class="dash-kpi"><small>Openly hostile</small><strong>{{ item.hostile }}</strong><span>messages</span></div></div>
+
+<section class="panel vc"><h2>Take it apart</h2>
+<form method="get" class="inc-controls" aria-label="Resolution">
+{% if item.timed %}<div class="inc-group" role="group" aria-label="Bar width"><span class="inc-lab">Bar width</span>{% for s, label in steps %}<a class="chip-btn{% if s == step %} on{% endif %}" href="?step={{ s }}&gap={{ gap }}">{{ label }}</a>{% endfor %}</div>{% else %}<p class="small-note">This chat has no usable times, so it can only be read message by message.</p>{% endif %}</form>
+<ul class="track-legend"><li><i class="lg crit"></i>Openly hostile</li><li><i class="lg warn"></i>Heated</li><li><i class="lg calm"></i>Calm</li></ul>
+{{ figure|safe }}</section>
+
+<section class="panel"><h2>The messages, in order</h2>
+<ol class="inc-rows">{% for r in item.rows %}<li class="inc-row {{ 'hot' if r.heated else 'cool' }}{{ ' hostile' if r.hostile else '' }}{{ ' outside' if not r.inside else '' }}">
+<span class="inc-time">{{ r.when.strftime('%H:%M') if item.timed else r.i + 1 }}</span>
+<div class="inc-msg">{% if r.role == 'start' or r.role == 'start-turn' %}<span class="inc-flag y"><i class="flag yellow">Y</i> Escalation starts</span>{% endif %}{% if r.role == 'turn' or r.role == 'start-turn' %}<span class="inc-flag r"><i class="flag red">R</i> Turns into conflict</span>{% endif %}
+<p>{{ r.text }}</p>{% if r.tags %}<span class="inc-tags">{% for t in r.tags %}<em>{{ t }}</em>{% endfor %}</span>{% endif %}</div></li>{% endfor %}</ol>
+<p class="small-note">The faded messages are the ones just before and after, for context. An incident is a run of heated messages that follow each other within {{ gap }} minutes. Tags are the tones the model rated 2 or 3. They describe wording, never a person.</p>
+{% if found|length > 1 %}<p class="inc-nav">{% if item.n > 1 %}<a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n - 1 }}?step={{ step }}&gap={{ gap }}">{{ icon('back') }} Incident {{ item.n - 1 }}</a>{% endif %}{% if item.n < found|length %} <a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n + 1 }}?step={{ step }}&gap={{ gap }}">Incident {{ item.n + 1 }} {{ icon('arrow') }}</a>{% endif %}</p>{% endif %}</section>
+</div></div>{% endblock %}

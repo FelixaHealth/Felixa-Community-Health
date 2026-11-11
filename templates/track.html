@@ -14,6 +14,13 @@
 {{ card.figure|safe }}
 {% for s in card.summary.sentences %}<p>{{ s }}</p>{% endfor %}</section>
 {% if story %}{% include "_track_story.html" %}{% endif %}
+{% if incident_list is not none %}<section class="panel"><h2>Incidents</h2>
+<p class="small-note">Each incident runs from the first heated message to the moment it turns into conflict. Open one to take it apart message by message or minute by minute.</p>
+{% if incident_list %}<form method="get" class="inc-gap"><span class="inc-lab">Quiet gap that ends an incident</span>{% for g in gap_choices %}<button class="chip-btn{% if g == gap %} on{% endif %}" name="gap" value="{{ g }}" type="submit">{{ g }} min</button>{% endfor %}</form>
+<ol class="inc-list">{% for i in incident_list %}<li><a class="inc-card {{ i.level }}" href="/analysis/{{ aid }}/incident/{{ i.n }}?gap={{ gap }}"><i class="flag {{ i.level }}">{{ 'R' if i.level == 'red' else 'Y' }}</i><div><strong>Incident {{ i.n }} · {{ i.when }}</strong>
+<span>{{ i.heated }} heated message{{ '' if i.heated == 1 else 's' }}{% if i.minutes is not none %} over {{ i.minutes }} min{% endif %}{% if i.turn %} · turned into conflict{% if i.minutes_to_conflict is not none %} after {{ i.minutes_to_conflict }} min{% endif %}{% else %} · stayed short of conflict{% endif %}</span></div><em>{{ icon('chevron') }}</em></a></li>{% endfor %}</ol>
+{% else %}<p>No incident this time: no run of heated messages in this chat.</p>{% endif %}</section>{% endif %}
+
 {% if card.flagged %}<section class="panel"><h2>Where it emerged and intensified</h2>
 {% if card.events %}<ol class="track-events">{% for e in card.events %}<li class="te {{ e.level or 'clear' }}"><span class="te-flag">{% if e.level %}<i class="flag {{ e.level }}">{{ 'R' if e.level == 'red' else 'Y' }}</i>{% else %}<i class="flag ok">{{ icon('check') }}</i>{% endif %}</span><div><strong>{{ e.label }}</strong> <em class="te-state st-{{ e.state }}">{{ {'emerged': 'Emerged', 'intensified': 'Intensified', 'holding': 'Holding', 'easing': 'Easing', 'cleared': 'Cleared'}[e.state] }}</em><p>{{ e.text }}</p>{% set pm = part_msgs.get(e.i) if part_msgs else None %}{% if pm %}<details class="te-msgs"><summary>Show the messages ({{ pm.total }})</summary><ul>{% for q in pm['items'] %}<li>{{ q }}</li>{% endfor %}</ul>{% if pm.total > pm['items']|length %}<p class="small-note">Showing the first {{ pm['items']|length }} of {{ pm.total }}. <a href="/analysis/{{ aid }}/{{ 'category/Toxic' if key == 'conflict' else 'category/Tense' }}">See every one</a>.</p>{% endif %}</details>{% endif %}</div></li>{% endfor %}</ol>
 {% else %}<p>No part of the chat carried a flag.</p>{% endif %}

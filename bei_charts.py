@@ -532,3 +532,40 @@ def compare_chart(cats, cur, prev, *, width=W):
         sc.hit(ml + step * i, mt, step, ph, {'t': c, 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
+
+
+def incident_chart(bars, *, width=W):
+    """One incident as stacked bars, a bar for each message or each stretch of minutes: openly hostile (red) on top of heated (yellow) on top of calm (grey). None without bars."""
+    n = len(bars)
+    if not n:
+        return None
+    narrow = width < 600
+    tick_size, _end = _sizes(width)
+    height = 190 if narrow else 210
+    ml, mr, mt, mb = 30, 10, 12, 30
+    pw, ph = width - ml - mr, height - mt - mb
+    top = max(max(b['n'] for b in bars), 1)
+    ticks = nice_ticks(float(top), 3)
+    top = max(ticks[-1], 1)
+    slot = pw / n
+    bw = max(2.0, min(40.0, slot * 0.72))
+    desc = 'Messages in each %s of the incident: %d openly hostile, %d heated, %d calm in all.' % ('bar', sum(b['hostile'] for b in bars), sum(b['heated'] for b in bars), sum(b['calm'] for b in bars))
+    sc = Scene(width, height, 'The incident, bar by bar', desc)
+    for t in ticks:
+        y = mt + ph * (1 - t / top)
+        sc.line(ml, y, width - mr, y, 'axis' if t == 0 else 'grid', 1)
+        sc.text(ml - 6, y + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
+    want = 4 if narrow else 8
+    every = max(1, -(-n // want))
+    for k, b in enumerate(bars):
+        x = ml + slot * k + (slot - bw) / 2
+        base = mt + ph
+        tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']]
+        for key, role in (('hostile', 'crit'), ('heated', 'warn'), ('calm', 'grid')):
+            h = ph * b[key] / top
+            if h > 0:
+                sc.rect(x, base - h, bw, max(1.0, h - 1), role, tip={'t': b['label'], 'r': tip_rows})
+                base -= h
+        if k % every == 0:
+            sc.text(x + bw / 2, height - mb + tick_size + 6, b['label'], size=tick_size, fill='ink2', anchor='middle')
+    return sc

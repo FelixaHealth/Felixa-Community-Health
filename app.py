@@ -38,6 +38,7 @@ import analysis
 import bei_charts
 import config
 import dashboard
+import incidents
 import flagged
 import detail
 import measures
@@ -1812,8 +1813,26 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
     return render(request, 'screen.html', screen=screen, title=RESULT_SCREENS[screen][0], act=act, rnav=nav, **ctx)
 
 
+@app.get('/analysis/{aid}/incident/{n}', response_class=HTMLResponse)
+def incident_page(request: Request, aid: AnalysisId, n: int, step: int = incidents.DEFAULT_STEP, gap: int = incidents.DEFAULT_GAP):
+    """One escalation incident taken apart: when it started, when it turned into conflict, every message in it, and a chart at the resolution asked for."""
+    ctx = report_context(aid, 'incident')
+    found = incidents.find(store.rated_text_units(aid), gap)
+    item = next((x for x in found if x['n'] == n), None)
+    if not item:
+        raise PageError(404, 'No such incident', 'This chat has no incident with that number at this setting.', back=(f'/analysis/{aid}/track/escalation', 'Back to Escalation'))
+    step = step if step in incidents.STEPS else incidents.DEFAULT_STEP
+    if not item['timed']:
+        step = 0
+    bars = incidents.bins(item, step)
+    figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w))
+    nav = results_nav(aid, ctx, 'escalation') if ctx.get('measures') else []
+    return render(request, 'incident.html', item=item, found=found, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
+                  rnav=nav, **ctx)
+
+
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
-def track_page(request: Request, aid: AnalysisId, key: str):
+def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents.DEFAULT_GAP):
     """One measure of the Track tab on a page of its own: how it was built up over the chat, its flags, and the three measures together."""
     if key not in track.KEYS:
         not_found()
@@ -1821,7 +1840,7 @@ def track_page(request: Request, aid: AnalysisId, key: str):
     view = track_views(ctx['measures'], only=key) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
-    return render(request, 'track.html', track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
+    return render(request, 'track.html', track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None, gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):
