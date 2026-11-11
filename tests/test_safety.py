@@ -258,3 +258,20 @@ class SenderCapture(unittest.TestCase):
         self.assertEqual(store._label_of('Alice Brown: hello there'), 'Alice Brown')
         self.assertIsNone(store._label_of('Note: remember this'))
         self.assertEqual(store._mention_of('hey @carol look at this'), 'carol')
+
+
+class TimeframeView(unittest.TestCase):
+    def test_a_time_step_that_would_give_too_many_bars_is_swapped_for_a_larger_one(self):
+        import datetime as dt
+        import high_risk
+        base = dt.datetime(2026, 11, 1, 0, 0)
+        ordered = [{'id': i} for i in range(3)]
+        stamps = [base, base + dt.timedelta(days=3), base + dt.timedelta(days=9)]
+        groups, starts, used = high_risk._time_buckets(ordered, stamps, {0, 2}, 30)
+        self.assertEqual(used, 300)                       # 30 minutes over 9 days is far too many bars: 5 hours is the smallest step that stays within 60
+        self.assertEqual(len(groups), 44)
+        self.assertEqual([len(g) for g in groups][0], 1)
+        self.assertEqual([len(g) for g in groups][-1], 1)
+        groups, starts, used = high_risk._time_buckets(ordered, stamps, {0, 2}, 0)
+        self.assertEqual((len(groups), used), (1, 0))
+        self.assertEqual(groups[0], [0, 2])

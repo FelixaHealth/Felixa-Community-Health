@@ -153,7 +153,30 @@ def _clusters(ordered, stamps, timed, uids) -> list:
     return groups
 
 
-def over_time(aid, hr) -> dict:
+TIMEFRAMES = ((30, '30 min'), (60, '1 hour'), (180, '3 hours'), (300, '5 hours'), (720, '12 hours'), (1440, '24 hours'), (0, 'All time'))
+MAX_BARS = 60
+
+
+def _time_buckets(ordered, stamps, uids, minutes):
+    """The bars of the timeframe view: the chat from its first to its last message in steps of `minutes` (0 = one bar for all of it). Returns ([positions of the matches in each step], [the start of each step], the minutes used).
+    A step that would give more than MAX_BARS bars is swapped for the next larger one."""
+    import datetime as _d
+    first, last = stamps[0], stamps[-1]
+    span = (last - first).total_seconds() / 60.0
+    sizes = [m for m, _l in TIMEFRAMES if m]
+    if minutes:
+        minutes = next((m for m in sizes if m >= minutes and span / m + 1 <= MAX_BARS), 0)
+    if not minutes:
+        return [[i for i, u in enumerate(ordered) if u['id'] in uids]], [first], 0
+    n = int(span // minutes) + 1
+    groups = [[] for _ in range(n)]
+    for i, u in enumerate(ordered):
+        if u['id'] in uids:
+            groups[min(n - 1, int(((stamps[i] - first).total_seconds() / 60.0) // minutes))].append(i)
+    return groups, [first + _d.timedelta(minutes=minutes * k) for k in range(n)], minutes
+
+
+def over_time(aid, hr, mode='incident', minutes=0) -> dict:
     """The Over time views: one bar for each High Risk incident (A) and dots by category inside each (B). A High Risk incident is a run of matches that follow each other within the quiet gap.
     A bar carries the flags of the escalation incident it sits in: yellow where it starts, red where it turns into conflict, green where someone calms it.
     {'svg_a', 'svg_b', 'days': [{'label','count','quotes','flags','incidents','detail'}], 'has_flags', 'n', 'gap'}; {} when nothing matched."""
@@ -162,7 +185,14 @@ def over_time(aid, hr) -> dict:
     uids, by_uid, cat_of = hr['uids'], hr['by_uid'], hr['cat_of']
     ordered, stamps, basis, _left = measures.order_units(store.units_for(aid))
     timed = basis == 'time'
-    groups = _clusters(ordered, stamps, timed, uids)
+    starts, used = None, None
+    if mode == 'time' and timed and ordered:
+        groups, starts, used = _time_buckets(ordered, stamps, uids, minutes)
+        if not any(groups):
+            return {}
+    else:
+        mode = 'incident'
+        groups = _clusters(ordered, stamps, timed, uids)
     if not groups:
         return {}
     inc_of = {}
@@ -178,31 +208,39 @@ def over_time(aid, hr) -> dict:
         q = [{'text': ' '.join(str(u['text'] or '').split()), 'when': stamps[i].strftime('%H:%M') if timed else '', 'behaviour': ', '.join(by_uid.get(u['id'], [])),
               'inc': inc_of[u['id']]['n'] if u['id'] in inc_of else None,
               'turn': bool(u['id'] in inc_of and inc_of[u['id']]['turn'] is not None and inc_of[u['id']]['turn'].get('uid') == u['id'])} for i, u in zip(g, mine)]
-        if timed:
+        if mode == 'time':
+            st = starts[k]
+            label = 'All time' if not used else (f'{st:%b %-d}' if used >= 1440 else f'{st:%b %-d %H:%M}')
+            span = 'the whole chat' if not used else f'{st:%b %-d %H:%M} for {used // 60} h' if used >= 60 and used % 60 == 0 else f'{st:%b %-d %H:%M} for {used} min'
+        elif timed:
             a, b = stamps[g[0]], stamps[g[-1]]
+            label = f'High Risk {k + 1}'
             span = f'{a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if len(g) > 1 and a.date() == b.date() else (f' to {b:%b %-d %H:%M}' if len(g) > 1 else ''))
         else:
+            label = f'High Risk {k + 1}'
             span = f'messages {g[0] + 1} to {g[-1] + 1}' if len(g) > 1 else f'message {g[0] + 1}'
-        days.append({'label': f'High Risk {k + 1}', 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': sorted((n, x['level']) for n, x in incs.items()), 'detail': span})
+        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': sorted((n, x['level']) for n, x in incs.items()), 'detail': span})
     n = len(days)
     mx = max(d['count'] for d in days) or 1
+    lab_step = 1 if (mode == 'incident' and n <= 12) else max(1, -(-n // 6))        # long time labels need room: about six on the axis
     W, H = 640, 190
     bw = W / n
     a = ''
     for d in days:
-        h = d['count'] / mx * 100
+        h = max(d['count'] / mx * 100, 0)
         w = min(bw - 2 * min(10, bw * .15), 72)
         x = d['k'] * bw + (bw - w) / 2
         y = 150 - h
         href = f' data-href="/analysis/{aid}/incident/{d["incidents"][0][0]}?src=safety"' if d['incidents'] else ''
         a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"{href}><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
-        a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
+        if d['count']:
+            a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
         for j, f in enumerate(d['flags']):
             a += _flag(x + w / 2 + (j * 17 - (len(d['flags']) - 1) * 8), y - 22, f)
         a += '</g>'
-        if n <= 12 or d['k'] % ((n + 9) // 10) == 0 or d['k'] == n - 1:
+        if d['k'] % lab_step == 0 or d['k'] == n - 1:
             a += f'<text x="{d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="middle">{_E(d["label"])}</text>'
-    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each High Risk incident, with flags">{a}</svg>'
+    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each bar, with flags">{a}</svg>'
     rows = [c for c, _b in CATEGORIES if any(cat_of.get(b) == c for u in ordered if u['id'] in uids for b in by_uid.get(u['id'], []))]
     svg_b = ''
     if rows:
@@ -214,7 +252,7 @@ def over_time(aid, hr) -> dict:
         for d in days:
             cx = lab + d['k'] * cw + cw / 2
             b += f'<line x1="{cx:.0f}" y1="{top - 6}" x2="{cx:.0f}" y2="{top + rowh * len(rows)}" stroke="#eee9db"/>'
-            if n <= 12 or d['k'] % ((n + 9) // 10) == 0 or d['k'] == n - 1:
+            if d['k'] % lab_step == 0 or d['k'] == n - 1:
                 b += f'<text x="{cx:.0f}" y="{Hb - 10}" text-anchor="middle">{_E(d["label"])}</text>'
             for j, f in enumerate(d['flags']):
                 b += _flag(cx + (j * 17 - (len(d['flags']) - 1) * 8), top - 12, f)
@@ -228,7 +266,7 @@ def over_time(aid, hr) -> dict:
                     r = rows.index(cat_of[bname])
                     b += f'<circle data-g="highrisk" cx="{lab + k * cw + (pos + .5) / len(g) * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(str(u["text"] or "")[:80])}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
-    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': n, 'by_incident': True,
+    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': n, 'by_incident': mode == 'incident', 'mode': mode, 'used': used, 'timed': timed,
             'gap': f'{incidents.DEFAULT_GAP} minutes' if timed else f'{incidents.QUIET_MESSAGES} messages'}
 
 

@@ -1878,7 +1878,7 @@ def traction_parts(aid):
 
 
 @app.get('/analysis/{aid}/safety', response_class=HTMLResponse)
-def safety_page(request: Request, aid: AnalysisId):
+def safety_page(request: Request, aid: AnalysisId, view: str = 'incident', tf: str = '60'):
     """The Safety module: what the FBSI detectors keep for a person to read. Held, never live; questions, never verdicts."""
     ctx = report_context(aid, 'safety')
     if not safety_module.AVAILABLE:
@@ -1888,7 +1888,9 @@ def safety_page(request: Request, aid: AnalysisId):
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
     sb = safety_module.build(aid)
     hr = high_risk.build(aid, sb)
-    return render(request, 'safety.html', vnav=track_nav(aid, 'safety'), hr=hr, over=high_risk.over_time(aid, hr), held=len(sb['held']), rnav=nav, **ctx)
+    view = view if view in ('incident', 'time') else 'incident'
+    minutes = {str(m): m for m, _l in high_risk.TIMEFRAMES}.get(tf, 60)
+    return render(request, 'safety.html', vnav=track_nav(aid, 'safety'), hr=hr, over=high_risk.over_time(aid, hr, view, minutes), view=view, tf=minutes, timeframes=high_risk.TIMEFRAMES, held=len(sb['held']), rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/safety/review', response_class=HTMLResponse)
