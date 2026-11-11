@@ -179,8 +179,9 @@ def link(m, kinds=('conflict', 'escalation')):
     st = m['stretches']
     k = len(st)
     care, hostile, heated = ([_rate(s, kind) for s in st] for kind in ('care', 'hostile', 'heated'))
-    out = {'k': k, 'ready': k >= MIN_FOR_LINK, 'sentences': [], 'r': {}}
+    out = {'k': k, 'ready': k >= MIN_FOR_LINK, 'sentences': [], 'r': {}, 'answer': ''}
     if not out['ready']:
+        out['answer'] = 'Not enough parts yet to say.'
         out['sentences'].append(f'There are {k} parts so far. With {MIN_FOR_LINK} or more parts the page says whether empathy goes with less ' + ' and '.join(kinds) + '.')
         return out
     for key, series, word in [x for x in (('conflict', hostile, 'conflict'), ('escalation', heated, 'escalation')) if x[0] in kinds]:
@@ -198,6 +199,17 @@ def link(m, kinds=('conflict', 'escalation')):
             out['sentences'].append(f'In the parts where empathy was higher, {word} tended to be higher too ({_strength(same)} link). That can happen when people talk about hard things with care.')
         if nxt is not None and abs(nxt) >= 0.4 and abs(nxt) > abs(same) + 0.1:
             out['sentences'].append(f'The link is stronger with the part after: empathy in one part goes with {"less" if nxt < 0 else "more"} {word} in the next.')
+    esc = out['r'].get('escalation')
+    if esc is not None:                                                   # the short answer to "Does empathy change escalation?", in one sentence
+        r = esc['same']
+        if r is None:
+            out['answer'] = 'Too little change from part to part to tell.'
+        elif abs(r) < 0.3:
+            out['answer'] = 'No clear link: empathy and escalation do not move together in this chat.'
+        elif r < 0:
+            out['answer'] = f'Yes, it goes with less: where empathy was higher, escalation tended to be lower ({_strength(r)} link).'
+        else:
+            out['answer'] = f'Not in a way that lowers it: where empathy was higher, escalation tended to be higher too ({_strength(r)} link).'
     out['caution'] = f'This compares {k} parts of one chat. A link in the numbers is not proof that one thing causes the other.'
     return out
 

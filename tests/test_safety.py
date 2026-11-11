@@ -275,3 +275,13 @@ class TimeframeView(unittest.TestCase):
         groups, starts, used = high_risk._time_buckets(ordered, stamps, {0, 2}, 0)
         self.assertEqual((len(groups), used), (1, 0))
         self.assertEqual(groups[0], [0, 2])
+
+
+class TrendsAnswer(unittest.TestCase):
+    def test_the_trends_page_answers_the_question_in_one_sentence(self):
+        import track
+        m = {'stretches': [{'rates': {'care': i, 'hostile': i % 3, 'heated': 10 - i}} for i in range(8)]}
+        out = track.link(m, ('escalation',))
+        self.assertTrue(out['answer'].startswith('Yes, it goes with less'), out['answer'])
+        few = track.link({'stretches': [{'rates': {'care': 1, 'hostile': 1, 'heated': 1}}] * 2}, ('escalation',))
+        self.assertEqual(few['answer'], 'Not enough parts yet to say.')
