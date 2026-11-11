@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — High Risk{% endblock %}
+{% block content %}
+<div class="shell"><div class="stage">
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/safety">High Risk</a><span aria-hidden="true">/</span><span aria-current="page">Review</span></nav>
+{% if rnav %}{% include "_rnav.html" %}{% endif %}
+<section class="results-head"><div class="rh-main"><h1>High Risk review</h1><p class="lead">Messages kept for a person to read. It asks questions and never gives a verdict.</p></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/safety">{{ icon('back') }} High Risk</a></div></section>
+
+<section class="panel sf-note"><p><i class="flag black">S</i> <strong>Held, not live.</strong> Nothing here sends an alert, confirms anything or triggers anything. These are unvalidated word rules: they miss a lot and can be wrong, so they only point at messages for a person to read.</p>
+<details class="ts-explain"><summary>Why is everything held?</summary><p class="small-note">A High Risk alert may only go live when a named, qualified safeguarding reviewer, an independent second reviewer and an approved emergency protocol exist. This app has none of them, so every item stays held.{% if safety.missing %} Still missing: {{ safety.missing|join('; ') }}.{% endif %} The app does not keep who wrote a message, so it reads every message as one speaker: it can see a single message that threatens, but not an exchange between two people.</p></details></section>
+
+<div class="dash-kpis inc-kpis">
+<div class="dash-kpi kpi-black"><small>Held for a person</small><strong>{{ safety.held|length }}</strong><span>black flag on graphs</span></div>
+<div class="dash-kpi"><small>Questions to ask</small><strong>{{ safety.questions|length }}</strong><span>never verdicts</span></div>
+<div class="dash-kpi"><small>Protective moves</small><strong>{{ safety.protective|length }}</strong><span>a pause, a check, "stop"</span></div>
+<div class="dash-kpi"><small>Messages read</small><strong>{{ '{:,}'.format(safety.messages) }}</strong><span>{{ safety.excluded }} left out as quoted, joked or reported</span></div></div>
+
+<section class="panel"><h2>Held for a person to read</h2>
+{% if safety.held %}<ol class="sf-list">{% for i in safety.held %}<li class="sf-item sf-held"><div class="sf-top"><i class="flag black">S</i><div><strong>{{ i.alert_name or i.name }}</strong>{% if i.alert_id %} <em class="sf-id">{{ i.alert_id }}</em>{% endif %}<span class="sf-sub">{{ i.status_word }} · {{ i.detector }} · {{ i.name }}</span></div></div>
+<p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote sf-quote">{{ q.text }}<small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}
+{% if i.total > i.quotes|length %}<p class="small-note">and {{ i.total - i.quotes|length }} more message{{ '' if i.total - i.quotes|length == 1 else 's' }}.</p>{% endif %}
+{% if i.note %}<p class="small-note">{{ i.note }}</p>{% endif %}<p class="small-note sf-hold">{{ i.hold_reason }}</p>
+{% if i.questions %}<details class="ts-explain"><summary>Questions for the person who reads it</summary><ul class="ts-about">{% for q in i.questions %}<li>{{ q }}</li>{% endfor %}</ul></details>{% endif %}</li>{% endfor %}</ol>
+{% else %}<p>Nothing is held. No message in this chat matched a High Risk rule. That does not mean nothing happened: the rules only read certain wording.</p>{% endif %}</section>
+
+{% if safety.questions %}<section class="panel"><h2>Questions to ask</h2>
+<p class="small-note">A match can only start a question. Each shows the messages behind it.</p>
+<ol class="sf-list">{% for i in safety.questions %}<li class="sf-item"><div class="sf-top"><i class="flag yellow">?</i><div><strong>{{ i.name }}</strong><span class="sf-sub">{{ i.status_word }} · {{ i.detector }}</span></div></div>
+<p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote">{{ q.text }}<small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}
+{% if i.questions %}<details class="ts-explain"><summary>Questions to ask</summary><ul class="ts-about">{% for q in i.questions %}<li>{{ q }}</li>{% endfor %}</ul></details>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+
+{% if safety.protective %}<section class="panel"><h2>Protective moves</h2>
+<ol class="sf-list">{% for i in safety.protective %}<li class="sf-item"><div class="sf-top"><i class="flag blue">+</i><div><strong>{{ i.name }}</strong><span class="sf-sub">{{ i.detector }}</span></div></div><p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote">{{ q.text }}</blockquote>{% endfor %}</li>{% endfor %}</ol></section>{% endif %}
+
+<section class="panel"><details class="all-alerts"><summary>What it reads: all {{ safety.catalogue|length }} detectors</summary><ul class="vc-rules aa-list">{% for d in safety.catalogue %}<li><strong>{{ d.id }} · {{ d.name }}</strong><em class="aa-lvl aa-{{ 'good' if d.valence == 'constructive' else 'medium' }}">{{ 'Protective' if d.valence == 'constructive' else 'Risk' }}</em><span class="vc-how">{{ d.needs }}</span></li>{% endfor %}</ul></details></section>
+</div></div>{% endblock %}

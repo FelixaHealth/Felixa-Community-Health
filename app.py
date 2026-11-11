@@ -40,6 +40,7 @@ import config
 import dashboard
 import deescalation
 import incidents
+import high_risk
 import safety_module
 import flagged
 import detail
@@ -1860,7 +1861,18 @@ def safety_page(request: Request, aid: AnalysisId):
     if not store.count_units(aid):
         raise PageError(404, 'No messages yet', 'Add messages first: the High Risk module reads them.', back=(f'/analysis/{aid}/analytics', 'Open Analytics'))
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
-    return render(request, 'safety.html', safety=safety_module.build(aid), rnav=nav, **ctx)
+    sb = safety_module.build(aid)
+    hr = high_risk.build(aid, sb)
+    return render(request, 'safety.html', hr=hr, over=high_risk.over_time(aid, hr['uids']), held=len(sb['held']), rnav=nav, **ctx)
+
+
+@app.get('/analysis/{aid}/safety/review', response_class=HTMLResponse)
+def safety_review_page(request: Request, aid: AnalysisId):
+    ctx = report_context(aid, 'safety')
+    if not safety_module.AVAILABLE:
+        return RedirectResponse(f'/analysis/{aid}/results', 303)
+    nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
+    return render(request, 'safety_review.html', safety=safety_module.build(aid), rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/track/deescalation', response_class=HTMLResponse)

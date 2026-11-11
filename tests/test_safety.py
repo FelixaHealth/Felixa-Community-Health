@@ -60,12 +60,33 @@ class Pages(AppCase):
         aid = self.new_analysis(name='Safety Co')
         self.upload(aid, ('chat.csv', CHAT, 'text/csv'))
         self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')
-        page = self.client.get(f'/analysis/{aid}/safety')
+        page = self.client.get(f'/analysis/{aid}/safety/review')
         self.assertEqual(page.status_code, 200)
         for needle in ('Held for a person to read', 'Held, not live', 'Blackmail or exposure threat', 'Identity document confiscation', 'flag black'):
             self.assertIn(needle, page.text, needle)
         self.assertNotIn('Alert sent', page.text)
         self.assertEqual(self.client.get('/analysis/9999/safety').status_code, 404)
+
+    def test_the_overview_sorts_messages_into_behaviours_with_exact_quotes(self):
+        aid = self.new_analysis(name='Safety Overview')
+        self.upload(aid, ('chat.csv', CHAT, 'text/csv'))
+        self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')
+        page = self.client.get(f'/analysis/{aid}/safety')
+        self.assertEqual(page.status_code, 200)
+        for needle in ('Aggression &amp; Violence', 'Self-Harm &amp; Dangerous Activities', 'Quotes', 'Messages found', 'Review', 'no reader yet'):
+            self.assertIn(needle, page.text, needle)
+        for noise in ('Held for a person', 'A question to ask', 'flag black'):
+            self.assertNotIn(noise, page.text, noise)
+        import high_risk
+        hr = high_risk.build(aid, safety_module.build(aid))
+        self.assertEqual(len(hr['categories']), 8)
+        names = {b['name'] for c in hr['categories'] for b in c['behaviours']}
+        self.assertTrue({'Blackmail', 'Coercion'} & names, names)
+
+    def test_forty_behaviours_in_eight_categories(self):
+        import high_risk
+        self.assertEqual(len(high_risk.CATEGORIES), 8)
+        self.assertEqual(sum(len(b) for _c, b in high_risk.CATEGORIES), 40)
 
     def test_the_summary_counts_the_held_items(self):
         aid = self.new_analysis(name='Safety Two')

@@ -3,34 +3,20 @@
 <div class="shell"><div class="stage">
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">High Risk</span></nav>
 {% if rnav %}{% include "_rnav.html" %}{% endif %}
-<section class="results-head"><div class="rh-main"><h1>High Risk</h1><p class="lead">Messages the High Risk module keeps for a person to read. It asks questions and never gives a verdict.</p></div>
+<section class="results-head"><div class="rh-main"><h1>High Risk</h1><p class="lead">Where the 40 behaviours showed up in this chat.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results">{{ icon('back') }} Back to results</a></div></section>
+<div class="hr-tabs"><a class="on" href="/analysis/{{ aid }}/safety">Overview</a><a href="/analysis/{{ aid }}/safety/review">Review{% if held %} <b>{{ held }}</b>{% endif %}</a></div>
 
-<section class="panel sf-note"><p><i class="flag black">S</i> <strong>Held, not live.</strong> Nothing here sends an alert, confirms anything or triggers anything. These are unvalidated word rules: they miss a lot and can be wrong, so they only point at messages for a person to read.</p>
-<details class="ts-explain"><summary>Why is everything held?</summary><p class="small-note">A High Risk alert may only go live when a named, qualified safeguarding reviewer, an independent second reviewer and an approved emergency protocol exist. This app has none of them, so every item stays held.{% if safety.missing %} Still missing: {{ safety.missing|join('; ') }}.{% endif %} The app does not keep who wrote a message, so it reads every message as one speaker: it can see a single message that threatens, but not an exchange between two people.</p></details></section>
+<div class="hr-kpis"><div><small>Messages found</small><strong>{{ hr.messages }}</strong></div><div><small>Behaviours</small><strong>{{ hr.behaviours }}</strong></div><div><small>Categories</small><strong>{{ hr.hit_categories }} of 8</strong></div></div>
 
-<div class="dash-kpis inc-kpis">
-<div class="dash-kpi kpi-black"><small>Held for a person</small><strong>{{ safety.held|length }}</strong><span>black flag on graphs</span></div>
-<div class="dash-kpi"><small>Questions to ask</small><strong>{{ safety.questions|length }}</strong><span>never verdicts</span></div>
-<div class="dash-kpi"><small>Protective moves</small><strong>{{ safety.protective|length }}</strong><span>a pause, a check, "stop"</span></div>
-<div class="dash-kpi"><small>Messages read</small><strong>{{ '{:,}'.format(safety.messages) }}</strong><span>{{ safety.excluded }} left out as quoted, joked or reported</span></div></div>
+{% if over %}<section class="panel"><h2>Over time</h2>
+<svg class="hr-over" viewBox="0 0 600 130" role="img" aria-label="Messages found in each part of the chat">{% set mx = (over|map(attribute='count')|max) or 1 %}{% set bw = 600 / over|length %}{% for o in over %}{% set h = (o.count / mx * 96) %}<rect x="{{ (loop.index0 * bw + 5)|round(1) }}" y="{{ (110 - h)|round(1) }}" width="{{ [bw - 10, 2]|max|round(1) }}" height="{{ h|round(1) }}" rx="3"><title>{{ o.label }}: {{ o.count }}</title></rect>{% endfor %}{% for o in over %}{% if loop.index0 % ((over|length / 5)|round(0, 'ceil')|int or 1) == 0 %}<text x="{{ (loop.index0 * bw + bw / 2)|round(1) }}" y="126" text-anchor="middle">{{ o.label }}</text>{% endif %}{% endfor %}</svg></section>{% endif %}
 
-<section class="panel"><h2>Held for a person to read</h2>
-{% if safety.held %}<ol class="sf-list">{% for i in safety.held %}<li class="sf-item sf-held"><div class="sf-top"><i class="flag black">S</i><div><strong>{{ i.alert_name or i.name }}</strong>{% if i.alert_id %} <em class="sf-id">{{ i.alert_id }}</em>{% endif %}<span class="sf-sub">{{ i.status_word }} · {{ i.detector }} · {{ i.name }}</span></div></div>
-<p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote sf-quote">{{ q.text }}<small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}
-{% if i.total > i.quotes|length %}<p class="small-note">and {{ i.total - i.quotes|length }} more message{{ '' if i.total - i.quotes|length == 1 else 's' }}.</p>{% endif %}
-{% if i.note %}<p class="small-note">{{ i.note }}</p>{% endif %}<p class="small-note sf-hold">{{ i.hold_reason }}</p>
-{% if i.questions %}<details class="ts-explain"><summary>Questions for the person who reads it</summary><ul class="ts-about">{% for q in i.questions %}<li>{{ q }}</li>{% endfor %}</ul></details>{% endif %}</li>{% endfor %}</ol>
-{% else %}<p>Nothing is held. No message in this chat matched a High Risk rule. That does not mean nothing happened: the rules only read certain wording.</p>{% endif %}</section>
-
-{% if safety.questions %}<section class="panel"><h2>Questions to ask</h2>
-<p class="small-note">A match can only start a question. Each shows the messages behind it.</p>
-<ol class="sf-list">{% for i in safety.questions %}<li class="sf-item"><div class="sf-top"><i class="flag yellow">?</i><div><strong>{{ i.name }}</strong><span class="sf-sub">{{ i.status_word }} · {{ i.detector }}</span></div></div>
-<p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote">{{ q.text }}<small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}
-{% if i.questions %}<details class="ts-explain"><summary>Questions to ask</summary><ul class="ts-about">{% for q in i.questions %}<li>{{ q }}</li>{% endfor %}</ul></details>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
-
-{% if safety.protective %}<section class="panel"><h2>Protective moves</h2>
-<ol class="sf-list">{% for i in safety.protective %}<li class="sf-item"><div class="sf-top"><i class="flag blue">+</i><div><strong>{{ i.name }}</strong><span class="sf-sub">{{ i.detector }}</span></div></div><p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote">{{ q.text }}</blockquote>{% endfor %}</li>{% endfor %}</ol></section>{% endif %}
-
-<section class="panel"><details class="all-alerts"><summary>What it reads: all {{ safety.catalogue|length }} detectors</summary><ul class="vc-rules aa-list">{% for d in safety.catalogue %}<li><strong>{{ d.id }} · {{ d.name }}</strong><em class="aa-lvl aa-{{ 'good' if d.valence == 'constructive' else 'medium' }}">{{ 'Protective' if d.valence == 'constructive' else 'Risk' }}</em><span class="vc-how">{{ d.needs }}</span></li>{% endfor %}</ul></details></section>
+<section class="panel"><div class="hr-sw"><h2>By category</h2><span>Tap a category, then a behaviour, to read the exact messages</span></div>
+{% set mx = (hr.categories|map(attribute='count')|max) or 1 %}
+{% for c in hr.categories %}<details class="hr-cat"{% if loop.first and c.count %} open{% endif %}><summary><span class="nm">{{ c.name }}</span><span class="bar"><i style="width:{{ (c.count / mx * 100)|round|int }}%"></i></span><b>{{ c.count }}</b></summary>
+<div class="hr-cb">{% for b in c.behaviours %}<details class="hr-beh"><summary><span>{{ b.name }}</span><b>{{ b.count }}</b><em>Quotes</em></summary><div class="hr-qs">{% for q in b.quotes %}<blockquote><p>“{{ q.text }}”</p><small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}</div></details>{% endfor %}
+{% if c.behaviours and c.none %}<p class="hr-none">No matches: {{ c.none|join(', ') }}</p>{% elif not c.behaviours %}<p class="hr-none">{% if c.readable %}Nothing found in this category.{% else %}Nothing found, and the app has no reader for this category yet.{% endif %}</p>{% endif %}</div></details>{% endfor %}</section>
+{% if hr.unread_categories %}<p class="hr-foot">The app has no reader yet for: {{ hr.unread_categories|join('; ') }}. A zero there is not a clear result.</p>{% endif %}
+<p class="hr-foot">Held items and questions for a person are in the Review tab.</p>
 </div></div>{% endblock %}
