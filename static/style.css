@@ -1146,7 +1146,7 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 /* High Risk overview */
 .hr-tabs{display:flex;gap:6px;margin:0 0 14px}.hr-tabs a{padding:7px 14px;border-radius:20px;background:var(--panel,#fff);border:1px solid #ddd8c8;color:inherit;text-decoration:none;font-size:14px}.hr-tabs a.on{background:#16251d;color:#fff;border-color:#16251d}.hr-tabs b{background:#000;color:#fff;border-radius:10px;padding:0 7px;font-size:12px;margin-left:4px}
 .hr-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}.hr-kpis div{background:var(--panel,#fff);border:1px solid #e6e2d4;border-radius:14px;padding:12px 14px}.hr-kpis small{display:block;color:#6b7a72;font-size:12px}.hr-kpis strong{font-size:26px}
-.hr-over{width:100%;height:auto}.hr-over rect{fill:#1f3a2e}.hr-over text{font-size:10px;fill:#6b7a72}
+.hr-over{width:100%;height:auto}.hr-over rect{fill:#1f3a2e}.hr-over text{font-size:10px;fill:#6b7a72}.hr-over text.v{font-size:11px;font-weight:700;fill:#16251d}
 .hr-sw{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.hr-sw span{font-size:13px;color:#6b7a72}
 .hr-cat{border-top:1px solid #eee9db}.hr-cat:first-of-type{border-top:0}.hr-cat>summary{display:grid;grid-template-columns:minmax(120px,1.3fr) 2fr 34px;gap:10px;align-items:center;padding:11px 0;cursor:pointer;list-style:none}
 .hr-cat summary::-webkit-details-marker,.hr-beh summary::-webkit-details-marker{display:none}.hr-cat .nm{font-weight:600;font-size:14px}.hr-cat .bar{height:10px;background:#efeadb;border-radius:6px;overflow:hidden}.hr-cat .bar i{display:block;height:100%;background:#1f3a2e;border-radius:6px}.hr-cat>summary b{text-align:right}
