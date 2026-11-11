@@ -56,9 +56,12 @@ class Dashboard(DashboardCase):
         b = self.workplace('Dash Beta', 'Team', 'Slack', checks=[(self.day(40), 45.0, {}), (self.day(3), 52.0, {})])
         page = self.client.get('/dashboard').text
         for needle in ('Overview', 'Over time', '<h2>Health score</h2>', '<h2>Vibe Check</h2>', 'How people spoke', '<h2>Members</h2>', 'Latest health score', 'Latest Vibe Check',
-                       'Most Negative', 'Most Positive', 'Latest check of each workplace', 'All checks', 'Dash Alpha', 'Dash Beta'):
+                       'Most Negative', 'Most Positive', 'All checks', 'Dash Alpha', 'Dash Beta'):
             self.assertIn(needle, page, needle)
         self.assertGreaterEqual(page.count('<svg'), 8, 'the charts are drawn, in two layouts each')
+        self.assertNotIn('Latest check of each workplace', page)
+        self.assertIn('<details class="vc-table"><summary>All checks (', page)
+        self.assertNotIn('<details class="vc-table" open', page)
         self.assertIn('<h2>Results dashboard</h2>' if False else 'Results dashboard', page)
         ctx = dashboard.build({}, TODAY)
         self.assertEqual(ctx['checks_n'] >= 5, True)

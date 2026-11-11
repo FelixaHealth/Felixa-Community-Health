@@ -354,7 +354,7 @@ def build(args, today=None) -> dict:
     check_rows = [[long_date(r['when'].isoformat()), r['workplace'], r['platform'] or '–', f'{r["n"]:,}', _cell(r['members']), _cell(r['health']), _cell(r['vibe'], 1),
                    _cell(r['conflict'], 1), _cell(r['empathy'], 1), _cell(r['passive'], 1), _cell(r['heated'], 1), _cell(r['episodes'])] for r in checks]
     head = ['Date', 'Workplace', 'Platform', 'Messages rated', 'Members', 'Health score', 'Vibe Check', 'Hostile per 100', 'Care per 100', 'Sarcasm per 100', 'Heated per 100', 'Heated moments']
-    tables['checks'] = data_table(head, check_rows) if check_rows else ''
+    tables['checks'] = data_table(head, check_rows, f'All checks ({len(check_rows)} in this view, newest first)') if check_rows else ''
 
     # the tiles
     health_now = _avg([r['health'] for r in latest])

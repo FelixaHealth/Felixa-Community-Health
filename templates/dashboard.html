@@ -36,7 +36,6 @@
 {% if detail_ctx.badges %}<p><strong>Badges earned:</strong> {{ detail_ctx.badges|join(', ') }}</p>{% else %}<p>No badges earned in the latest check.</p>{% endif %}
 <p><a class="btn" href="/analysis/{{ detail.aid }}/workspace">{{ icon('eye') }} Open {{ detail.name }}</a> <a class="btn" href="/analysis/{{ detail.aid }}/report">{{ icon('file') }} Full report</a></p>
 {% if detail_ctx.signals %}<h3>Signal profile, latest check</h3>{{ detail_ctx.signals|safe }}{% endif %}</section>{% endif %}
-<section class="dash-card" style="margin-top:18px"><h2>Latest check of each workplace</h2>{% if latest|length %}<div class="table-wrap"><table><caption class="sr-only">Latest check of each workplace</caption><thead><tr>{% for h in latest_head %}<th scope="col">{{ h }}</th>{% endfor %}</tr></thead><tbody>{% for row in latest %}<tr>{% for c in row %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% endif %}</section>
-<section class="dash-card" style="margin-top:18px"><h2>All checks</h2><p class="small-note">{{ shown_n }} of {{ checks_n }} checks in this view, newest first.</p>{{ tables.checks|safe }}</section>
+<section class="dash-card" style="margin-top:18px">{{ tables.checks|safe }}</section>
 {% endif %}{% endif %}
 </div></div>{% endblock %}
