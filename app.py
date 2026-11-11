@@ -1835,8 +1835,12 @@ def incident_page(request: Request, aid: AnalysisId, n: int, step: int = inciden
 def traction_parts(aid):
     """The deescalation view of a chat and its traction graph: for each incident where someone calmed things, how many heated messages still came after that."""
     dv = deescalation.view(store.rated_text_units(aid))
-    items = [(f'Incident {i["n"]} · {i["when"]}', i['calm']['heated_after'], 'pos' if i['calm']['held'] else 'warn') for i in dv['tried']]
-    figure = vibe_check.figure(lambda w: dashboard.hbars(items, title='Heated messages after the first calming message',
+    def words(i):
+        n = i['calm']['heated_after']
+        return 'Took hold' if i['calm']['held'] else f'{n} heated message{"" if n == 1 else "s"} came back'
+    items = [(f'Incident {i["n"]} · {i["when"]}', i['calm']['heated_after'], 'pos' if i['calm']['held'] else 'warn', words(i)) for i in dv['tried']]
+    top = max([5] + [x[1] for x in items])                       # a fixed floor, so one heated message is a short bar and not the whole width
+    figure = vibe_check.figure(lambda w: dashboard.hbars(items, title='Heated messages after the first calming message', vmax=top,
                                                          desc='For each incident, the heated messages that still came after someone calmed things: none means the calming message took hold.',
                                                          width=w, sort=False)) if items else ''
     return dv, figure

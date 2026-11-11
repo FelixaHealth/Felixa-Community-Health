@@ -1124,3 +1124,7 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .ds-heat{--sc:#d03b3b}.ds-calm{--sc:#1f66bf}.ds-traction{--sc:#3f9a5a}
 .de-panel .ts-steps{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .track-legend{flex-wrap:wrap;gap:6px 16px}.track-legend li{white-space:nowrap}
+.de-panel .ts-steps{list-style:none;margin:14px 0 8px;padding:0;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.de-panel .ts-body h3{margin:2px 0 0!important;font-size:15px!important;line-height:1.25}
+@media(max-width:700px){.de-panel .ts-steps{grid-template-columns:1fr}.de-panel .ts-step:not(:last-child) .ts-node::after{display:none}}
+.ds-miss{--sc:#f2b928}

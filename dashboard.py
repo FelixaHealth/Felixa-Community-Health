@@ -204,7 +204,7 @@ def _wrap(label, room, size=12, lines=2):
 
 def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720, sort=True):
     """One horizontal bar per item, longest first: [(label, value, role)]. A long label wraps onto a second line inside the graph; the value sits at the tip."""
-    items = [i for i in items if i[1] is not None]
+    items = [tuple(i) for i in items if i[1] is not None]
     if not items:
         return None
     if sort:
@@ -213,18 +213,21 @@ def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720, sort=T
     wrapped = [_wrap(i[0], label_w - 6) for i in items]
     row_h = 38 if any(len(w) > 1 for w in wrapped) else 28
     bar_h, top = 15, 4
-    x0, x1 = label_w + 10, width - 58
-    mx = vmax or max(max(v for _l, v, _r in items), 1e-9)
+    shown = [(i[3] if len(i) > 3 else f'{_fmt(i[1], places)}{unit}') for i in items]         # the words at the tip of each bar: its own text, or the value
+    room = max(58, int(max(text_w(s, 13, True) for s in shown)) + 16)
+    x0, x1 = label_w + 10, width - room
+    mx = vmax or max(max(i[1] for i in items), 1e-9)
     sc = Scene(width, top + row_h * len(items) + 4, title, desc)
     sc.line(x0, top, x0, top + row_h * len(items), 'axis', 1)
-    for i, ((label, v, role), lines_) in enumerate(zip(items, wrapped)):
+    for i, (item, lines_, tip_text) in enumerate(zip(items, wrapped, shown)):
+        label, v, role = item[0], item[1], item[2]
         yc = top + i * row_h + row_h / 2
         length = max(4.0, (x1 - x0) * min(v, mx) / mx)
         sc.rect(x0, yc - bar_h / 2, length, bar_h, role, r=(0, 4, 4, 0), tip={'t': label, 'r': [[title, f'{_fmt(v, places)}{unit}', role]]})
         first = yc - (len(lines_) - 1) * 7 + 4.5
         for k, line in enumerate(lines_):
             sc.text(label_w, first + k * 14, line, size=12, anchor='end', fill='ink2')
-        sc.text(x0 + length + 8, yc + 4.5, f'{_fmt(v, places)}{unit}', fill='ink', weight=600)
+        sc.text(x0 + length + 8, yc + 4.5, tip_text, fill='ink', weight=600)
     return sc
 
 

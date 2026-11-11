@@ -57,7 +57,7 @@ def stages(found):
         {'key': 'calm', 'title': 'Blue flag: someone calms it', 'about': 'A message that is not heated and shows care, politeness or encouragement, right after the heat.',
          'examples': [calm], 'real': real, 'part': ''},
         {'key': 'traction', 'title': 'Traction: the heat falls' if held else 'No traction yet: the heat comes back',
-         'about': 'The messages that follow show whether the calming message took hold.', 'examples': follow, 'real': real, 'part': ''}]
+         'about': 'The messages that follow show whether the calming message took hold.', 'examples': follow, 'real': real, 'part': '', 'held': held}]
 
 
 def view(units, gap=incidents.DEFAULT_GAP):
