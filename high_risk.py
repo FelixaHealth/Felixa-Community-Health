@@ -84,6 +84,7 @@ def build(aid, safety=None) -> dict:
 
 import datetime as _dt
 import html as _html
+from collections import Counter
 
 _E = _html.escape
 YELLOW, RED, INK = '#fab219', '#d03b3b', '#16251d'
@@ -91,7 +92,7 @@ YELLOW, RED, INK = '#fab219', '#d03b3b', '#16251d'
 
 def _flag(x, y, kind):
     c = YELLOW if kind == 'Y' else RED
-    return f'<g><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
+    return f'<g data-g="{"escalation" if kind == "Y" else "conflict"}"><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
 
 
 def _buckets(msgs, timed):
@@ -128,11 +129,18 @@ def over_time(aid, hr) -> dict:
             flags.setdefault(where[inc['start']['i']], set()).add('Y')
         if inc['turn'] is not None and inc['turn']['i'] in where:
             flags.setdefault(where[inc['turn']['i']], set()).add('R')
+    found = incidents.find(units)
+    inc_of = {}
+    for inc in found:
+        for i in range(inc['start']['i'], inc['end']['i'] + 1):
+            inc_of[i] = inc
     days = []
     for k, (label, idx) in enumerate(buckets):
-        q = [{'text': msgs[i]['text'], 'when': msgs[i]['when'].strftime('%H:%M') if timed and hasattr(msgs[i]['when'], 'strftime') else '', 'behaviour': ', '.join(by_uid.get(msgs[i]['uid'], []))}
+        q = [{'text': msgs[i]['text'], 'when': msgs[i]['when'].strftime('%H:%M') if timed and hasattr(msgs[i]['when'], 'strftime') else '', 'behaviour': ', '.join(by_uid.get(msgs[i]['uid'], [])),
+              'inc': inc_of[i]['n'] if i in inc_of else None, 'turn': bool(i in inc_of and inc_of[i]['turn'] is not None and inc_of[i]['turn']['i'] == i)}
              for i in idx if msgs[i]['uid'] in uids]
-        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': sorted(flags.get(k, []), reverse=True), 'k': k})
+        links = sorted({(x['inc'], inc_of[i]['level']) for x, i in zip(q, [i for i in idx if msgs[i]['uid'] in uids]) if x['inc']})
+        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': sorted(flags.get(k, []), reverse=True), 'k': k, 'incidents': links})
     n = len(days)
     mx = max(d['count'] for d in days) or 1
     # A: bars
@@ -143,7 +151,7 @@ def over_time(aid, hr) -> dict:
         h = d['count'] / mx * 100
         x, w = d['k'] * bw + min(10, bw * .15), bw - 2 * min(10, bw * .15)
         y = 150 - h
-        a += f'<g class="hr-bar" data-day="{d["k"]}"><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
+        a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
         if d['count']:
             a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
         for j, f in enumerate(d['flags']):
@@ -179,6 +187,33 @@ def over_time(aid, hr) -> dict:
                 frac = (m['when'].hour * 60 + m['when'].minute) / 1440 if timed and hasattr(m['when'], 'hour') and (buckets[0][0][:4] != 'Part') else (pos + .5) / max(len(idx), 1)
                 for bname in by_uid.get(m['uid'], [])[:1]:
                     r = rows.index(cat_of[bname])
-                    b += f'<circle cx="{lab + k * cw + frac * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(m["text"][:80])}</title></circle>'
+                    b += f'<circle data-g="highrisk" cx="{lab + k * cw + frac * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(m["text"][:80])}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
     return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days)}
+
+
+def lane(bars) -> list:
+    """The High Risk lane of an incident chart: [(behaviour, {bar index: messages})], the most frequent behaviour first."""
+    rows: dict = {}
+    for k, b in enumerate(bars):
+        for name in b.get('beh') or []:
+            rows.setdefault(name, {})
+            rows[name][k] = rows[name].get(k, 0) + 1
+    return sorted(rows.items(), key=lambda kv: -sum(kv[1].values()))
+
+
+def annotate(aid, found) -> dict:
+    """Puts what each incident contains on it: item['hr'] = [(behaviour, messages)], item['hr_n'] = High Risk messages inside it. Returns the behaviours of every message (uid -> [behaviour])."""
+    import safety_module
+    hr = build(aid, safety_module.build(aid)) if safety_module.AVAILABLE else build(aid)
+    by_uid = hr['by_uid']
+    for item in found or []:
+        c = Counter()
+        n = 0
+        for r in item['rows']:
+            if r.get('inside') and r.get('uid') in by_uid:
+                n += 1
+                c.update(by_uid[r['uid']])
+        item['hr'] = c.most_common()
+        item['hr_n'] = n
+    return by_uid

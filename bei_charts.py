@@ -414,6 +414,7 @@ def track_chart(key, name, stretches, flags, *, width=W, black=None):
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
         sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
     _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
+    sc.group(key)
     for i, f in enumerate(flags):
         h = max(2.0, Y(0) - Y(f['value']))
         sc.rect(X(i) - bar_w / 2, Y(0) - h, bar_w, h, track_shade(key, f['value']), r=(3, 3, 0, 0))
@@ -426,9 +427,11 @@ def track_chart(key, name, stretches, flags, *, width=W, black=None):
             cy = max(mt - 10, Y(f['value']) - 13)
             sc.circle(X(i), cy, 9, 'crit' if f['level'] == 'red' else 'warn')
             sc.text(X(i), cy + 4, 'R' if f['level'] == 'red' else 'Y', size=11, fill='on-fill' if f['level'] == 'red' else 'on-warn', anchor='middle', weight=700)
+    sc.group('highrisk')
     for i in range(n):
         if black and black[i]:
             black_flag(sc, X(i) - 1, 1)
+    sc.group(None)
     for i, f in enumerate(flags):
         st = stretches[i]
         rows = [[SAID_PLAIN[key], f'{f["count"]:,} of {f["n"]:,}', TRACK_SCALE[key] + '3'], ['per 100 messages', f'{_whole(f["value"])}', TRACK_SCALE[key] + '3']]
@@ -480,21 +483,26 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None):
     ends = []
     for key in [k for k in ('deescalation', 'escalation', 'empathy', 'conflict') if k in series]:                # conflict last, so its red line is never hidden under another
         role = TRACK_LINE[key]
+        sc.group(key)
         pts = [(X(i), Y(v)) for i, v in enumerate(series[key])]
         sc.poly(pts, stroke=role, width=2.5)
         for x, y in pts:
             sc.circle(x, y, outer, 'surface')
             sc.circle(x, y, inner, role)
-        ends.append((pts[-1][1], role, _whole(series[key][-1])))
+        ends.append((pts[-1][1], role, _whole(series[key][-1]), key))
+    sc.group('highrisk')
     for i in range(n):
         if black and black[i]:
             black_flag(sc, X(i) - 1, 1)
+    sc.group(None)
     floor = Y(0) - 4                                            # the values at the end of the lines, kept apart and above the axis labels
     next_y = floor
-    for y, role, val in sorted(ends, reverse=True):
+    for y, role, val, gkey in sorted(ends, reverse=True):
         y = min(y, next_y)
+        sc.group(gkey)
         sc.text(width - mr + 8, y + end_size * 0.35, val, size=end_size, fill='ink', weight=600)
         next_y = y - end_size - 2
+    sc.group(None)
     step = pw / (n - 1)
     for i, st in enumerate(stretches):
         rows = [['Escalation', f'{_whole(series["escalation"][i])} per 100', TRACK_LINE['escalation']], ['Conflict', f'{_whole(series["conflict"][i])} per 100', TRACK_LINE['conflict']],
@@ -554,22 +562,38 @@ def compare_chart(cats, cur, prev, *, width=W):
     return sc
 
 
-def incident_chart(bars, *, width=W):
-    """One incident as stacked bars, a bar for each message or each stretch of minutes: openly hostile (red) on top of heated (yellow) on top of calm (grey). None without bars."""
+def pole_flag(sc, x, y, role) -> None:
+    """A pole with a pennant in a role colour (red for conflict, yellow for escalation), drawn with its top at y."""
+    sc.line(x, y, x, y + 17, 'ink2', 1.6)
+    sc.poly([(x, y), (x + 12, y + 4.5), (x, y + 9)], stroke=role, width=1, fill=role, close=True)
+
+
+def incident_chart(bars, *, width=W, lane=None):
+    """One incident as stacked bars, a bar for each message or each stretch of minutes: openly hostile (red) on top of heated (yellow) on top of calm (grey).
+    The yellow flag marks the bar where escalation starts and the red flag the bar where it turns into conflict. `lane` ([(behaviour, {bar index: messages})]) adds a row of dots
+    for each High Risk behaviour under the bars, in the same columns. None without bars."""
     n = len(bars)
     if not n:
         return None
+    lane = lane or []
     narrow = width < 600
     tick_size, _end = _sizes(width)
-    height = 190 if narrow else 210
-    ml, mr, mt, mb = 30, 10, 12 + (18 if any(x.get('black') for x in bars) else 0), 30
-    pw, ph = width - ml - mr, height - mt - mb
+    base_h = 190 if narrow else 210
+    flags_on = any(b.get('start') or b.get('turn') for b in bars)
+    row_h = 34
+    height = base_h + (row_h * len(lane) + 10 if lane else 0)
+    ml, mr, mt, mb = 30, 10, 12 + (18 if (flags_on or any(x.get('black') for x in bars)) else 0), 30
+    pw, ph = width - ml - mr, base_h - mt - mb
     top = max(max(b['n'] for b in bars), 1)
     ticks = nice_ticks(float(top), 3)
     top = max(ticks[-1], 1)
     slot = pw / n
     bw = max(2.0, min(40.0, slot * 0.72))
     desc = 'Messages in each %s of the incident: %d openly hostile, %d heated, %d calm in all.' % ('bar', sum(b['hostile'] for b in bars), sum(b['heated'] for b in bars), sum(b['calm'] for b in bars))
+    if flags_on:
+        desc += ' A yellow flag marks where escalation starts and a red flag where it turns into conflict.'
+    if lane:
+        desc += ' Under the bars, a row for each High Risk behaviour shows where it appeared: ' + ', '.join(name for name, _ in lane) + '.'
     sc = Scene(width, height, 'The incident, bar by bar', desc)
     for t in ticks:
         y = mt + ph * (1 - t / top)
@@ -581,13 +605,33 @@ def incident_chart(bars, *, width=W):
         x = ml + slot * k + (slot - bw) / 2
         base = mt + ph
         tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']] + ([['High Risk flag', f"{b['black']} held", 'black']] if b.get('black') else [])
-        for key, role in (('hostile', 'crit'), ('heated', 'warn'), ('calm', 'grid')):
+        for key, role, g in (('hostile', 'crit', 'conflict'), ('heated', 'warn', 'escalation'), ('calm', 'grid', None)):
             h = ph * b[key] / top
             if h > 0:
+                sc.group(g)
                 sc.rect(x, base - h, bw, max(1.0, h - 1), role, tip={'t': b['label'], 'r': tip_rows})
                 base -= h
+        sc.group(None)
+        mid = x + bw / 2
+        both = (b.get('start') or b.get('turn')) and b.get('black')
+        if b.get('start'):
+            sc.group('escalation')
+            pole_flag(sc, mid - (7 if both else 1), 1, 'warn')
+        if b.get('turn'):
+            sc.group('conflict')
+            pole_flag(sc, mid - (7 if both else 1) + (9 if b.get('start') else 0), 1, 'crit')
         if b.get('black'):
-            black_flag(sc, x + bw / 2 - 1, 1)
+            sc.group('highrisk')
+            black_flag(sc, mid + (8 if both else -1), 1)
+        sc.group(None)
         if k % every == 0:
-            sc.text(x + bw / 2, height - mb + tick_size + 6, b['label'], size=tick_size, fill='ink2', anchor='middle')
+            sc.text(x + bw / 2, base_h - mb + tick_size + 6, b['label'], size=tick_size, fill='ink2', anchor='middle')
+    sc.group('highrisk')
+    for r, (name, where) in enumerate(lane):
+        y0 = base_h + 4 + r * row_h
+        sc.text(ml, y0 + tick_size + 1, name, size=tick_size, fill="ink2")
+        sc.line(ml, y0 + row_h - 6, width - mr, y0 + row_h - 6, 'grid', 1)
+        for k, count in where.items():
+            sc.circle(ml + slot * k + slot / 2, y0 + row_h - 6, 5.5 if count < 2 else 7, 'ink')
+    sc.group(None)
     return sc

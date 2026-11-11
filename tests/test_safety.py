@@ -114,3 +114,49 @@ class Absent(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class Connection(unittest.TestCase):
+    """Escalation, conflict and High Risk on one timeline, and the on/off groups of the graphs."""
+
+    def bars(self):
+        return [{'label': '09:00', 'n': 3, 'calm': 1, 'heated': 1, 'hostile': 1, 'black': 1, 'text': '', 'beh': ['Threats'], 'start': True, 'turn': True},
+                {'label': '09:05', 'n': 2, 'calm': 2, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': ['Threats', 'Blackmail'], 'start': False, 'turn': False}]
+
+    def test_the_lane_lists_each_behaviour_with_the_bars_it_appears_in(self):
+        import high_risk
+        lane = high_risk.lane(self.bars())
+        self.assertEqual(lane[0][0], 'Threats')
+        self.assertEqual(lane[0][1], {0: 1, 1: 1})
+        self.assertEqual(dict(lane)['Blackmail'], {1: 1})
+
+    def test_every_series_of_the_incident_chart_can_be_switched_off(self):
+        import bei_charts
+        from vibe_check.charts import to_svg
+        import high_risk
+        svg = to_svg(bei_charts.incident_chart(self.bars(), width=700, lane=high_risk.lane(self.bars())), 't1')
+        for g in ('conflict', 'escalation', 'highrisk'):
+            self.assertIn(f'data-g="{g}"', svg, g)
+        self.assertIn('Threats', svg)
+
+    def test_the_trends_lines_carry_their_series_name(self):
+        import bei_charts
+        from vibe_check.charts import to_svg
+        st = [{'label': f'p{i}', 'axis': f'p{i}', 'rates': {'heated': i, 'hostile': i / 2, 'care': 3}} for i in range(5)]
+        svg = to_svg(bei_charts.track_compare(st, width=700, deescalation=[1, 2, 3, 2, 1], black=[0, 0, 1, 0, 0]), 't2')
+        for g in ('empathy', 'conflict', 'escalation', 'deescalation', 'highrisk'):
+            self.assertIn(f'data-g="{g}"', svg, g)
+
+    def test_incidents_are_annotated_with_their_behaviours(self):
+        import high_risk
+        rows = [{'uid': 1, 'inside': True}, {'uid': 2, 'inside': True}, {'uid': 3, 'inside': False}, {'uid': 9, 'inside': True}]
+        item = {'rows': rows}
+        import safety_module
+        orig = high_risk.build
+        high_risk.build = lambda aid, safety=None: {'by_uid': {1: ['Threats'], 2: ['Threats', 'Blackmail'], 3: ['Racism']}}
+        try:
+            high_risk.annotate(1, [item])
+        finally:
+            high_risk.build = orig
+        self.assertEqual(item['hr'], [('Threats', 2), ('Blackmail', 1)])
+        self.assertEqual(item['hr_n'], 2)

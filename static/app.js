@@ -175,3 +175,37 @@ document.addEventListener('click', e => {
   const box = document.getElementById('hr-days'), day = document.getElementById('hr-day-' + g.dataset.day);
   if (box) box.open = true; if (day) { day.open = true; day.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 });
+
+// Graphs with a legend that switches series on and off: Empathy, Conflict, Escalation and High Risk behaviours. The choice is kept for each graph.
+(() => {
+  document.querySelectorAll('ul[data-toggle]').forEach((ul) => {
+    const key = 'felixa-g:' + ul.dataset.toggle;
+    const svgs = () => {
+      if (ul.dataset.scope === 'panel') { const p = ul.closest('.panel'); return p ? [...p.querySelectorAll('svg')] : []; }
+      const after = ul.dataset.dir === 'after';
+      let el = after ? ul.nextElementSibling : ul.previousElementSibling;
+      for (let k = 0; el && k < 4; k++, el = after ? el.nextElementSibling : el.previousElementSibling) {
+        const found = el.matches('svg') ? [el] : [...el.querySelectorAll('svg')];
+        if (found.length) return found;
+      }
+      return [];
+    };
+    let off = [];
+    try { off = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { off = []; }
+    const apply = () => {
+      const all = svgs();
+      ul.querySelectorAll('[data-g]').forEach((li) => {
+        const g = li.dataset.g, hide = off.includes(g);
+        li.classList.toggle('off', hide); li.setAttribute('aria-pressed', String(!hide));
+        all.forEach((s) => s.querySelectorAll('[data-g="' + g + '"]').forEach((e) => { e.style.display = hide ? 'none' : ''; }));
+      });
+    };
+    ul.querySelectorAll('[data-g]').forEach((li) => {
+      li.setAttribute('role', 'button'); li.tabIndex = 0;
+      const flip = () => { const g = li.dataset.g; off = off.includes(g) ? off.filter((x) => x !== g) : off.concat(g); try { localStorage.setItem(key, JSON.stringify(off)); } catch (e) {} apply(); };
+      li.addEventListener('click', flip);
+      li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+    });
+    apply();
+  });
+})();

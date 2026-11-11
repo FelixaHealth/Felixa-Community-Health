@@ -17,6 +17,7 @@ through CSS variables (--vc-<role>) and dark mode needs no code change.
 from __future__ import annotations
 
 import html
+import re
 import json
 import math
 
@@ -98,9 +99,13 @@ class Scene:
     def __init__(self, width: float, height: float, title: str, desc: str):
         self.width, self.height, self.title, self.desc = width, height, title, desc
         self.items: list[dict] = []
+        self.cur = None                           # the series that the marks drawn next belong to (web only: lets a reader switch a series on and off)
+
+    def group(self, name):
+        self.cur = name
 
     def _add(self, kind: str, **kw):
-        self.items.append({'kind': kind, **kw})
+        self.items.append({'kind': kind, 'g': self.cur, **kw})
 
     def rect(self, x, y, w, h, fill, *, r=(0, 0, 0, 0), opacity=1.0, tip=None):
         self._add('rect', x=x, y=y, w=w, h=h, fill=fill, r=r, opacity=opacity, tip=tip)
@@ -183,6 +188,7 @@ def to_svg(scene: Scene, uid: str) -> str:
            f'<title id="{uid}-t">{esc(scene.title)}</title><desc id="{uid}-d">{esc(scene.desc)}</desc>']
     for it in scene.items:
         k = it['kind']
+        mark = len(out)
         if k == 'rect':
             st = _paint('fill', it['fill']) + (f';fill-opacity:{_n(it["opacity"])}' if it['opacity'] < 1 else '')
             extra = ''
@@ -218,6 +224,9 @@ def to_svg(scene: Scene, uid: str) -> str:
         elif k == 'cross':
             out.append(f'<line class="vc-cross" x1="0" y1="{_n(it["y1"])}" x2="0" y2="{_n(it["y2"])}" '
                        f'style="{_paint("stroke", "axis")};stroke-width:1;visibility:hidden;pointer-events:none"/>')
+        if it.get('g'):
+            for j in range(mark, len(out)):
+                out[j] = re.sub(r'^<(\w+)', lambda m: f'<{m.group(1)} data-g="{it["g"]}"', out[j], count=1)
     out.append('</svg>')
     return ''.join(out)
 

@@ -129,23 +129,30 @@ def _traction(msgs, a, b, timed, gap):
             'last_heat': _quote(before[-1]) if before else '', 'follow': follow, 'minutes_after': minutes, 'before_conflict': c > a and (not any(m['hostile'] for m in msgs[a:c]))}
 
 
-def bins(incident, step, flagged=None):
+def bins(incident, step, flagged=None, beh=None):
     """The bars of the incident chart: [{'label', 'n', 'calm', 'heated', 'hostile'}]. step 0 = a bar for each message; otherwise a bar for each `step` minutes.
     A chat without times only has the message-by-message view."""
     rows = incident['rows']
+    beh = beh or {}
     if not step or not incident['timed']:
         return [{'label': _clock(r['when']) if incident['timed'] else str(r['i'] + 1), 'n': 1, 'calm': int(not r['heated']), 'heated': int(r['heated'] and not r['hostile']),
-                 'hostile': int(r['hostile']), 'black': int(r.get('uid') in (flagged or ())), 'text': r['text']} for r in rows]
+                 'hostile': int(r['hostile']), 'black': int(r.get('uid') in (flagged or ())), 'text': r['text'], 'beh': list(beh.get(r.get('uid'), [])),
+                 'start': r.get('role') in ('start', 'start-turn'), 'turn': r.get('role') in ('turn', 'start-turn')} for r in rows]
     first = rows[0]['when'].replace(second=0, microsecond=0)
     base = first - _dt.timedelta(minutes=first.minute % step if step < 60 else first.minute, hours=0)
     last = rows[-1]['when']
     count = int((last - base).total_seconds() // (step * 60)) + 1
     count = min(count, MAX_BARS)
-    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': ''} for k in range(count)]
+    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': [], 'start': False, 'turn': False} for k in range(count)]
     for r in rows:
         k = min(count - 1, int((r['when'] - base).total_seconds() // (step * 60)))
         b = out[k]
         b['n'] += 1
+        b['beh'] += list(beh.get(r.get('uid'), []))
+        if r.get('role') in ('start', 'start-turn'):
+            b['start'] = True
+        if r.get('role') in ('turn', 'start-turn'):
+            b['turn'] = True
         if r.get('uid') in (flagged or ()):
             b['black'] += 1
         if r['hostile']:

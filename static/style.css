@@ -1158,3 +1158,11 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .hr-view{display:flex;gap:6px}.hr-view label{padding:4px 12px;border:1px solid #ddd8c8;border-radius:16px;font-size:13px;cursor:pointer;color:#16251d!important;background:#fff}.hr-view input{position:absolute;opacity:0;pointer-events:none}.hr-view label:has(input:checked){background:#16251d;color:#fff!important;border-color:#16251d}
 .hr-vb{display:none}.panel:has(input[data-b]:checked) .hr-vb{display:block}.panel:has(input[data-b]:checked) .hr-va{display:none}
 .hr-bar{cursor:pointer}.hr-leg{margin:8px 0}.hr-day{background:#faf8f1;border-radius:10px;margin:6px 0}.hr-day>summary{display:flex;gap:10px;padding:9px 12px;cursor:pointer;list-style:none}.hr-day>summary span{flex:1}.hr-day>summary::-webkit-details-marker{display:none}
+
+[data-toggle] li[data-g]{cursor:pointer;user-select:none;padding:3px 10px;border:1px solid #ddd8c8;border-radius:16px;background:#fff}
+[data-toggle] li[data-g].off{opacity:.45;text-decoration:line-through}
+.track-legend .lg.dark{background:#1f3a2e}
+.inc-tags em.hrc,.chips em.hrc{font-style:normal;background:#16251d;color:#fff;border-radius:12px;padding:1px 9px;font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.hr-day>summary{align-items:center;flex-wrap:wrap}.hr-inc{font-size:12px;border-radius:12px;padding:1px 9px;text-decoration:none;color:#0b0b0b;background:#fab219}.hr-inc.red{background:#d03b3b;color:#fff}.hr-turn{color:#d03b3b}
+.inc-card .chips{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;margin-top:6px}.inc-card .chips em{display:inline-block;width:auto;height:auto;flex:none;margin:0;font-style:normal;background:#16251d;color:#fff;border-radius:12px;padding:1px 9px;font-size:12px;line-height:1.5}

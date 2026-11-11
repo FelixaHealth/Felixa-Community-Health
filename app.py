@@ -1831,10 +1831,12 @@ def incident_page(request: Request, aid: AnalysisId, n: int, step: int = inciden
     if not item['timed']:
         step = 0
     flagged = safety_module.flagged_uids(aid)
-    bars = incidents.bins(item, step, flagged)
-    figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w))
+    by_uid = high_risk.annotate(aid, found)
+    bars = incidents.bins(item, step, flagged, by_uid)
+    lane = high_risk.lane(bars)
+    figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w, lane=lane))
     nav = results_nav(aid, ctx, 'escalation') if ctx.get('measures') else []
-    return render(request, 'incident.html', item=item, found=found, flagged=flagged, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
+    return render(request, 'incident.html', item=item, found=found, flagged=flagged, by_uid=by_uid, lane=lane, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
                   rnav=nav, **ctx)
 
 
@@ -1883,6 +1885,7 @@ def deescalation_page(request: Request, aid: AnalysisId):
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Deescalation needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     dv, figure = traction_parts(aid)
+    high_risk.annotate(aid, dv['incidents'])
     return render(request, 'deescalation.html', held_texts=safety_module.flagged_texts(aid), track_view=view, de_view=dv, traction_figure=figure, key='deescalation', rnav=results_nav(aid, ctx, 'deescalation'), **ctx)
 
 
@@ -1895,7 +1898,10 @@ def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents
     view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
-    return render(request, 'track.html', held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None, **dict(zip(('de_view', 'traction_figure'), traction_parts(aid))), gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
+    il = incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None
+    if il:
+        high_risk.annotate(aid, il)
+    return render(request, 'track.html', held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=il, **dict(zip(('de_view', 'traction_figure'), traction_parts(aid))), gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):
