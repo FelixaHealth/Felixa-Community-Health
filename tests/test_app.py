@@ -2859,6 +2859,13 @@ class Auth(AppCase):
             for host in ('lan', 'bei.lan.attacker.example', 'attacker.example', 'testserver'):
                 self.assertEqual(self.client.get('/', headers={'host': host}).status_code, 400, host)
 
+    def test_a_wildcard_in_the_allowed_hosts_lets_a_family_of_tunnel_names_in(self):
+        with mock.patch.dict(os.environ, {'FELIXA_ALLOWED_HOSTS': 'bei.lan, *.trycloudflare.com'}):
+            for host in ('random-words-here.trycloudflare.com', 'a.b.trycloudflare.com:443', 'bei.lan'):
+                self.assertEqual(self.client.get('/', headers={'host': host}).status_code, 200, host)
+            for host in ('trycloudflare.com.attacker.example', 'nottrycloudflare.com', 'attacker.example', 'trycloudflare.com'):
+                self.assertEqual(self.client.get('/', headers={'host': host}).status_code, 400, host)
+
     def test_password_protection(self):
         aid = self.new_analysis()
         with mock.patch.dict(os.environ, {'FELIXA_PASSWORD': 'correct horse', 'FELIXA_USERNAME': 'felixa'}):

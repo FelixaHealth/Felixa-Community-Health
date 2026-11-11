@@ -293,8 +293,10 @@ def unexpected_host(request):
     that is how DNS rebinding looks: a hostile site whose name now points at 127.0.0.1. The raw header is parsed here because
     libraries read a malformed one differently."""
     match = HOST_HEADER.fullmatch(request.headers.get('host', '').lower())
-    allowed = LOCAL_HOSTS | {h.strip().lower() for h in os.getenv('FELIXA_ALLOWED_HOSTS', '').split(',') if h.strip()}
-    return not match or match.group(1) not in allowed
+    listed = {h.strip().lower() for h in os.getenv('FELIXA_ALLOWED_HOSTS', '').split(',') if h.strip()}
+    allowed = LOCAL_HOSTS | {h for h in listed if not h.startswith('*.')}
+    suffixes = tuple(h[1:] for h in listed if h.startswith('*.'))             # '*.trycloudflare.com' lets a whole family of names in, for a tunnel whose name changes
+    return not match or (match.group(1) not in allowed and not (suffixes and match.group(1).endswith(suffixes)))
 
 
 def cross_site(request):
