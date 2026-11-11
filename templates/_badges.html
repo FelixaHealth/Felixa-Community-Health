@@ -3,9 +3,9 @@
 {% set earned = ms.badges|selectattr('earned')|list %}{% set others = ms.badges|rejectattr('earned')|list %}
 <section class="panel vc" id="badges" aria-labelledby="badges-h"><div class="eyebrow">Celebrate</div><h2 id="badges-h">Badges</h2>
 {% if not earned %}<p class="vc-trendline">{{ ms.texts.no_badges }}</p>{% endif %}
-<div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Flag</th><th scope="col">Status</th><th scope="col">Type</th><th scope="col">Why</th></tr></thead><tbody>
-{% for b in ms.badges %}<tr class="{{ 'ab-on' if b.earned else 'ab-off' }}"><td data-label="Flag"><i class="flag {{ 'green' if b.earned else 'grey' }}">{{ 'G' if b.earned else '–' }}</i></td><td data-label="Status">{{ 'Earned' if b.earned else 'Not earned' }}</td><td data-label="Type"><strong>{{ b.name }}</strong></td>
-<td data-label="Why">{% if b.earned %}{{ b.evidence }}{% else %}{{ b.how }}{% if b.needs %}<span class="ab-sub">{{ b.needs }}</span>{% endif %}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Flag</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Why</th></tr></thead><tbody>
+{% for b in ms.badges %}<tr class="{{ 'ab-on' if b.earned else 'ab-off' }}"><td data-label="Flag"><i class="flag {{ 'green' if b.earned else 'grey' }}">{{ 'G' if b.earned else '–' }}</i></td><td data-label="Type"><strong>{{ b.name }}</strong></td><td data-label="Status">{{ 'Earned' if b.earned else 'Not yet' }}</td>
+<td data-label="Why">{% if b.earned %}{{ b.evidence }}{% else %}{% if b.needs %}<span class="ab-sub">{{ b.needs }}</span>{% endif %}<span class="ab-sub">{{ b.how }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% if ms.badge_note %}<p class="vc-note">{{ ms.badge_note }}</p>{% endif %}
 <details><summary>How badges are meant</summary><p class="vc-caveat">{{ ms.caveats.badges }}</p></details>
 </section>

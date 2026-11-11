@@ -6,15 +6,15 @@
 {% set FLAG = {'high': ('red', 'R'), 'medium': ('yellow', 'Y'), 'good': ('green', 'G')} %}
 {% set TYPES = {'serious': 'Serious messages', 'conflict': 'Conflict', 'empathy': 'Empathy', 'mood_down': 'Mood falling', 'mood_up': 'Mood rising', 'conflict_down': 'Conflict falling', 'empathy_up': 'Empathy rising', 'heated': 'Heated moment', 'passive': 'Passive-aggressive'} %}
 {% macro row(al) %}<tr><td data-label="Flag"><i class="flag {{ FLAG[al.level][0] }}">{{ FLAG[al.level][1] }}</i></td><td data-label="Severity">{{ levels[al.level].name if levels[al.level] else al.level }}</td><td data-label="Type">{{ TYPES.get(al.key, al.key|replace('_', ' ')|capitalize) }}</td>
-<td data-label="What it says"><strong>{{ al.title }}</strong><span class="ab-sub">{{ al.detail }}</span>{% if al.when %}<span class="ab-sub">Where in the chat: {{ al.when }}</span>{% endif %}{% if al['try'] %}<details class="ab-try"><summary>Try this</summary><p>{{ al['try'] }}</p></details>{% endif %}</td></tr>{% endmacro %}
+<td data-label="What it says"><strong class="vc-alert-title">{{ al.title }}</strong><span class="ab-sub vc-alert-detail">{{ al.detail }}</span>{% if al.base %}<span class="ab-sub vc-alert-base">{{ al.base }}</span>{% endif %}{% if al.when %}<span class="ab-sub vc-alert-when">Where in the chat: {{ al.when }}</span>{% endif %}{% if al['try'] %}<details class="ab-try"><summary>Try this:</summary><p>{{ al['try'] }}</p></details>{% endif %}</td></tr>{% endmacro %}
 <section class="panel vc" id="alerts" aria-labelledby="alerts-h"><div class="eyebrow">Look first</div><h2 id="alerts-h">Alerts</h2>
 {% if look == 1 %}<p class="vc-trendline vc-count">1 thing to look at first.</p>
 {% elif look > 1 %}<p class="vc-trendline vc-count">{{ look }} things worth a look.</p>
 {% elif ms.all_clear %}<p class="vc-trendline vc-count">Nothing needs urgent attention in {{ 'this message' if ms.m.n == 1 else 'these {:,} messages'.format(ms.m.n) }}.</p>{% endif %}
 {% if felixa_flags and (felixa_flags.high or felixa_flags.medium) %}<h3 class="ab-h">Flags on single messages</h3>
 <div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Flag</th><th scope="col">Severity</th><th scope="col">Type</th><th scope="col">Messages</th></tr></thead><tbody>
-{% for name, n in felixa_flags.high %}<tr><td data-label="Flag"><i class="flag red">R</i></td><td data-label="Severity">High</td><td data-label="Type">{{ name }}</td><td data-label="Messages">{{ n }}</td></tr>{% endfor %}
-{% for name, n in felixa_flags.medium %}<tr><td data-label="Flag"><i class="flag yellow">Y</i></td><td data-label="Severity">Medium</td><td data-label="Type">{{ name }}</td><td data-label="Messages">{{ n }}</td></tr>{% endfor %}</tbody></table></div>
+{% for name, n in felixa_flags.high %}<tr><td data-label="Flag"><i class="flag red">R</i></td><td data-label="Severity">High severity</td><td data-label="Type">{{ name }}</td><td data-label="Messages">{{ n }}</td></tr>{% endfor %}
+{% for name, n in felixa_flags.medium %}<tr><td data-label="Flag"><i class="flag yellow">Y</i></td><td data-label="Severity">Medium severity</td><td data-label="Type">{{ name }}</td><td data-label="Messages">{{ n }}</td></tr>{% endfor %}</tbody></table></div>
 <a class="ff-link" href="/analysis/{{ aid }}/flagged">See every flagged message</a>{% endif %}
 {% if shown %}<h3 class="ab-h">Alerts for this check</h3>
 <div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Flag</th><th scope="col">Severity</th><th scope="col">Type</th><th scope="col">What it says</th></tr></thead><tbody>{% for al in shown[:8] %}{{ row(al) }}{% endfor %}</tbody></table></div>
