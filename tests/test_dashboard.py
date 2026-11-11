@@ -55,10 +55,12 @@ class Dashboard(DashboardCase):
         a = self.workplace('Dash Alpha', checks=[(self.day(60), 55.0, {'members': 100}), (self.day(30), 62.0, {'members': 110}), (self.day(2), 70.0, {'members': 130})])
         b = self.workplace('Dash Beta', 'Team', 'Slack', checks=[(self.day(40), 45.0, {}), (self.day(3), 52.0, {})])
         page = self.client.get('/dashboard').text
-        for needle in ('Overview', 'Over time', '<h2>Health score</h2>', '<h2>Vibe Check</h2>', 'How people spoke', '<h2>Members</h2>', 'Latest health score', 'Latest Vibe Check',
+        for needle in ('Overview', 'Over time', 'How people spoke', 'Latest health score', 'Latest Vibe Check',
                        'Most Negative', 'Most Positive', 'All checks', 'Dash Alpha', 'Dash Beta'):
             self.assertIn(needle, page, needle)
-        self.assertGreaterEqual(page.count('<svg'), 8, 'the charts are drawn, in two layouts each')
+        for gone in ('<h2>Health score</h2>', '<h2>Vibe Check</h2>', '<h2>Members</h2>', '<h2>Sentiment mix</h2>'):
+            self.assertNotIn(gone, page, gone)
+        self.assertGreaterEqual(page.count('<svg'), 6, 'the charts are drawn, in two layouts each')
         self.assertNotIn('<h2>Latest check of each workplace</h2>', page)
         self.assertIn('<details class="vc-table"><summary>All checks (', page)
         self.assertNotIn('<details class="vc-table" open', page)
@@ -70,7 +72,7 @@ class Dashboard(DashboardCase):
         for label in ('Workplaces', 'Comments analysed', 'Vibe Check', 'Health score', 'Sentiment'):
             self.assertIn(label, tiles)
         self.assertIn('<h2>Sentiment</h2>', page)
-        self.assertLess(page.index('id="compare"'), page.index('<h2>Health score</h2>'), 'the overview comes first')
+        self.assertLess(page.index('id="compare"'), page.index('How people spoke'), 'the overview comes first')
         self.assertIn('class="dash-filter"', page)
         self.assertNotIn('class="dash-filter" open', page, 'the filters start folded')
         # every check is a row of the table behind the charts
