@@ -485,10 +485,11 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None, green=No
         role = TRACK_LINE[key]
         sc.group(key)
         pts = [(X(i), Y(v)) for i, v in enumerate(series[key])]
-        sc.poly(pts, stroke=role, width=2.5)
+        thick = key == 'escalation'                       # escalation is drawn wide and underneath, conflict narrow on top: when every heated message is openly hostile the two lines meet, and both colours stay visible
+        sc.poly(pts, stroke=role, width=6 if thick else 2.5)
         for x, y in pts:
-            sc.circle(x, y, outer, 'surface')
-            sc.circle(x, y, inner, role)
+            sc.circle(x, y, outer + (2.5 if thick else 0), 'surface')
+            sc.circle(x, y, inner + (2.5 if thick else 0), role)
         ends.append((pts[-1][1], role, _whole(series[key][-1]), key))
     sc.group('highrisk')
     for i in range(n):

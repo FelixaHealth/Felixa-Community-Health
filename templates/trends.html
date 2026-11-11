@@ -11,7 +11,7 @@
 {% if track_view.early %}<p class="small-note"><strong>Early reading.</strong> There are fewer than 48 messages on the timeline, so a part can be flagged yellow but not red yet.</p>{% endif %}
 <section class="panel vc"><h2>Does empathy change conflict and escalation?</h2>
 {{ track_view.compare|safe }}
-<ul class="track-legend" data-toggle="trends-{{ aid }}"><li data-g="empathy"><i class="lg cat3"></i>Empathy</li><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li data-g="deescalation"><i class="lg blue"></i>Deescalation</li>{% endif %}<li data-g="highrisk"><i class="flag black">S</i> High Risk flag (held)</li></ul>
-<p class="small-note">Tap a name to show or hide it. <i class="flag green">G</i> marks a part where someone calmed an incident down.</p>
+<ul class="track-legend" data-toggle="trends-{{ aid }}"><li data-g="empathy"><i class="lg cat3"></i>Empathy</li><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li data-g="deescalation"><i class="lg blue"></i>Deescalation</li>{% endif %}<li data-g="highrisk"><i class="flag black">R</i> High Risk flag (held)</li></ul>
+
 <div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>
 </div></div>{% endblock %}

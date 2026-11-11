@@ -7,7 +7,7 @@
 <section class="results-head"><div class="rh-main"><h1>High Risk review</h1><p class="lead">Messages kept for a person to read. It asks questions and never gives a verdict.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/safety">{{ icon('back') }} High Risk</a></div></section>
 
-<section class="panel sf-note"><p><i class="flag black">S</i> <strong>Held, not live.</strong> Nothing here sends an alert, confirms anything or triggers anything. These are unvalidated word rules: they miss a lot and can be wrong, so they only point at messages for a person to read.</p>
+<section class="panel sf-note"><p><i class="flag black">R</i> <strong>Held, not live.</strong> Nothing here sends an alert, confirms anything or triggers anything. These are unvalidated word rules: they miss a lot and can be wrong, so they only point at messages for a person to read.</p>
 <details class="ts-explain"><summary>Why is everything held?</summary><p class="small-note">A High Risk alert may only go live when a named, qualified safeguarding reviewer, an independent second reviewer and an approved emergency protocol exist. This app has none of them, so every item stays held.{% if safety.missing %} Still missing: {{ safety.missing|join('; ') }}.{% endif %} The app does not keep who wrote a message, so it reads every message as one speaker: it can see a single message that threatens, but not an exchange between two people.</p></details></section>
 
 <div class="dash-kpis inc-kpis">
@@ -17,7 +17,7 @@
 <div class="dash-kpi"><small>Messages read</small><strong>{{ '{:,}'.format(safety.messages) }}</strong><span>{{ safety.excluded }} left out as quoted, joked or reported</span></div></div>
 
 <section class="panel"><h2>Held for a person to read</h2>
-{% if safety.held %}<ol class="sf-list">{% for i in safety.held %}<li class="sf-item sf-held"><div class="sf-top"><i class="flag black">S</i><div><strong>{{ i.alert_name or i.name }}</strong>{% if i.alert_id %} <em class="sf-id">{{ i.alert_id }}</em>{% endif %}<span class="sf-sub">{{ i.status_word }} · {{ i.detector }} · {{ i.name }}</span></div></div>
+{% if safety.held %}<ol class="sf-list">{% for i in safety.held %}<li class="sf-item sf-held"><div class="sf-top"><i class="flag black">R</i><div><strong>{{ i.alert_name or i.name }}</strong>{% if i.alert_id %} <em class="sf-id">{{ i.alert_id }}</em>{% endif %}<span class="sf-sub">{{ i.status_word }} · {{ i.detector }} · {{ i.name }}</span></div></div>
 <p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote sf-quote">{{ q.text }}<small>{{ q.when }}{% if q.source %} · {{ q.source }}{% endif %}</small></blockquote>{% endfor %}
 {% if i.total > i.quotes|length %}<p class="small-note">and {{ i.total - i.quotes|length }} more message{{ '' if i.total - i.quotes|length == 1 else 's' }}.</p>{% endif %}
 {% if i.note %}<p class="small-note">{{ i.note }}</p>{% endif %}<p class="small-note sf-hold">{{ i.hold_reason }}</p>
