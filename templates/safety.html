@@ -32,6 +32,5 @@
 {% if safety.protective %}<section class="panel"><h2>Protective moves</h2>
 <ol class="sf-list">{% for i in safety.protective %}<li class="sf-item"><div class="sf-top"><i class="flag blue">+</i><div><strong>{{ i.name }}</strong><span class="sf-sub">{{ i.detector }}</span></div></div><p>{{ i.basis }}</p>{% for q in i.quotes %}<blockquote class="ts-quote">{{ q.text }}</blockquote>{% endfor %}</li>{% endfor %}</ol></section>{% endif %}
 
-<section class="panel"><details class="all-alerts"><summary>What it reads: all {{ safety.catalogue|length }} detectors</summary><ul class="vc-rules aa-list">{% for d in safety.catalogue %}<li><strong>{{ d.id }} · {{ d.name }}</strong><em class="aa-lvl aa-{{ 'good' if d.valence == 'constructive' else 'medium' }}">{{ 'Protective' if d.valence == 'constructive' else 'Risk' }}</em><span class="vc-how">{{ d.needs }}</span></li>{% endfor %}</ul></details>
-<p class="small-note">{{ safety.limits|join(' ') }}</p></section>
+<section class="panel"><details class="all-alerts"><summary>What it reads: all {{ safety.catalogue|length }} detectors</summary><ul class="vc-rules aa-list">{% for d in safety.catalogue %}<li><strong>{{ d.id }} · {{ d.name }}</strong><em class="aa-lvl aa-{{ 'good' if d.valence == 'constructive' else 'medium' }}">{{ 'Protective' if d.valence == 'constructive' else 'Risk' }}</em><span class="vc-how">{{ d.needs }}</span></li>{% endfor %}</ul></details></section>
 </div></div>{% endblock %}
