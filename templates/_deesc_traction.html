@@ -1,0 +1,15 @@
+{# Deescalation traction: under the Trends graph. Needs `de_view` (deescalation.view) and `traction_figure`. #}
+{% from "_icons.html" import icon %}
+<section class="panel vc de-panel"><h2>Deescalation traction</h2>
+{% if de_view.tried %}
+<p class="small-note">For each incident where someone calmed things, how many heated messages still came after that. <strong>None means the calming message took hold.</strong></p>
+<ul class="track-legend"><li><i class="lg blue"></i>Took hold</li><li><i class="lg warn"></i>Heat came back</li></ul>
+{{ traction_figure|safe }}
+<p>{{ de_view.held|length }} of {{ de_view.tried|length }} calming attempt{{ '' if de_view.tried|length == 1 else 's' }} took hold{% if de_view.median_minutes is not none %}. The heat usually stopped within {{ de_view.median_minutes }} minute{{ '' if de_view.median_minutes == 1 else 's' }} of the calming message{% endif %}.</p>
+{% else %}
+<p>{% if de_view.incidents %}Nobody calmed things in the {{ de_view.incidents|length }} incident{{ '' if de_view.incidents|length == 1 else 's' }} of this chat, so there is no traction to show yet.{% else %}This chat has no incident of heated messages, so there was nothing to calm.{% endif %}</p>
+{% endif %}
+<ol class="ts-steps de-steps">{% for s in de_view.stages %}<li class="ts-step ds-{{ s.key }}"><div class="ts-node" aria-hidden="true">{% if s.key == 'calm' %}<i class="flag blue">B</i>{% elif s.key == 'heat' %}<i class="flag red">R</i>{% else %}<i class="flag ok">{{ icon('check') }}</i>{% endif %}</div>
+<div class="ts-body"><h3>{{ s.title }}</h3>{% for q in s.examples %}<blockquote class="ts-quote">{{ q }}</blockquote>{% endfor %}<small class="ts-from">{% if s.real %}From this chat{% else %}Example{% endif %}</small></div></li>{% endfor %}</ol>
+<details class="ts-explain"><summary>How to read this</summary><ul class="ts-about"><li><strong>Blue flag.</strong> A message that is not heated and shows care, politeness or encouragement, right after heat.</li><li><strong>Traction.</strong> The heat fell after it: no heated message followed in the same incident.</li><li>These describe wording in the chat, never a person. A calm message can also be a coincidence, so read the messages.</li></ul></details>
+</section>

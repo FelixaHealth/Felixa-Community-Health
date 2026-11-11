@@ -378,7 +378,7 @@ def health_meter(score, tone, *, width=W):
 # ---- the Track tab: a measure built up over the parts of a chat, with flags, and the three measures together ------------------------------------
 TRACK_STEPS = {'escalation': (5, 10, 20, 35), 'conflict': (2, 5, 12, 25), 'empathy': (2, 4, 8, 14)}      # per 100 messages: where the colour moves to the next shade
 TRACK_SCALE = {'escalation': 'heat', 'conflict': 'heat', 'empathy': 'calm'}
-TRACK_LINE = {'escalation': 'warn', 'conflict': 'crit', 'empathy': 'cat3'}
+TRACK_LINE = {'escalation': 'warn', 'conflict': 'crit', 'empathy': 'cat3', 'deescalation': 'pos'}
 
 
 def track_shade(key, value) -> str:
@@ -441,12 +441,14 @@ def track_chart(key, name, stretches, flags, *, width=W):
 SAID_PLAIN = {'escalation': 'heated messages', 'conflict': 'openly hostile messages', 'empathy': 'caring messages'}
 
 
-def track_compare(stretches, *, width=W):
+def track_compare(stretches, *, width=W, deescalation=None):
     """Escalation, Conflict and Empathy on one scale (messages per 100), one line each, so that a rise in one can be read against the others."""
     n = len(stretches)
     if n < 2:
         return None
     series = {k: [float(st['rates'][kind]) for st in stretches] for k, kind in (('escalation', 'heated'), ('conflict', 'hostile'), ('empathy', 'care'))}
+    if deescalation and len(deescalation) == n:                      # the blue line: calming messages after heat, per 100
+        series['deescalation'] = [float(v) for v in deescalation]
     narrow = width < 600
     tick_size, end_size = _sizes(width)
     height = 260 if narrow else 250
@@ -465,7 +467,7 @@ def track_compare(stretches, *, width=W):
     _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
     outer, inner = _marker_radii(n)
     ends = []
-    for key in ('escalation', 'empathy', 'conflict'):                # conflict last, so its red line is never hidden under another
+    for key in [k for k in ('deescalation', 'escalation', 'empathy', 'conflict') if k in series]:                # conflict last, so its red line is never hidden under another
         role = TRACK_LINE[key]
         pts = [(X(i), Y(v)) for i, v in enumerate(series[key])]
         sc.poly(pts, stroke=role, width=2.5)
@@ -483,6 +485,8 @@ def track_compare(stretches, *, width=W):
     for i, st in enumerate(stretches):
         rows = [['Escalation', f'{_whole(series["escalation"][i])} per 100', TRACK_LINE['escalation']], ['Conflict', f'{_whole(series["conflict"][i])} per 100', TRACK_LINE['conflict']],
                 ['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']]]
+        if 'deescalation' in series:
+            rows.append(['Deescalation', f'{_whole(series["deescalation"][i])} per 100', TRACK_LINE['deescalation']])
         sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc

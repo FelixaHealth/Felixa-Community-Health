@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Deescalation{% endblock %}
+{% block content %}
+<div class="shell"><div class="stage">
+{{ assets|safe }}
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">Deescalation</span></nav>
+{% include "_rnav.html" %}
+<section class="results-head"><div class="rh-main"><h1>Deescalation</h1><p class="lead">The messages that calm a chat down, and whether the heat fell after them.</p></div>
+<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results">{{ icon('back') }} Back to results</a></div></section>
+<div class="dash-kpis inc-kpis">
+<div class="dash-kpi"><small>Incidents</small><strong>{{ de_view.incidents|length }}</strong><span>runs of heated messages</span></div>
+<div class="dash-kpi"><small>Someone calmed it</small><strong>{{ de_view.tried|length }}</strong><span>of {{ de_view.incidents|length }} incidents</span></div>
+<div class="dash-kpi"><small>Took hold</small><strong>{{ de_view.held|length }}</strong><span>the heat did not come back</span></div>
+<div class="dash-kpi"><small>Time to settle</small><strong>{{ (de_view.median_minutes ~ ' min') if de_view.median_minutes is not none else '–' }}</strong><span>after the calming message</span></div></div>
+<section class="panel vc"><h2>Trends</h2>
+{{ track_view.compare|safe }}
+<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg crit"></i>Conflict</li><li><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li><i class="lg blue"></i>Deescalation</li>{% endif %}</ul>
+<p class="small-note">The blue line is the calming messages that came soon after heat, per 100 messages.</p></section>
+{% include "_deesc_traction.html" %}
+{% if de_view.incidents %}<section class="panel"><h2>Incident by incident</h2>
+<ol class="inc-list">{% for i in de_view.incidents %}<li><a class="inc-card {{ 'blue' if i.calm and i.calm.held else i.level }}" href="/analysis/{{ aid }}/incident/{{ i.n }}"><i class="flag {{ 'blue' if i.calm and i.calm.held else i.level }}">{{ 'B' if i.calm and i.calm.held else ('R' if i.level == 'red' else 'Y') }}</i><div><strong>Incident {{ i.n }} · {{ i.when }}</strong>
+<span>{% if i.calm %}Calmed by a message{% if i.calm.minutes_after is not none %}, settled {{ i.calm.minutes_after }} min later{% endif %}{% if i.calm.held %} · took hold{% else %} · {{ i.calm.heated_after }} heated message{{ '' if i.calm.heated_after == 1 else 's' }} after it{% endif %}{% else %}Nobody calmed it in the chat{% endif %}</span></div><em>{{ icon('chevron') }}</em></a></li>{% endfor %}</ol></section>{% endif %}
+</div></div>{% endblock %}

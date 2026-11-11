@@ -24,7 +24,7 @@
 <ol class="inc-rows">{% for r in item.rows %}<li class="inc-row {{ 'hot' if r.heated else 'cool' }}{{ ' hostile' if r.hostile else '' }}{{ ' outside' if not r.inside else '' }}">
 <span class="inc-time">{{ r.when.strftime('%H:%M') if item.timed else r.i + 1 }}</span>
 <div class="inc-msg">{% if r.role == 'start' or r.role == 'start-turn' %}<span class="inc-flag y"><i class="flag yellow">Y</i> Escalation starts</span>{% endif %}{% if r.role == 'turn' or r.role == 'start-turn' %}<span class="inc-flag r"><i class="flag red">R</i> Turns into conflict</span>{% endif %}
-<p>{{ r.text }}</p>{% if r.tags %}<span class="inc-tags">{% for t in r.tags %}<em>{{ t }}</em>{% endfor %}</span>{% endif %}</div></li>{% endfor %}</ol>
+{% if r.calm_mark %}<span class="inc-flag b"><i class="flag blue">B</i> Someone calms it</span>{% endif %}<p>{{ r.text }}</p>{% if r.tags %}<span class="inc-tags">{% for t in r.tags %}<em>{{ t }}</em>{% endfor %}</span>{% endif %}</div></li>{% endfor %}</ol>
 <p class="small-note">The faded messages are the ones just before and after, for context. An incident is a run of heated messages that follow each other within {{ gap }} minutes. Tags are the tones the model rated 2 or 3. They describe wording, never a person.</p>
 {% if found|length > 1 %}<p class="inc-nav">{% if item.n > 1 %}<a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n - 1 }}?step={{ step }}&gap={{ gap }}">{{ icon('back') }} Incident {{ item.n - 1 }}</a>{% endif %}{% if item.n < found|length %} <a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n + 1 }}?step={{ step }}&gap={{ gap }}">Incident {{ item.n + 1 }} {{ icon('arrow') }}</a>{% endif %}</p>{% endif %}</section>
 </div></div>{% endblock %}

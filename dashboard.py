@@ -202,12 +202,13 @@ def _wrap(label, room, size=12, lines=2):
     return out
 
 
-def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720):
+def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720, sort=True):
     """One horizontal bar per item, longest first: [(label, value, role)]. A long label wraps onto a second line inside the graph; the value sits at the tip."""
     items = [i for i in items if i[1] is not None]
     if not items:
         return None
-    items.sort(key=lambda i: -i[1])
+    if sort:
+        items.sort(key=lambda i: -i[1])
     label_w = 150 if width >= 600 else 104
     wrapped = [_wrap(i[0], label_w - 6) for i in items]
     row_h = 38 if any(len(w) > 1 for w in wrapped) else 28

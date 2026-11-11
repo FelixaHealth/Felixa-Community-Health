@@ -75,3 +75,27 @@ class Context(unittest.TestCase):
         inc = incidents.find(chat, 30)[0]
         self.assertEqual([r['text'] for r in inc['rows']], ['Hmm.', 'No.'])
         self.assertLessEqual(len(incidents.bins(inc, 5)), 3)
+
+
+class Deescalation(unittest.TestCase):
+    def test_a_calming_message_after_heat_is_found_and_the_heat_held_back_or_not(self):
+        import deescalation
+        chat = [unit(0, 'Morning.'), unit(1, 'Ugh.', Agitated=2), unit(2, 'You never listen.', Rude=3), unit(3, 'Let us take a breath, I hear you.', Empathetic=3),
+                unit(4, 'Okay. Sorry.'), unit(5, 'Thanks.', Polite=2), unit(6, 'Fine.')]
+        found = incidents.find(chat, 30)
+        self.assertEqual(len(found), 1)
+        calm = found[0]['calm']
+        self.assertEqual(calm['text'], 'Let us take a breath, I hear you.')
+        self.assertTrue(calm['held'])
+        self.assertEqual(calm['heated_after'], 0)
+        view = deescalation.view(chat)
+        self.assertEqual((len(view['tried']), len(view['held'])), (1, 1))
+        self.assertTrue(all(s['examples'] for s in view['stages']))
+        flared = [unit(0, 'Ugh.', Agitated=2), unit(1, 'Let us take a breath.', Empathetic=3), unit(2, 'No. You are useless.', Rude=3), unit(3, 'Stop it.', Agitated=2)]
+        self.assertFalse(incidents.find(flared, 30)[0]['calm']['held'])
+
+    def test_no_calming_message_means_no_traction_and_a_labelled_example(self):
+        import deescalation
+        chat = [unit(0, 'Ugh.', Agitated=2), unit(1, 'No.', Rude=3), unit(2, 'Whatever.')]
+        self.assertIsNone(incidents.find(chat, 30)[0]['calm'])
+        self.assertFalse(deescalation.view(chat)['real'])

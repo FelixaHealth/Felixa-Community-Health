@@ -1115,3 +1115,12 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .inc-flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin:0 8px 2px 0}
 .inc-tags{display:flex;flex-wrap:wrap;gap:4px}.inc-tags em{font-style:normal;font-size:11.5px;padding:1px 8px;border-radius:999px;background:#f4efe1;color:#6d4a07;font-weight:650}
 .inc-nav{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+
+/* Deescalation: the blue flag, line and traction */
+.track-legend .lg.blue,.dash-legend i.blue{background:#1f66bf}
+.flag.blue{background:#1f66bf;color:#fff}
+.inc-card.blue{border-color:#bcd2f0;background:#f3f8ff}
+.inc-flag.b{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin:0 8px 2px 0;color:#1f4f99}
+.ds-heat{--sc:#d03b3b}.ds-calm{--sc:#1f66bf}.ds-traction{--sc:#3f9a5a}
+.de-panel .ts-steps{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.track-legend{flex-wrap:wrap;gap:6px 16px}.track-legend li{white-space:nowrap}

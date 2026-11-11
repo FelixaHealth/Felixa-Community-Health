@@ -17,6 +17,7 @@ QUIET_MESSAGES = 5                           # without times: this many messages
 BEFORE, AFTER = 2, 3
 MAX_BARS = 150
 HOSTILE_TONES = tuple(sorted(measures.OVERT))
+CALMING_TONES = ('Empathetic', 'Polite', 'Encouraging')     # a message that is not heated and shows one of these helps the mood settle
 
 
 def _clock(stamp, with_date=False):
@@ -42,8 +43,9 @@ def messages(units):
     out = []
     for i, (u, s) in enumerate(zip(ordered, stamps)):
         f = measures.message_flags(u['ratings'])
+        calming = (not f['heated']) and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
         out.append({'i': i, 'text': ' '.join(str(u.get('text') or '').split()), 'when': s, 'heated': bool(f['heated']), 'hostile': bool(f['hostile']),
-                    'tags': _tags(u['ratings']), 'source': u.get('source') or ''})
+                    'calming': calming, 'calm_tags': [a for a in CALMING_TONES if int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN], 'tags': _tags(u['ratings']), 'source': u.get('source') or ''})
     return out, basis == 'time'
 
 
@@ -70,6 +72,7 @@ def find(units, gap=DEFAULT_GAP):
         hostile = [m for m in inside if m['hostile']]
         if len(run) < 2 and not hostile:
             continue
+        calm = _traction(msgs, a, b, timed, gap)
         lo, hi = max(0, a - BEFORE), min(len(msgs), b + 1 + AFTER)
         if timed:                                   # context from another day or hours away would only stretch the chart: keep what is within one quiet gap
             while lo < a and (msgs[a]['when'] - msgs[lo]['when']).total_seconds() / 60.0 > gap:
@@ -83,16 +86,47 @@ def find(units, gap=DEFAULT_GAP):
                 role = 'start'
             if hostile and m['i'] == hostile[0]['i']:
                 role = 'turn' if m['i'] != a else 'start-turn'
-            rows.append(dict(m, role=role, inside=a <= m['i'] <= b))
+            rows.append(dict(m, role=role, inside=a <= m['i'] <= b, calm_mark=bool(calm and m['i'] == calm['i'])))
         start, turn = msgs[a], (hostile[0] if hostile else None)
         minutes_to = round((turn['when'] - start['when']).total_seconds() / 60.0) if (turn and timed) else None
         length = round((msgs[b]['when'] - start['when']).total_seconds() / 60.0) if timed else None
-        out.append({'n': len(out) + 1, 'rows': rows, 'timed': timed, 'start': start, 'turn': turn, 'end': msgs[b], 'level': 'red' if turn else 'yellow',
+        out.append({'n': len(out) + 1, 'calm': calm, 'rows': rows, 'timed': timed, 'start': start, 'turn': turn, 'end': msgs[b], 'level': 'red' if turn else 'yellow',
                     'heated': len(run), 'hostile': len(hostile), 'messages': b - a + 1, 'minutes_to_conflict': minutes_to, 'minutes': length,
                     'messages_to_conflict': (turn['i'] - a) if turn else None,
                     'when': _clock(start['when'], True) if timed else f'Messages {a + 1} to {b + 1}',
                     'range': (f'{_clock(start["when"], True)} to {_clock(msgs[b]["when"])}' if timed else f'Messages {a + 1} to {b + 1}')})
     return out
+
+
+def _quote(m, limit=160):
+    text = m['text']
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
+
+
+def _traction(msgs, a, b, timed, gap):
+    """The first calming message of an incident and what happened to the heat after it, or None when nobody tried to calm things.
+    Looked for from the second message of the incident until the end of it, and among the messages that follow within one quiet gap (or three messages without times).
+    held = no heated message came after it."""
+    limit = b
+    for j in range(b + 1, len(msgs)):
+        near = ((msgs[j]['when'] - msgs[b]['when']).total_seconds() / 60.0 <= gap) if timed else (j - b <= 3)
+        if not near:
+            break
+        limit = j
+    c = next((j for j in range(a + 1, limit + 1) if msgs[j]['calming']), None)
+    if c is None:
+        return None
+    after = msgs[c + 1:b + 1]
+    heated_after = sum(1 for m in after if m['heated'])
+    hostile_after = sum(1 for m in after if m['hostile'])
+    before = [m for m in msgs[a:c] if m['heated']]
+    follow = [_quote(m) for m in msgs[c + 1:c + 3]]
+    minutes = None
+    if timed:
+        minutes = max(0, round((msgs[b]['when'] - msgs[c]['when']).total_seconds() / 60.0))
+    return {'i': c, 'text': _quote(msgs[c]), 'when': msgs[c]['when'], 'tags': msgs[c].get('calm_tags', []),
+            'heated_before': len(before), 'heated_after': heated_after, 'hostile_after': hostile_after, 'held': heated_after == 0,
+            'last_heat': _quote(before[-1]) if before else '', 'follow': follow, 'minutes_after': minutes, 'before_conflict': c > a and (not any(m['hostile'] for m in msgs[a:c]))}
 
 
 def bins(incident, step):
