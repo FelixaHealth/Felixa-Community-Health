@@ -101,8 +101,8 @@ YELLOW, RED, GREEN, INK = '#fab219', '#d03b3b', '#2e9e5b', '#16251d'
 
 
 def _flag(x, y, kind):
-    c = {'Y': YELLOW, 'R': RED, 'G': GREEN}[kind]
-    return f'<g data-g="{ {"Y": "escalation", "R": "conflict", "G": "deescalation"}[kind] }"><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
+    c = {'Y': YELLOW, 'R': RED, 'D': GREEN}[kind]
+    return f'<g data-g="{ {"Y": "escalation", "R": "conflict", "D": "deescalation"}[kind] }"><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
 
 
 def _buckets(msgs, timed):
@@ -174,7 +174,7 @@ def over_time(aid, hr) -> dict:
     for k, g in enumerate(groups):
         mine = [ordered[i] for i in g]
         incs = {inc_of[u['id']]['n']: inc_of[u['id']] for u in mine if u['id'] in inc_of}
-        fl = (['Y'] if incs else []) + (['R'] if any(x['turn'] is not None for x in incs.values()) else []) + (['G'] if any(x['calm'] for x in incs.values()) else [])
+        fl = (['Y'] if incs else []) + (['R'] if any(x['turn'] is not None for x in incs.values()) else []) + (['D'] if any(x['calm'] for x in incs.values()) else [])
         q = [{'text': ' '.join(str(u['text'] or '').split()), 'when': stamps[i].strftime('%H:%M') if timed else '', 'behaviour': ', '.join(by_uid.get(u['id'], [])),
               'inc': inc_of[u['id']]['n'] if u['id'] in inc_of else None,
               'turn': bool(u['id'] in inc_of and inc_of[u['id']]['turn'] is not None and inc_of[u['id']]['turn'].get('uid') == u['id'])} for i, u in zip(g, mine)]
@@ -194,7 +194,8 @@ def over_time(aid, hr) -> dict:
         w = min(bw - 2 * min(10, bw * .15), 72)
         x = d['k'] * bw + (bw - w) / 2
         y = 150 - h
-        a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
+        href = f' data-href="/analysis/{aid}/incident/{d["incidents"][0][0]}?src=safety"' if d['incidents'] else ''
+        a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"{href}><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
         a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
         for j, f in enumerate(d['flags']):
             a += _flag(x + w / 2 + (j * 17 - (len(d['flags']) - 1) * 8), y - 22, f)

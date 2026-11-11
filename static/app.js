@@ -172,6 +172,7 @@ document.addEventListener('click', e => { document.querySelectorAll('.rn-more[op
 // High Risk, Over time: tapping a bar opens that day's exact messages.
 document.addEventListener('click', e => {
   const g = e.target.closest && e.target.closest('.hr-bar'); if (!g) return;
+  if (g.dataset.href) { window.location.href = g.dataset.href; return; }
   const box = document.getElementById('hr-days'), day = document.getElementById('hr-day-' + g.dataset.day);
   if (box) box.open = true; if (day) { day.open = true; day.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 });
