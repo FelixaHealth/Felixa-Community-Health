@@ -882,7 +882,7 @@ class FlareUp(MeasuresCase):
             self.assertIn(f'No serious flags {norm(noflags["how"])} {HELD_BACK}', badges, what)    # listed with its rule, and why it is held back, under the fold
             fold = ' '.join(re.findall(r'<details>.*?</details>', section(html, 'badges'), re.S))
             self.assertIn(HELD_BACK, unescape(fold), what)
-            self.assertEqual(len(re.findall(r'<div class="award">', section(html, 'badges'))), 1, what)         # one tile (Cools fast), and not the held back one
+            self.assertEqual(len(re.findall(r'<tr class="ab-on">', section(html, 'badges'))), 1, what)         # one earned row (Cools fast), and not the held back one
         pdf = squeeze(measures_pdf(self.pdf(aid)))
         self.assertIn(squeeze(f'No serious flags Not yet {HELD_BACK}'), pdf)
         self.assertEqual(pdf.count(squeeze(HELD_BACK)), 1)
