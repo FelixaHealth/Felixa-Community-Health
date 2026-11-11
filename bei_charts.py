@@ -197,11 +197,12 @@ def _runs(flags) -> list:
     return out
 
 
-def _moments_said(runs) -> str:
+def _moments_said(runs, legacy=True) -> str:
     if not runs:
         return ''
     place = [f'part {a}' if a == b else f'parts {a} to {b}' for a, b in runs]
-    return f' Heated moment{"" if len(runs) == 1 else "s"}: ' + (place[0] if len(place) == 1 else ', '.join(place[:-1]) + ' and ' + place[-1]) + '.'
+    word = 'Heated moment' if legacy else 'Flagged part'
+    return f' {word}{"" if len(runs) == 1 else "s"}: ' + (place[0] if len(place) == 1 else ', '.join(place[:-1]) + ' and ' + place[-1]) + '.'
 
 
 def measure_chart(card, stretches, bands=None, *, width=W):
@@ -227,9 +228,11 @@ def measure_chart(card, stretches, bands=None, *, width=W):
     said, pred = SAID[kind]
     first, last = _whole(values[0]), _whole(values[-1])
     peak = max(range(n), key=lambda i: (values[i], -i))
-    counted = _runs([bool(st.get('counted')) for st in stretches])
+    legacy = 'flagged' not in card                      # a card built by hand, without the Track flags: shade what the analysis counted
+    flagged = {i: 'yellow' for i, st in enumerate(stretches) if st.get('counted')} if legacy else (card.get('flagged') or {})
+    counted = _runs([i in flagged for i in range(len(stretches))])
     desc = (f'How many of every 100 messages {pred}, in each of {n} parts of the chat. The first part had {first}, the last had {last}, '
-            + (f'and the highest was part {peak + 1} with {_whole(values[peak])}.' if _whole(values[peak]) else 'and none had any.') + _moments_said(counted))
+            + (f'and the highest was part {peak + 1} with {_whole(values[peak])}.' if _whole(values[peak]) else 'and none had any.') + _moments_said(counted, legacy))
     sc = Scene(width, height, f'{name} over time', desc)
     named = []                                              # (top, height, word) of every band that can carry its name
     if bands and kind in BAND_ROLES:
@@ -242,10 +245,10 @@ def measure_chart(card, stretches, bands=None, *, width=W):
     step = pw / (n - 1)
     columns = []                                            # the shaded heated moments, as (left, right)
     for i, st in enumerate(stretches):
-        if st.get('counted'):
+        if i in flagged:                                    # yellow or red, as on the Track page
             x0, x1 = max(ml, X(i) - step / 2), min(ml + pw, X(i) + step / 2)
             columns.append((x0, x1))
-            sc.rect(x0, mt, x1 - x0, ph, 'warn', opacity=MOMENT_WASH)
+            sc.rect(x0, mt, x1 - x0, ph, 'crit' if flagged[i] == 'red' else 'warn', opacity=MOMENT_WASH)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
         sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
@@ -261,8 +264,10 @@ def measure_chart(card, stretches, bands=None, *, width=W):
     for i, st in enumerate(stretches):
         lo, hi = max(ml, X(i) - step / 2), min(width - mr, X(i) + step / 2)
         rows = [[said, f'{st["counts"][kind]:,} of {st["n"]:,}', 'series1'], ['per 100 messages', f'{_whole(values[i])}', 'series1']]
-        if st.get('counted'):               # the climb is the climb of heated messages, so its number belongs to the Escalation chart; the others only say the part is shaded
+        if i in flagged and legacy:         # the climb is the climb of heated messages, so its number belongs to the Escalation chart; the others only say the part is shaded
             rows.append(['part of a heated moment', f'up {_whole(st["climb"])} per 100 messages', 'warn'] if kind == 'heated' else ['', 'part of a heated moment', 'warn'])
+        elif i in flagged:                  # the part is flagged on the Track page: yellow or red
+            rows.append(['Red flag' if flagged[i] == 'red' else 'Yellow flag', 'heat climbed in this part', 'crit' if flagged[i] == 'red' else 'warn'])
         sc.hit(lo, mt, hi - lo, ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc

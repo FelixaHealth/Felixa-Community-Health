@@ -431,10 +431,14 @@ def cards(m) -> list:
     """The four measure cards, with their words. Each: key, name, meaning, level, tone, headline, trend, note, series (what the chart draws)."""
     o, out = m['overall'], []
     stretches = m['stretches']
+    flagged_map = {}                                                      # the parts the Track page flags, so that every chart shades the same parts the card counts
+    if m['has_series'] and m['verdicts']:
+        import track
+        flagged_map = {i: f['level'] for i, f in enumerate(track.escalation_flags(m)) if f['level'] and i > 0}
     for key in KEYS:
         name, meaning = CARD_TEXT[key]
         kind = KIND_OF[key]
-        card = {'key': key, 'name': name, 'meaning': meaning, 'kind': kind, 'series': [s['rates'][kind] for s in stretches]}
+        card = {'key': key, 'name': name, 'meaning': meaning, 'kind': kind, 'series': [s['rates'][kind] for s in stretches], 'flagged': flagged_map}
         if key == 'escalation':
             eps = m['episodes']
             flagged = []                                              # the parts the Track page flags: the card and the graphs now say the same thing
