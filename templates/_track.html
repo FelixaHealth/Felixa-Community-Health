@@ -11,5 +11,5 @@
 <p class="track-open"><a class="btn" href="/analysis/{{ aid }}/track/{{ c.key }}">{{ icon('arrow') }} See when and how</a></p></article>{% endfor %}</div></section>
 <section class="panel vc" id="track-together"><h2>Does empathy change conflict and escalation?</h2>
 {{ track_view.compare|safe }}
-<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg cat4"></i>Conflict</li><li><i class="lg cat2"></i>Escalation</li></ul>
+<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg crit"></i>Conflict</li><li><i class="lg warn"></i>Escalation</li></ul>
 <div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>

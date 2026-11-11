@@ -1089,3 +1089,4 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .te-msgs{margin-top:6px}.te-msgs summary{cursor:pointer;font-weight:600;color:#6d4a07;font-size:13.5px}
 .te-msgs ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
 .te-msgs li{padding:8px 10px;border-radius:10px;background:#faf6ea;font-size:13.5px;line-height:1.4;overflow-wrap:anywhere}
+.track-legend .lg.crit,.dash-legend i.crit{background:#d03b3b}.track-legend .lg.warn,.dash-legend i.warn{background:#f2b928}

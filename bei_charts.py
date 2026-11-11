@@ -378,7 +378,7 @@ def health_meter(score, tone, *, width=W):
 # ---- the Track tab: a measure built up over the parts of a chat, with flags, and the three measures together ------------------------------------
 TRACK_STEPS = {'escalation': (5, 10, 20, 35), 'conflict': (2, 5, 12, 25), 'empathy': (2, 4, 8, 14)}      # per 100 messages: where the colour moves to the next shade
 TRACK_SCALE = {'escalation': 'heat', 'conflict': 'heat', 'empathy': 'calm'}
-TRACK_LINE = {'escalation': 'cat2', 'conflict': 'cat4', 'empathy': 'cat3'}
+TRACK_LINE = {'escalation': 'warn', 'conflict': 'crit', 'empathy': 'cat3'}
 
 
 def track_shade(key, value) -> str:
@@ -465,7 +465,7 @@ def track_compare(stretches, *, width=W):
     _axis_labels(sc, [(X(i), st.get('axis') or '') for i, st in enumerate(stretches)], tick_size, height - mb + tick_size + 7)
     outer, inner = _marker_radii(n)
     ends = []
-    for key in ('conflict', 'escalation', 'empathy'):
+    for key in ('escalation', 'empathy', 'conflict'):                # conflict last, so its red line is never hidden under another
         role = TRACK_LINE[key]
         pts = [(X(i), Y(v)) for i, v in enumerate(series[key])]
         sc.poly(pts, stroke=role, width=2.5)

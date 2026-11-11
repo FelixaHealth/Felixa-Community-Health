@@ -19,7 +19,7 @@ RANGES = (('30', 'Last 30 days', 30), ('90', 'Last 90 days', 90), ('365', 'Last 
 CATEGORY_ROLES = ('cat1', 'cat2', 'cat3', 'cat4', 'cat5', 'cat6')        # one colour per workplace, in a fixed order; a seventh workplace repeats them with a marker shape
 MAX_LINES = 6
 MAX_ROWS = 300
-BEHAVIOUR = (('conflict', 'Conflict', 'cat4'), ('empathy', 'Empathy', 'cat3'), ('passive', 'Passive-aggressive', 'cat2'), ('heated', 'Heated messages', 'cat5'))
+BEHAVIOUR = (('conflict', 'Conflict', 'crit'), ('empathy', 'Empathy', 'cat3'), ('passive', 'Passive-aggressive', 'cat2'), ('heated', 'Heated messages', 'cat5'))
 
 
 # ---- reading the checks ---------------------------------------------------------------
@@ -267,7 +267,7 @@ def build(args, today=None) -> dict:
         base = [r for r in rows if str(r['aid']) == one] if one else rows
         last = [r for r in _latest_per_workplace(base)]
         items = []
-        for key, label, role in (('conflict', 'Openly hostile', 'cat4'), ('empathy', 'Caring', 'cat3'), ('passive', 'Sarcastic', 'cat2'), ('heated', 'Heated', 'cat5')):
+        for key, label, role in (('conflict', 'Openly hostile', 'crit'), ('empathy', 'Caring', 'cat3'), ('passive', 'Sarcastic', 'cat2'), ('heated', 'Heated', 'cat5')):
             vals = [(r[key], r['n']) for r in last if r[key] is not None]
             if vals:
                 items.append((label, sum(v * n for v, n in vals) / sum(n for _v, n in vals), role))
