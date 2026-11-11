@@ -1863,7 +1863,7 @@ def safety_page(request: Request, aid: AnalysisId):
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
     sb = safety_module.build(aid)
     hr = high_risk.build(aid, sb)
-    return render(request, 'safety.html', hr=hr, over=high_risk.over_time(aid, hr['uids']), held=len(sb['held']), rnav=nav, **ctx)
+    return render(request, 'safety.html', hr=hr, over=high_risk.over_time(aid, hr), held=len(sb['held']), rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/safety/review', response_class=HTMLResponse)
