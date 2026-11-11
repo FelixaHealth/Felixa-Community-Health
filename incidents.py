@@ -44,7 +44,7 @@ def messages(units):
     for i, (u, s) in enumerate(zip(ordered, stamps)):
         f = measures.message_flags(u['ratings'])
         calming = (not f['heated']) and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
-        out.append({'i': i, 'text': ' '.join(str(u.get('text') or '').split()), 'when': s, 'heated': bool(f['heated']), 'hostile': bool(f['hostile']),
+        out.append({'i': i, 'uid': u.get('id'), 'text': ' '.join(str(u.get('text') or '').split()), 'when': s, 'heated': bool(f['heated']), 'hostile': bool(f['hostile']),
                     'calming': calming, 'calm_tags': [a for a in CALMING_TONES if int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN], 'tags': _tags(u['ratings']), 'source': u.get('source') or ''})
     return out, basis == 'time'
 
@@ -129,23 +129,25 @@ def _traction(msgs, a, b, timed, gap):
             'last_heat': _quote(before[-1]) if before else '', 'follow': follow, 'minutes_after': minutes, 'before_conflict': c > a and (not any(m['hostile'] for m in msgs[a:c]))}
 
 
-def bins(incident, step):
+def bins(incident, step, flagged=None):
     """The bars of the incident chart: [{'label', 'n', 'calm', 'heated', 'hostile'}]. step 0 = a bar for each message; otherwise a bar for each `step` minutes.
     A chat without times only has the message-by-message view."""
     rows = incident['rows']
     if not step or not incident['timed']:
         return [{'label': _clock(r['when']) if incident['timed'] else str(r['i'] + 1), 'n': 1, 'calm': int(not r['heated']), 'heated': int(r['heated'] and not r['hostile']),
-                 'hostile': int(r['hostile']), 'text': r['text']} for r in rows]
+                 'hostile': int(r['hostile']), 'black': int(r.get('uid') in (flagged or ())), 'text': r['text']} for r in rows]
     first = rows[0]['when'].replace(second=0, microsecond=0)
     base = first - _dt.timedelta(minutes=first.minute % step if step < 60 else first.minute, hours=0)
     last = rows[-1]['when']
     count = int((last - base).total_seconds() // (step * 60)) + 1
     count = min(count, MAX_BARS)
-    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'text': ''} for k in range(count)]
+    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': ''} for k in range(count)]
     for r in rows:
         k = min(count - 1, int((r['when'] - base).total_seconds() // (step * 60)))
         b = out[k]
         b['n'] += 1
+        if r.get('uid') in (flagged or ()):
+            b['black'] += 1
         if r['hostile']:
             b['hostile'] += 1
         elif r['heated']:

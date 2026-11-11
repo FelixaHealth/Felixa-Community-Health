@@ -387,7 +387,7 @@ def track_shade(key, value) -> str:
     return f'{TRACK_SCALE[key]}{step + 1}'
 
 
-def track_chart(key, name, stretches, flags, *, width=W):
+def track_chart(key, name, stretches, flags, *, width=W, black=None):
     """One measure as bars, one per part of the chat, in a colour that deepens as the rate climbs. A red or yellow flag sits on the parts that carry one (the letter
     R or Y is in the flag, so the colour is not the only sign). For Escalation a thin line follows the recent level each part is measured against. A hover target for every part."""
     values = [f['value'] for f in flags]
@@ -397,7 +397,7 @@ def track_chart(key, name, stretches, flags, *, width=W):
     narrow = width < 600
     tick_size, _end = _sizes(width)
     height = 230 if narrow else 220
-    ml, mr, mt, mb = 40, 16, 30, 34
+    ml, mr, mt, mb = 40, 16, 30 + (14 if black and any(black) else 0), 34
     pw, ph = width - ml - mr, height - mt - mb
     ticks = nice_ticks(max(values + [20.0]), 4)
     top = ticks[-1]
@@ -426,6 +426,9 @@ def track_chart(key, name, stretches, flags, *, width=W):
             cy = max(mt - 10, Y(f['value']) - 13)
             sc.circle(X(i), cy, 9, 'crit' if f['level'] == 'red' else 'warn')
             sc.text(X(i), cy + 4, 'R' if f['level'] == 'red' else 'Y', size=11, fill='on-fill' if f['level'] == 'red' else 'on-warn', anchor='middle', weight=700)
+    for i in range(n):
+        if black and black[i]:
+            black_flag(sc, X(i) - 1, 1)
     for i, f in enumerate(flags):
         st = stretches[i]
         rows = [[SAID_PLAIN[key], f'{f["count"]:,} of {f["n"]:,}', TRACK_SCALE[key] + '3'], ['per 100 messages', f'{_whole(f["value"])}', TRACK_SCALE[key] + '3']]
@@ -433,6 +436,8 @@ def track_chart(key, name, stretches, flags, *, width=W):
             rows.append(['recent level', f'{_whole(f["base"])} per 100', 'ink2'])
         if f['level']:
             rows.append(['flag', 'Red flag' if f['level'] == 'red' else 'Yellow flag', 'crit' if f['level'] == 'red' else 'warn'])
+        if black and black[i]:
+            rows.append(['Safety flag', f'{black[i]} held', 'black'])
         sc.hit(max(ml, X(i) - step / 2), mt - 12, min(step, pw), ph + 12, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
@@ -441,7 +446,13 @@ def track_chart(key, name, stretches, flags, *, width=W):
 SAID_PLAIN = {'escalation': 'heated messages', 'conflict': 'openly hostile messages', 'empathy': 'caring messages'}
 
 
-def track_compare(stretches, *, width=W, deescalation=None):
+def black_flag(sc, x, y) -> None:
+    """The black Safety flag: a pole with a small pennant, drawn with its top at y. It marks a part of the chat, a bar or a message that holds something the Safety module keeps for a person to read."""
+    sc.line(x, y, x, y + 17, 'black', 2)
+    sc.poly([(x, y), (x + 12, y + 4.5), (x, y + 9)], stroke='black', width=1, fill='black', close=True)
+
+
+def track_compare(stretches, *, width=W, deescalation=None, black=None):
     """Escalation, Conflict and Empathy on one scale (messages per 100), one line each, so that a rise in one can be read against the others."""
     n = len(stretches)
     if n < 2:
@@ -452,7 +463,7 @@ def track_compare(stretches, *, width=W, deescalation=None):
     narrow = width < 600
     tick_size, end_size = _sizes(width)
     height = 260 if narrow else 250
-    ml, mr, mt, mb = 40, 46, 16, 34
+    ml, mr, mt, mb = 40, 46, 16 + (16 if black and any(black) else 0), 34
     pw, ph = width - ml - mr, height - mt - mb
     ticks = nice_ticks(max(max(v) for v in series.values()) or 20.0, 4)
     top = ticks[-1]
@@ -475,6 +486,9 @@ def track_compare(stretches, *, width=W, deescalation=None):
             sc.circle(x, y, outer, 'surface')
             sc.circle(x, y, inner, role)
         ends.append((pts[-1][1], role, _whole(series[key][-1])))
+    for i in range(n):
+        if black and black[i]:
+            black_flag(sc, X(i) - 1, 1)
     floor = Y(0) - 4                                            # the values at the end of the lines, kept apart and above the axis labels
     next_y = floor
     for y, role, val in sorted(ends, reverse=True):
@@ -487,6 +501,8 @@ def track_compare(stretches, *, width=W, deescalation=None):
                 ['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']]]
         if 'deescalation' in series:
             rows.append(['Deescalation', f'{_whole(series["deescalation"][i])} per 100', TRACK_LINE['deescalation']])
+        if black and black[i]:
+            rows.append(['Safety flag', f'{black[i]} held', 'black'])
         sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
@@ -546,7 +562,7 @@ def incident_chart(bars, *, width=W):
     narrow = width < 600
     tick_size, _end = _sizes(width)
     height = 190 if narrow else 210
-    ml, mr, mt, mb = 30, 10, 12, 30
+    ml, mr, mt, mb = 30, 10, 12 + (18 if any(x.get('black') for x in bars) else 0), 30
     pw, ph = width - ml - mr, height - mt - mb
     top = max(max(b['n'] for b in bars), 1)
     ticks = nice_ticks(float(top), 3)
@@ -564,12 +580,14 @@ def incident_chart(bars, *, width=W):
     for k, b in enumerate(bars):
         x = ml + slot * k + (slot - bw) / 2
         base = mt + ph
-        tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']]
+        tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']] + ([['Safety flag', f"{b['black']} held", 'black']] if b.get('black') else [])
         for key, role in (('hostile', 'crit'), ('heated', 'warn'), ('calm', 'grid')):
             h = ph * b[key] / top
             if h > 0:
                 sc.rect(x, base - h, bw, max(1.0, h - 1), role, tip={'t': b['label'], 'r': tip_rows})
                 base -= h
+        if b.get('black'):
+            black_flag(sc, x + bw / 2 - 1, 1)
         if k % every == 0:
             sc.text(x + bw / 2, height - mb + tick_size + 6, b['label'], size=tick_size, fill='ink2', anchor='middle')
     return sc

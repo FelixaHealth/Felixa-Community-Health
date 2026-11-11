@@ -13,7 +13,7 @@
 <div class="dash-kpi"><small>Time to settle</small><strong>{{ (de_view.median_minutes ~ ' min') if de_view.median_minutes is not none else '–' }}</strong><span>after the calming message</span></div></div>
 <section class="panel vc"><h2>Trends</h2>
 {{ track_view.compare|safe }}
-<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg crit"></i>Conflict</li><li><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li><i class="lg blue"></i>Deescalation</li>{% endif %}</ul>
+<ul class="track-legend"><li><i class="lg cat3"></i>Empathy</li><li><i class="lg crit"></i>Conflict</li><li><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li><i class="lg blue"></i>Deescalation</li>{% endif %}<li><i class="flag black">S</i> Safety flag (held)</li></ul>
 <p class="small-note">The blue line is the calming messages that came soon after heat, per 100 messages.</p></section>
 {% include "_deesc_traction.html" %}
 {% if de_view.incidents %}<section class="panel"><h2>Incident by incident</h2>

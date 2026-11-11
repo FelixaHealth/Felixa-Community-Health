@@ -40,6 +40,7 @@ import config
 import dashboard
 import deescalation
 import incidents
+import safety_module
 import flagged
 import detail
 import measures
@@ -588,6 +589,7 @@ def home_view(aid):
     if ctx.get('measures'):
         kp = {k['key']: k for k in actview.build(ctx, 'previous')['kpis']}
     view = {'ctx': ctx, 'kpi': kp, 'vibe': None, 'health': None, 'sentiment': None, 'modules': [], 'alerts': 0, 'badges': 0, 'flagged': 0, 'read': 0, 'sources': 0, 'model': ctx['a']['model_used'] or ''}
+    view['safety'] = safety_module.summary(aid) if (safety_module.AVAILABLE and store.count_units(aid)) else None
     if vibe:
         pct = (vibe.get('sentiment') or {}).get('pct') or {}
         view['flagged'], view['read'], view['sources'] = len(vibe.get('flagged') or []), vibe.get('analyzed_n') or 0, len(vibe.get('sources') or [])
@@ -1732,18 +1734,18 @@ def report_page(request: Request, aid: AnalysisId):
     return render(request, 'report.html', **ctx)
 
 
-def track_views(ms, only=None, de=None):
+def track_views(ms, only=None, de=None, black=None):
     """What the Track tab and its pages draw: for each of Escalation, Conflict and Empathy the headline numbers, the flags and a figure; and the three together."""
     if not track.available(ms):
         return None
     m = ms['m']
-    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
+    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de, black=black)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
     for key in track.KEYS:
         if only and key != only:
             continue
         flags = track.flags_for(m, key)
         c = track.card(m, key)
-        c['figure'] = vibe_check.figure(lambda w, k=key, f=flags: bei_charts.track_chart(k, track.NAMES[k], m['stretches'], f, width=w))
+        c['figure'] = vibe_check.figure(lambda w, k=key, f=flags: bei_charts.track_chart(k, track.NAMES[k], m['stretches'], f, width=w, black=black))
         c['events'] = track.events(m, key)
         c['summary'] = track.summary(m, key)
         out['cards'].append(c)
@@ -1776,12 +1778,14 @@ def results_nav(aid, ctx, current):
     for key in ('alerts',):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
+    if ms and safety_module.AVAILABLE:
+        out.append(('safety', 'Safety', 'warning', f'/analysis/{aid}/safety', current == 'safety'))
     return out
 
 
 def results_context(aid, what='page of results'):
     ctx = report_context(aid, what)
-    ctx['track_view'] = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)) if ctx.get('measures') else None) if ctx.get('measures') else None
+    ctx['track_view'] = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
     return ctx
 
 
@@ -1825,10 +1829,11 @@ def incident_page(request: Request, aid: AnalysisId, n: int, step: int = inciden
     step = step if step in incidents.STEPS else incidents.DEFAULT_STEP
     if not item['timed']:
         step = 0
-    bars = incidents.bins(item, step)
+    flagged = safety_module.flagged_uids(aid)
+    bars = incidents.bins(item, step, flagged)
     figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w))
     nav = results_nav(aid, ctx, 'escalation') if ctx.get('measures') else []
-    return render(request, 'incident.html', item=item, found=found, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
+    return render(request, 'incident.html', item=item, found=found, flagged=flagged, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
                   rnav=nav, **ctx)
 
 
@@ -1846,15 +1851,27 @@ def traction_parts(aid):
     return dv, figure
 
 
+@app.get('/analysis/{aid}/safety', response_class=HTMLResponse)
+def safety_page(request: Request, aid: AnalysisId):
+    """The Safety module: what the FBSI detectors keep for a person to read. Held, never live; questions, never verdicts."""
+    ctx = report_context(aid, 'safety')
+    if not safety_module.AVAILABLE:
+        raise PageError(404, 'The Safety module is not installed', 'The FBSI engine files are not on this computer. See fbsi/README.md.', back=(f'/analysis/{aid}/results', 'Back to the results'))
+    if not store.count_units(aid):
+        raise PageError(404, 'No messages yet', 'Add messages first: the Safety module reads them.', back=(f'/analysis/{aid}/analytics', 'Open Analytics'))
+    nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
+    return render(request, 'safety.html', safety=safety_module.build(aid), rnav=nav, **ctx)
+
+
 @app.get('/analysis/{aid}/track/deescalation', response_class=HTMLResponse)
 def deescalation_page(request: Request, aid: AnalysisId):
     """Deescalation: who calmed things, whether the heat fell after it, shown as traction by incident and as a diagram with messages."""
     ctx = report_context(aid, 'deescalation')
-    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid))) if ctx.get('measures') else None
+    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Deescalation needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     dv, figure = traction_parts(aid)
-    return render(request, 'deescalation.html', track_view=view, de_view=dv, traction_figure=figure, key='deescalation', rnav=results_nav(aid, ctx, 'deescalation'), **ctx)
+    return render(request, 'deescalation.html', held_texts=safety_module.flagged_texts(aid), track_view=view, de_view=dv, traction_figure=figure, key='deescalation', rnav=results_nav(aid, ctx, 'deescalation'), **ctx)
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
@@ -1863,10 +1880,10 @@ def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents
     if key not in track.KEYS:
         not_found()
     ctx = report_context(aid, 'track')
-    view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)) if ctx.get('measures') else None) if ctx.get('measures') else None
+    view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
-    return render(request, 'track.html', track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None, **dict(zip(('de_view', 'traction_figure'), traction_parts(aid))), gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
+    return render(request, 'track.html', held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None, **dict(zip(('de_view', 'traction_figure'), traction_parts(aid))), gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):

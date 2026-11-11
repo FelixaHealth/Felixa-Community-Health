@@ -8,3 +8,7 @@ uploads/
 demo/out/
 *.zip
 .DS_Store
+
+# The FBSI engine files are copied beside the app from Felixa-Behavioural-Intelligence (see fbsi/README.md); they are not kept in this repository
+fbsi/be_*.py
+fbsi/org_signals.py

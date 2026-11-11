@@ -5,5 +5,5 @@
 <ul class="ts-about">{% for s in story.stages %}<li><strong>{{ s.title }}.</strong> {{ s.about }}</li>{% endfor %}</ul></details>
 <ol class="ts-steps">{% for s in story.stages %}<li class="ts-step ts-{{ s.key }}"><div class="ts-node" aria-hidden="true">{% if s.key == 'yellow' %}<i class="flag yellow">Y</i>{% elif s.key == 'red' %}<i class="flag red">R</i>{% elif s.key == 'ease' %}<i class="flag ok">{{ icon('check') }}</i>{% else %}<i class="flag calm"></i>{% endif %}</div>
 <div class="ts-body"><h3>{{ s.title }}</h3>
-{% for q in s.examples %}<blockquote class="ts-quote">{{ q }}</blockquote>{% endfor %}
+{% for q in s.examples %}{% set qq = q.rstrip('…') %}{% set ns = namespace(h=false) %}{% for h in (held_texts or []) %}{% if h.startswith(qq) %}{% set ns.h = true %}{% endif %}{% endfor %}<blockquote class="ts-quote">{% if ns.h %}<i class="flag black">S</i> {% endif %}{{ q }}</blockquote>{% endfor %}
 <small class="ts-from">{% if s.real %}From this chat{% if s.part %} · {{ s.part }}{% endif %}{% else %}Example{% endif %}</small></div></li>{% endfor %}</ol></section>
