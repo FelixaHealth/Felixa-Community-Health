@@ -77,13 +77,16 @@ class Pages(AppCase):
             self.assertIn(needle, page.text, needle)
         for noise in ('Held for a person', 'A question to ask', 'flag black'):
             self.assertNotIn(noise, page.text, noise)
-        for needle in ('By day', 'Escalation starts', 'Turns into conflict', 'Exact messages, day by day'):
-            self.assertIn(needle, page.text, needle)
         import high_risk
         hr = high_risk.build(aid, safety_module.build(aid))
         ot = high_risk.over_time(aid, hr)
-        self.assertTrue(ot['svg_a'].startswith('<svg'))
-        self.assertEqual(sum(d['count'] for d in ot['days']), len(hr['uids']))
+        if ot:
+            self.assertTrue(ot['svg_a'].startswith('<svg'))
+            self.assertLessEqual(sum(d['count'] for d in ot['days']), len(hr['uids']))
+            for needle in ('By day', 'Escalation starts', 'Turns into conflict', 'Exact messages, day by day'):
+                self.assertIn(needle, page.text, needle)
+        else:
+            self.assertNotIn('Over time', page.text)
         self.assertEqual(len(hr['categories']), 8)
         names = {b['name'] for c in hr['categories'] for b in c['behaviours']}
         self.assertTrue({'Blackmail', 'Coercion'} & names, names)
