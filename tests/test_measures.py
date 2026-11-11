@@ -40,6 +40,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tests'))
 
 import measures  # noqa: E402
+import track
 import store  # noqa: E402
 from vibe_check.engine import _PUNITIVE  # noqa: E402
 
@@ -62,7 +63,7 @@ CHART_KEY = 'Lines show messages per 100. Shaded bands show where Rare, Some and
 SAMPLED = 'A short flare-up can fall between the samples. Choose "all of them" for the volume to see every message.'                  # the note about a sample
 HELD_BACK = 'Held back while an alert about serious flags or a High priority alert stands.'                                                  # why No serious flags is not given
 TENSE_NOTE = r'(?i)\balready tense\b'                                                                                                 # the card note for a tense start (a pattern: the spec quotes no wording)
-CHANCE_NOTE = 'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.'                                                  # the card note for a hot part that chance could give
+CHANCE_NOTE = 'Some parts were heated, but none climbed above the parts before it, so no part is flagged.'                                                  # the card note for a hot part that chance could give
 REMOVED_NOTES = ('not_alike', 'opening')                                                                                              # notes that no longer exist
 
 
@@ -1169,8 +1170,8 @@ class ClimbTests(unittest.TestCase):
             self.assertNotEqual(measures.escalation_word(peak), 'early')
 
     def test_the_card_names_the_word_of_the_biggest_counted_climb(self):
-        # 24 stretches of 20; a calm run of one heated message per stretch (5%) for three stretches, then a spike: climb = 5 x heated - 5
-        for heated, climb, word in [(3, None, 'None'), (4, 15, 'Small'), (5, 20, 'Small'), (6, 25, 'Clear'), (8, 35, 'Clear'), (9, 40, 'Steep'), (12, 55, 'Steep')]:
+        # 24 stretches of 20; a calm run of one heated message per stretch (5%) for three stretches, then a spike: climb = 5 x heated - 5. A part is flagged from a climb of 10 with 2 heated messages
+        for heated, climb, word in [(2, None, 'None'), (3, 10, 'Small'), (4, 15, 'Small'), (5, 20, 'Small'), (6, 25, 'Clear'), (8, 35, 'Clear'), (9, 40, 'Steep'), (12, 55, 'Steep')]:
             with self.subTest(heated=heated):
                 counts = [0] * 24
                 counts[7:10] = [1, 1, 1]
@@ -1179,11 +1180,10 @@ class ClimbTests(unittest.TestCase):
                 card = measures.cards(m)[0]
                 self.assertEqual(card['level'], word)
                 if climb is None:
-                    self.assertEqual((card['count'], m['episodes']), (0, []))
+                    self.assertEqual(card['count'], 0)
                 else:
                     self.assertEqual(card['count'], 1)
                     self.assertAlmostEqual(card['peak'], climb, places=6)
-                    self.assertAlmostEqual(m['episodes'][0]['peak'], climb, places=6)
 
     def test_a_climb_exactly_on_a_cut_off_is_counted_and_worded_as_reaching_it(self):
         # Exact fractions decide: 100c/s - 100(b1+b2+b3)/(3s) is 15, 25 or 40 on the nose in these chats (24 stretches of s messages, calm but for the three before
@@ -1536,9 +1536,9 @@ class CardTests(unittest.TestCase):
         self.assertEqual(card['count'], 2)
         self.assertAlmostEqual(card['peak'], 50.0, places=9)
         self.assertEqual(card['level'], 'Steep')
-        self.assertRegex(card['headline'], r'\b2\b.*heated moments')
+        self.assertRegex(card['headline'], r'\b2\b.*red flags')
         one = measures.cards(an(part_chat([0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0], 8, HEAT)))[0]
-        self.assertRegex(one['headline'], r'\b1\b.*heated moment\b')
+        self.assertRegex(one['headline'], r'\b1\b.*red flag\b')
         none = measures.cards(an(part_chat([0] * 12, 8, HEAT)))[0]
         self.assertEqual((none['count'], none['level']), (0, 'None'))
         self.assertRegex(none['headline'], r'(?i)\bno heated moments')
@@ -1700,20 +1700,20 @@ class CardTests(unittest.TestCase):
         self.assertEqual(measures.cards(an(part_chat([0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0], 8, HEAT)))[0]['count'], 2)
 
     def test_the_card_note_says_when_a_hot_part_could_be_chance_and_only_then(self):
-        """MEASURES.md: when a part of the chat has 30 or more heated messages in 100 but no heated moment passed the chance test, the card says it."""
-        said = 'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.'
-        busy = [2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3]            # 12 parts of 8: the first is at 25 in 100, the seventh at 75, the rest at 38: a community that is often heated
-        m = an(part_chat(busy, 8, HEAT))
-        self.assertEqual((m['episodes'], m['opening_heated'], m['verdicts']), ([], False, True), 'the precondition: a hot part, no heated moment, no tense start')
+        """MEASURES.md: when a part of the chat has 30 or more heated messages in 100 but no part climbed enough to be flagged, the card says it."""
+        said = CHANCE_NOTE
+        busy = [5] * 3 + [6] * 21                                # 24 parts of 20: a steady 25 in 100, then 30 in 100: hot, but no part climbs 10 points above the parts before it
+        m = an(part_chat(busy, 20, HEAT))
+        self.assertEqual((m['episodes'], m['opening_heated'], m['verdicts']), ([], False, True), 'the precondition: a hot part, no flagged part, no tense start')
         self.assertGreaterEqual(max(s['rates']['heated'] for s in m['stretches']), 30)
         card = measures.cards(m)[0]
         self.assertEqual((card['note'], card['level'], card['count']), (said, 'None', 0))
-        self.assertNotIn('opening', [n['key'] for n in scan(part_chat(busy, 8, HEAT))[2]], 'it is a card note, and not the tense start')
-        # the edge: 24 parts of 10 with the hottest at exactly 30 in 100 has the note, at 20 in 100 it has none
-        for hottest, note in ((3, said), (2, '')):
-            counts = [2] * 24
+        self.assertNotIn('opening', [n['key'] for n in scan(part_chat(busy, 20, HEAT))[2]], 'it is a card note, and not the tense start')
+        # the edge: 24 parts of 20 with the hottest at exactly 30 in 100 has the note, at 25 in 100 it has none
+        for hottest, note in ((6, said), (5, '')):
+            counts = [5] * 24
             counts[11] = hottest
-            m = an(part_chat(counts, 10, HEAT))
+            m = an(part_chat(counts, 20, HEAT))
             self.assertEqual(m['episodes'], [], hottest)
             self.assertEqual(measures.cards(m)[0]['note'], note, hottest)
         # not with a heated moment: the same community with one part that does pass the chance test
@@ -3672,7 +3672,7 @@ class WordingTests(unittest.TestCase):
         self.assertGreaterEqual(len(self.found), 400)
         self.assertEqual(sorted(set(notes_wanted) - seen_notes), [], seen_notes)
         self.assertEqual(sorted(set(whys_wanted) - seen_whys), [], 'the scenarios reach every reason two checks are not alike')
-        self.assertTrue(CHANCE_NOTE in seen_card_notes and any(re.search(TENSE_NOTE, note) for note in seen_card_notes), seen_card_notes)
+        self.assertTrue(any(re.search(TENSE_NOTE, note) for note in seen_card_notes), seen_card_notes)
         self.assertEqual(sorted(seen_badges), sorted(BadgeTests.NAMES))
 
     def collect(self):
@@ -3838,11 +3838,11 @@ class WordingTests(unittest.TestCase):
                 self.assertEqual((esc['level'], esc['tone'], esc['count']), ('Too early', 'info', None), name)
                 seen['too early'] += 1
                 continue
-            self.assertEqual(esc['count'], len(m['episodes']), name)
-            if not m['episodes'] and m['opening_heated']:
+            self.assertEqual(esc['count'], sum(1 for i, f in enumerate(track.escalation_flags(m)) if f['level'] and i > 0), name)
+            if not esc['count'] and m['opening_heated']:
                 self.assertEqual((esc['level'], esc['tone'], esc['tone_word']), ('None', 'info', 'Neutral'), name)
                 seen['tense none'] += 1
-            elif not m['episodes'] and not silent and esc['level'] == 'None' and not esc['note']:
+            elif not esc['count'] and not silent and esc['level'] == 'None' and not esc['note']:
                 self.assertEqual((esc['tone'], esc['tone_word']), ('good', 'A good sign'), name)
                 seen['green none'] += 1
         for kind in ('silent', 'young', 'by the word', 'too early', 'tense none', 'green none'):
@@ -4146,8 +4146,8 @@ class FuzzTests(unittest.TestCase):
                 check(c['level'] in ('Rare', 'Some', 'Often'), k, 'card level word')
                 check(n >= 48 or c['tone'] == 'info', k, f'card {c["key"]}: neutral below 48 rated messages')
             elif m['has_series'] and m['verdicts']:
-                check(c['count'] == len(m['episodes']) and c['level'] in ('None', 'Small', 'Clear', 'Steep'), k, 'escalation card')
-                check(m['episodes'] or not m['opening_heated'] or c['tone'] == 'info', k, 'escalation: a None is neutral when the chat was hot from its first part')
+                check(c['count'] == sum(1 for i, f in enumerate(track.escalation_flags(m)) if f['level'] and i > 0) and c['level'] in ('None', 'Small', 'Clear', 'Steep'), k, 'escalation card')
+                check(c['count'] or not m['opening_heated'] or c['tone'] == 'info', k, 'escalation: a None is neutral when the chat was hot from its first part')
             else:
                 check(c['count'] is None and (c['level'], c['word'], c['tone']) == ('Too early', 'early', 'info'), k, 'escalation card: Too early, no count, in the neutral tone')
         silent = 20 * m['silent'] >= 19 * n                                                  # almost no tone was found

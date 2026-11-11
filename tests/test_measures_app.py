@@ -1164,7 +1164,7 @@ class TooEarly(MeasuresCase):
     never a green None; below 48 rated messages the mark of Conflict, Empathy and Passive-aggressive is neutral grey. And a part of the chat that chance alone could
     make hot gets a note on the Escalation card, not a heated moment."""
 
-    SAID = 'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.'
+    SAID = 'Some parts were heated, but none climbed above the parts before it, so no part is flagged.'
 
     def thin(self):
         """30 messages whose middle (messages 11 to 18) is hostile and heated: more than the 24 that lines need, fewer than the 48 that a verdict needs."""

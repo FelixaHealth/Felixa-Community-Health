@@ -440,7 +440,7 @@ def cards(m) -> list:
             flagged = []                                              # the parts the Track page flags: the card and the graphs now say the same thing
             if m['has_series'] and m['verdicts']:
                 import track
-                flagged = [(i, f) for i, f in enumerate(track.escalation_flags(m)) if f['level']]
+                flagged = [(i, f) for i, f in enumerate(track.escalation_flags(m)) if f['level'] and i > 0]      # a rise: the first part has nothing before it to climb from
             peak = max((f['climb'] for _i, f in flagged), default=0.0)
             word = escalation_word(peak) if flagged else 'none'
             if flagged and word == 'none':
