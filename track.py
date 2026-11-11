@@ -288,3 +288,21 @@ def _generic():
         title, about = STAGES[g['key']]
         out.append({'key': g['key'], 'title': title, 'about': about, 'part': '', 'examples': g['examples'], 'real': False})
     return out
+
+
+def part_messages(m, units, key, limit=15):
+    """The exact messages behind each part of the chat for Escalation (the heated ones) or Conflict (the openly hostile ones): {part index: {'items', 'total'}}."""
+    kind = KIND.get(key)
+    if key == 'empathy' or not kind:
+        return {}
+    complete = [u for u in (units or []) if all(a in (u.get('ratings') or {}) and u['ratings'][a] is not None for a in measures.analysis.ATTRIBUTES)]
+    ordered = measures.order_units(complete)[0]
+    spans = measures.cut(len(ordered))
+    if not spans or len(spans) != len(m['stretches']):
+        return {}
+    out = {}
+    for i, (a, b) in enumerate(spans):
+        hits = [' '.join(str(u['text'] or '').split()) for u in ordered[a:b] if measures.message_flags(u['ratings'])[kind]]
+        if hits:
+            out[i] = {'items': hits[:limit], 'total': len(hits)}
+    return out

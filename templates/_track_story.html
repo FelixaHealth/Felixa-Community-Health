@@ -1,8 +1,9 @@
 {# How a chat escalates: calm, yellow flag, red flag, easing, each with example messages. Needs `story` (track.story). #}
 {% from "_icons.html" import icon %}
-<section class="panel ts-panel"><div class="eyebrow">How it progresses</div><h2>From heat to conflict</h2>
-<p class="small-note">{% if story.real %}The moments of this chat, in order, with messages from each.{% else %}This chat did not reach these moments, so this is an illustrated example of how a chat moves from calm to conflict.{% endif %} <span class="flag-key"><i class="flag yellow">Y</i> Yellow flag: escalation starts</span> <span class="flag-key"><i class="flag red">R</i> Red flag: it turns into conflict</span></p>
+<section class="panel ts-panel"><h2>From heat to conflict</h2>
+<details class="ts-explain"><summary>How to read this</summary><p class="small-note">{% if story.real %}The moments of this chat, in order, with messages from each.{% else %}This chat did not reach these moments, so this is an illustrated example of how a chat moves from calm to conflict.{% endif %} <span class="flag-key"><i class="flag yellow">Y</i> Yellow flag: escalation starts</span> <span class="flag-key"><i class="flag red">R</i> Red flag: it turns into conflict</span></p>
+<ul class="ts-about">{% for s in story.stages %}<li><strong>{{ s.title }}.</strong> {{ s.about }}</li>{% endfor %}</ul></details>
 <ol class="ts-steps">{% for s in story.stages %}<li class="ts-step ts-{{ s.key }}"><div class="ts-node" aria-hidden="true">{% if s.key == 'yellow' %}<i class="flag yellow">Y</i>{% elif s.key == 'red' %}<i class="flag red">R</i>{% elif s.key == 'ease' %}<i class="flag ok">{{ icon('check') }}</i>{% else %}<i class="flag calm"></i>{% endif %}</div>
-<div class="ts-body"><h3>{{ s.title }}</h3><p>{{ s.about }}</p>
+<div class="ts-body"><h3>{{ s.title }}</h3>
 {% for q in s.examples %}<blockquote class="ts-quote">{{ q }}</blockquote>{% endfor %}
 <small class="ts-from">{% if s.real %}From this chat{% if s.part %} · {{ s.part }}{% endif %}{% else %}Example{% endif %}</small></div></li>{% endfor %}</ol></section>
