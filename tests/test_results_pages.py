@@ -34,8 +34,8 @@ class Pages(AppCase):
         for card in ('Vibe Check', 'Health Score', 'Sentiment', 'Escalation', 'Conflict', 'Empathy', 'Passive-aggressive', 'Badges &amp; Alerts', 'Tones'):
             self.assertIn(card, page, card)
         for screen in ('vibe', 'health', 'sentiment', 'passive', 'alerts'):
-            self.assertIn(f'href="/analysis/{aid}/results/{screen}"', page, screen)
-            self.assertEqual(self.client.get(f'/analysis/{aid}/results/{screen}').status_code, 200, screen)
+            self.assertIn(f'href="/analysis/{aid}/results/sentiment?view=passive"' if screen == 'passive' else f'href="/analysis/{aid}/results/{screen}"', page, screen)       # Passive-aggressive is a view of Sentiment
+            self.assertEqual(self.client.get(f'/analysis/{aid}/results/{screen}', follow_redirects=True).status_code, 200, screen)
         for key in ('escalation', 'conflict', 'empathy'):
             self.assertEqual(self.client.get(f'/analysis/{aid}/track/{key}').status_code, 200, key)
         self.assertEqual(self.client.get(f'/analysis/{aid}/results/nothing').status_code, 404)
