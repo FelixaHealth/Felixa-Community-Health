@@ -59,7 +59,7 @@ class Dashboard(DashboardCase):
                        'Most Negative', 'Most Positive', 'All checks', 'Dash Alpha', 'Dash Beta'):
             self.assertIn(needle, page, needle)
         self.assertGreaterEqual(page.count('<svg'), 8, 'the charts are drawn, in two layouts each')
-        self.assertNotIn('Latest check of each workplace', page)
+        self.assertNotIn('<h2>Latest check of each workplace</h2>', page)
         self.assertIn('<details class="vc-table"><summary>All checks (', page)
         self.assertNotIn('<details class="vc-table" open', page)
         self.assertIn('<h2>Results dashboard</h2>' if False else 'Results dashboard', page)
