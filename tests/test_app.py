@@ -2268,10 +2268,7 @@ class Print(AppCase):
         self.assertTrue(rows)
         for chain in rows:
             self.assertEqual(paper.get(chain, 'break-inside'), 'avoid', 'a table row can be cut in two')
-        rules = [c for c in chains if c[-1][0] == 'li' and len(c) > 1 and 'vc-rules' in c[-2][1]]
-        self.assertTrue(rules)
-        for chain in rules:
-            self.assertEqual(paper.get(chain, 'break-inside'), 'avoid', 'the rule of a badge can be cut in two')
+        # the badges are table rows now, so the row check above covers a badge
 
     def test_the_method_panel_of_the_report_is_a_column_and_not_the_landing_pages_strip_of_four_steps(self):
         """The Method panel carried the class `how`, which lays out the four steps of the front page in four columns: its eyebrow sat alone in the first, the
