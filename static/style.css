@@ -1166,3 +1166,9 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .hr-day>summary{align-items:center;flex-wrap:wrap}.hr-inc{font-size:12px;border-radius:12px;padding:1px 9px;text-decoration:none;color:#0b0b0b;background:#fab219}.hr-inc.red{background:#d03b3b;color:#fff}.hr-turn{color:#d03b3b}
 .inc-card .chips{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;margin-top:6px}.inc-card .chips em{display:inline-block;width:auto;height:auto;flex:none;margin:0;font-style:normal;background:#16251d;color:#fff;border-radius:12px;padding:1px 9px;font-size:12px;line-height:1.5}
+
+/* Track: one page, many views */
+.views{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 14px}.views a{padding:7px 14px;border-radius:20px;background:var(--panel,#fff);border:1px solid #ddd8c8;color:inherit;text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.views a.on,.views a.back{background:#16251d;color:#fff;border-color:#16251d}.views a .ic{width:16px;height:16px}.views-crumb{color:#6b7a72;font-size:14px;margin-left:6px}
+.flag.green{background:#2e9e5b;color:#fff}.track-legend .lg.pos{background:#2e9e5b}.dash-kpi.kpi-green{border-left:4px solid #2e9e5b}
+.inc-flag.b{color:#1f7a45}.inc-kpis .dash-kpi.kpi-green{border-left:4px solid #2e9e5b}

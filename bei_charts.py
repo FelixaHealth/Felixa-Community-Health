@@ -455,7 +455,7 @@ def black_flag(sc, x, y) -> None:
     sc.poly([(x, y), (x + 12, y + 4.5), (x, y + 9)], stroke='black', width=1, fill='black', close=True)
 
 
-def track_compare(stretches, *, width=W, deescalation=None, black=None):
+def track_compare(stretches, *, width=W, deescalation=None, black=None, green=None):
     """Escalation, Conflict and Empathy on one scale (messages per 100), one line each, so that a rise in one can be read against the others."""
     n = len(stretches)
     if n < 2:
@@ -466,7 +466,7 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None):
     narrow = width < 600
     tick_size, end_size = _sizes(width)
     height = 260 if narrow else 250
-    ml, mr, mt, mb = 40, 46, 16 + (16 if black and any(black) else 0), 34
+    ml, mr, mt, mb = 40, 46, 16 + (16 if (black and any(black)) or (green and any(green)) else 0), 34
     pw, ph = width - ml - mr, height - mt - mb
     ticks = nice_ticks(max(max(v) for v in series.values()) or 20.0, 4)
     top = ticks[-1]
@@ -494,6 +494,10 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None):
     for i in range(n):
         if black and black[i]:
             black_flag(sc, X(i) - 1, 1)
+    sc.group('deescalation')
+    for i in range(n):
+        if green and green[i]:
+            pole_flag(sc, X(i) + (9 if black and black[i] else 0) + 1, 1, 'green')
     sc.group(None)
     floor = Y(0) - 4                                            # the values at the end of the lines, kept apart and above the axis labels
     next_y = floor
@@ -509,6 +513,8 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None):
                 ['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']]]
         if 'deescalation' in series:
             rows.append(['Deescalation', f'{_whole(series["deescalation"][i])} per 100', TRACK_LINE['deescalation']])
+        if green and green[i]:
+            rows.append(['Deescalation flag', f'{green[i]} calmed', 'green'])
         if black and black[i]:
             rows.append(['High Risk flag', f'{black[i]} held', 'black'])
         sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
@@ -579,7 +585,7 @@ def incident_chart(bars, *, width=W, lane=None):
     narrow = width < 600
     tick_size, _end = _sizes(width)
     base_h = 190 if narrow else 210
-    flags_on = any(b.get('start') or b.get('turn') for b in bars)
+    flags_on = any(b.get('start') or b.get('turn') or b.get('calm_mark') for b in bars)
     row_h = 34
     height = base_h + (row_h * len(lane) + 10 if lane else 0)
     ml, mr, mt, mb = 30, 10, 12 + (18 if (flags_on or any(x.get('black') for x in bars)) else 0), 30
@@ -591,7 +597,7 @@ def incident_chart(bars, *, width=W, lane=None):
     bw = max(2.0, min(40.0, slot * 0.72))
     desc = 'Messages in each %s of the incident: %d openly hostile, %d heated, %d calm in all.' % ('bar', sum(b['hostile'] for b in bars), sum(b['heated'] for b in bars), sum(b['calm'] for b in bars))
     if flags_on:
-        desc += ' A yellow flag marks where escalation starts and a red flag where it turns into conflict.'
+        desc += ' A yellow flag marks where escalation starts, a red flag where it turns into conflict and a green flag where someone calms it.'
     if lane:
         desc += ' Under the bars, a row for each High Risk behaviour shows where it appeared: ' + ', '.join(name for name, _ in lane) + '.'
     sc = Scene(width, height, 'The incident, bar by bar', desc)
@@ -620,9 +626,12 @@ def incident_chart(bars, *, width=W, lane=None):
         if b.get('turn'):
             sc.group('conflict')
             pole_flag(sc, mid - (7 if both else 1) + (9 if b.get('start') else 0), 1, 'crit')
+        if b.get('calm_mark'):
+            sc.group('deescalation')
+            pole_flag(sc, mid + (1 if not (b.get('start') or b.get('turn')) else 10), 1, 'green')
         if b.get('black'):
             sc.group('highrisk')
-            black_flag(sc, mid + (8 if both else -1), 1)
+            black_flag(sc, mid + (8 if both else -1) + (19 if b.get('calm_mark') else 0), 1)
         sc.group(None)
         if k % every == 0:
             sc.text(x + bw / 2, base_h - mb + tick_size + 6, b['label'], size=tick_size, fill='ink2', anchor='middle')

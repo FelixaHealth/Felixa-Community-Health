@@ -1735,12 +1735,12 @@ def report_page(request: Request, aid: AnalysisId):
     return render(request, 'report.html', **ctx)
 
 
-def track_views(ms, only=None, de=None, black=None):
+def track_views(ms, only=None, de=None, black=None, green=None):
     """What the Track tab and its pages draw: for each of Escalation, Conflict and Empathy the headline numbers, the flags and a figure; and the three together."""
     if not track.available(ms):
         return None
     m = ms['m']
-    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de, black=black)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
+    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de, black=black, green=green)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
     for key in track.KEYS:
         if only and key != only:
             continue
@@ -1764,6 +1764,18 @@ def screens_with_results(ctx) -> dict:
     return {'vibe': vibe_ok, 'health': bool(ms), 'sentiment': vibe_ok or bool(ctx.get('metrics')), 'passive': bool(ms), 'alerts': bool(ms), 'questions': bool(ctx.get('answers') or ctx.get('guidance'))}
 
 
+TRACK_VIEWS = ('trends', 'escalation', 'conflict', 'empathy', 'deescalation', 'safety', 'incident')
+
+
+def track_nav(aid, current):
+    """The view buttons of the Track page: one page, one button for each way of looking at the chat. (key, label, href, current?)"""
+    items = [('trends', 'Trends'), ('escalation', 'Escalation'), ('conflict', 'Conflict'), ('empathy', 'Empathy'), ('deescalation', 'Deescalation')]
+    out = [(k, label, f'/analysis/{aid}/track/{k}', current == k) for k, label in items]
+    if safety_module.AVAILABLE:
+        out.append(('safety', 'High Risk', f'/analysis/{aid}/safety', current == 'safety'))
+    return out
+
+
 def results_nav(aid, ctx, current):
     """The row of screens along the top of every results screen: only the ones this check has something for. (key, label, icon, href, current?)"""
     ms = ctx.get('measures')
@@ -1773,20 +1785,17 @@ def results_nav(aid, ctx, current):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
     if ms:
-        for key, icon_name in (('escalation', 'trend'), ('deescalation', 'shield'), ('conflict', 'users'), ('empathy', 'heart')):
-            out.append((key, 'Deescalation' if key == 'deescalation' else track.NAMES[key], icon_name, f'/analysis/{aid}/track/{key}', current == key))
+        out.append(('track', 'Track', 'trend', f'/analysis/{aid}/track/trends', current in TRACK_VIEWS))
         out.append(('passive', 'Passive-aggressive', 'chat', f'/analysis/{aid}/results/passive', current == 'passive'))
     for key in ('alerts',):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
-    if ms and safety_module.AVAILABLE:
-        out.append(('safety', 'High Risk', 'warning', f'/analysis/{aid}/safety', current == 'safety'))
     return out
 
 
 def results_context(aid, what='page of results'):
     ctx = report_context(aid, what)
-    ctx['track_view'] = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
+    ctx['track_view'] = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid)), green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid))) if ctx.get('measures') else None
     return ctx
 
 
@@ -1820,7 +1829,7 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
 
 
 @app.get('/analysis/{aid}/incident/{n}', response_class=HTMLResponse)
-def incident_page(request: Request, aid: AnalysisId, n: int, step: int = incidents.DEFAULT_STEP, gap: int = incidents.DEFAULT_GAP):
+def incident_page(request: Request, aid: AnalysisId, n: int, step: int = incidents.DEFAULT_STEP, gap: int = incidents.DEFAULT_GAP, src: str = 'escalation'):
     """One escalation incident taken apart: when it started, when it turned into conflict, every message in it, and a chart at the resolution asked for."""
     ctx = report_context(aid, 'incident')
     found = incidents.find(store.rated_text_units(aid), gap)
@@ -1835,8 +1844,9 @@ def incident_page(request: Request, aid: AnalysisId, n: int, step: int = inciden
     bars = incidents.bins(item, step, flagged, by_uid)
     lane = high_risk.lane(bars)
     figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w, lane=lane))
-    nav = results_nav(aid, ctx, 'escalation') if ctx.get('measures') else []
-    return render(request, 'incident.html', item=item, found=found, flagged=flagged, by_uid=by_uid, lane=lane, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
+    nav = results_nav(aid, ctx, 'incident') if ctx.get('measures') else []
+    back = {'safety': (f'/analysis/{aid}/safety', 'High Risk'), 'deescalation': (f'/analysis/{aid}/track/deescalation', 'Deescalation')}.get(src, (f'/analysis/{aid}/track/escalation?gap={gap}', 'Escalation'))
+    return render(request, 'incident.html', back=back, src=src, item=item, found=found, flagged=flagged, by_uid=by_uid, lane=lane, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
                   rnav=nav, **ctx)
 
 
@@ -1865,7 +1875,7 @@ def safety_page(request: Request, aid: AnalysisId):
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
     sb = safety_module.build(aid)
     hr = high_risk.build(aid, sb)
-    return render(request, 'safety.html', hr=hr, over=high_risk.over_time(aid, hr), held=len(sb['held']), rnav=nav, **ctx)
+    return render(request, 'safety.html', vnav=track_nav(aid, 'safety'), hr=hr, over=high_risk.over_time(aid, hr), held=len(sb['held']), rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/safety/review', response_class=HTMLResponse)
@@ -1874,19 +1884,30 @@ def safety_review_page(request: Request, aid: AnalysisId):
     if not safety_module.AVAILABLE:
         return RedirectResponse(f'/analysis/{aid}/results', 303)
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
-    return render(request, 'safety_review.html', safety=safety_module.build(aid), rnav=nav, **ctx)
+    return render(request, 'safety_review.html', vnav=track_nav(aid, 'safety'), safety=safety_module.build(aid), rnav=nav, **ctx)
+
+
+@app.get('/analysis/{aid}/track/trends', response_class=HTMLResponse)
+def trends_page(request: Request, aid: AnalysisId):
+    """Trends: Escalation, Conflict, Empathy and Deescalation on one graph, with the flags of every view. The graph lives here once."""
+    ctx = report_context(aid, 'trends')
+    units = store.rated_text_units(aid)
+    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], units), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), units, safety_module.flagged_uids(aid)),
+                       green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), units)) if ctx.get('measures') else None
+    if not view:
+        raise PageError(404, 'Too few messages for a timeline', 'Trends need at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
+    return render(request, 'trends.html', vnav=track_nav(aid, 'trends'), track_view=view, key='trends', rnav=results_nav(aid, ctx, 'trends'), **ctx)
 
 
 @app.get('/analysis/{aid}/track/deescalation', response_class=HTMLResponse)
 def deescalation_page(request: Request, aid: AnalysisId):
     """Deescalation: who calmed things, whether the heat fell after it, shown as traction by incident and as a diagram with messages."""
     ctx = report_context(aid, 'deescalation')
-    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
+    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid)), green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid))) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Deescalation needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     dv, figure = traction_parts(aid)
-    high_risk.annotate(aid, dv['incidents'])
-    return render(request, 'deescalation.html', held_texts=safety_module.flagged_texts(aid), track_view=view, de_view=dv, traction_figure=figure, key='deescalation', rnav=results_nav(aid, ctx, 'deescalation'), **ctx)
+    return render(request, 'deescalation.html', vnav=track_nav(aid, 'deescalation'), held_texts=safety_module.flagged_texts(aid), track_view=view, de_view=dv, traction_figure=figure, key='deescalation', rnav=results_nav(aid, ctx, 'deescalation'), **ctx)
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
@@ -1895,13 +1916,13 @@ def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents
     if key not in track.KEYS:
         not_found()
     ctx = report_context(aid, 'track')
-    view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid))) if ctx.get('measures') else None
+    view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid)), green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid))) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     il = incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None
     if il:
         high_risk.annotate(aid, il)
-    return render(request, 'track.html', held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=il, **dict(zip(('de_view', 'traction_figure'), traction_parts(aid))), gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
+    return render(request, 'track.html', vnav=track_nav(aid, key), held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=il, gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):

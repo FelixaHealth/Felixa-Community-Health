@@ -1,0 +1,2 @@
+{# The view buttons of the Track page: one page, many views. Needs `vnav` = [(key, label, href, current?)]. #}
+<nav class="views" aria-label="Views of the Track page">{% for key, label, href, on in vnav %}<a href="{{ href }}"{% if on %} class="on" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>

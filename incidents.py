@@ -137,13 +137,13 @@ def bins(incident, step, flagged=None, beh=None):
     if not step or not incident['timed']:
         return [{'label': _clock(r['when']) if incident['timed'] else str(r['i'] + 1), 'n': 1, 'calm': int(not r['heated']), 'heated': int(r['heated'] and not r['hostile']),
                  'hostile': int(r['hostile']), 'black': int(r.get('uid') in (flagged or ())), 'text': r['text'], 'beh': list(beh.get(r.get('uid'), [])),
-                 'start': r.get('role') in ('start', 'start-turn'), 'turn': r.get('role') in ('turn', 'start-turn')} for r in rows]
+                 'start': r.get('role') in ('start', 'start-turn'), 'turn': r.get('role') in ('turn', 'start-turn'), 'calm_mark': bool(r.get('calm_mark'))} for r in rows]
     first = rows[0]['when'].replace(second=0, microsecond=0)
     base = first - _dt.timedelta(minutes=first.minute % step if step < 60 else first.minute, hours=0)
     last = rows[-1]['when']
     count = int((last - base).total_seconds() // (step * 60)) + 1
     count = min(count, MAX_BARS)
-    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': [], 'start': False, 'turn': False} for k in range(count)]
+    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': [], 'start': False, 'turn': False, 'calm_mark': False} for k in range(count)]
     for r in rows:
         k = min(count - 1, int((r['when'] - base).total_seconds() // (step * 60)))
         b = out[k]
@@ -153,6 +153,8 @@ def bins(incident, step, flagged=None, beh=None):
             b['start'] = True
         if r.get('role') in ('turn', 'start-turn'):
             b['turn'] = True
+        if r.get('calm_mark'):
+            b['calm_mark'] = True
         if r.get('uid') in (flagged or ()):
             b['black'] += 1
         if r['hostile']:
@@ -166,3 +168,18 @@ def bins(incident, step, flagged=None, beh=None):
 
 def step_label(step):
     return 'Message by message' if not step else ('1 minute' if step == 1 else f'{step} minutes')
+
+
+def calm_parts(stretch_count, units) -> list:
+    """For each part of the chat (as Trends cuts it), how many incidents were first calmed by a message in it: the green flag. [] when nothing was calmed or the parts do not line up."""
+    msgs, _timed = messages(units)
+    spans = measures.cut(len(msgs))
+    if not spans or len(spans) != stretch_count:
+        return []
+    out = [0] * len(spans)
+    for inc in find(units):
+        if inc['calm']:
+            for k, (a, b) in enumerate(spans):
+                if a <= inc['calm']['i'] < b:
+                    out[k] += 1
+    return out if any(out) else []

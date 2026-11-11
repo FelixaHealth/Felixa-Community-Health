@@ -4,8 +4,9 @@
 {{ assets|safe }}
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/track/escalation">Escalation</a><span aria-hidden="true">/</span><span aria-current="page">Incident {{ item.n }}</span></nav>
 {% include "_rnav.html" %}
+<nav class="views"><a class="back" href="{{ back[0] }}">{{ icon('back') }} Back to {{ back[1] }}</a><span class="views-crumb">Incident {{ item.n }} of {{ found|length }}</span></nav>
 <section class="results-head"><div class="rh-main"><h1>Incident {{ item.n }} of {{ found|length }}</h1><p class="lead">{{ item.range }}{% if item.minutes is not none %} · {{ item.minutes }} min{% endif %} · {{ item.messages }} message{{ '' if item.messages == 1 else 's' }}</p></div>
-<div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/track/escalation">{{ icon('back') }} All incidents</a></div></section>
+<div class="head-actions"></div></section>
 
 <div class="dash-kpis inc-kpis">
 <div class="dash-kpi kpi-yellow"><small>Escalation starts</small><strong>{{ item.start.when.strftime('%H:%M') if item.timed else 'Message ' ~ (item.start.i + 1) }}</strong><span>{{ item.start.tags|join(', ') or 'a heated message' }}</span></div>
@@ -13,20 +14,21 @@
 {% else %}<div class="dash-kpi"><small>Turns into conflict</small><strong>Not here</strong><span>It stayed short of open hostility</span></div>{% endif %}
 <div class="dash-kpi"><small>Heated messages</small><strong>{{ item.heated }}</strong><span>of {{ item.messages }} in the incident</span></div>
 <div class="dash-kpi"><small>Openly hostile</small><strong>{{ item.hostile }}</strong><span>messages</span></div>
+{% if item.calm %}<div class="dash-kpi kpi-green"><small>Someone calms it</small><strong>{{ item.calm.when.strftime('%H:%M') if item.timed else 'Message ' ~ (item.calm.i + 1) }}</strong><span>{{ 'the heat did not come back' if item.calm.held else item.calm.heated_after ~ ' heated message' ~ ('' if item.calm.heated_after == 1 else 's') ~ ' came after' }}</span></div>{% endif %}
 <div class="dash-kpi"><small>High Risk messages</small><strong>{{ item.hr_n }}</strong><span>{{ item.hr|length }} behaviour{{ '' if item.hr|length == 1 else 's' }}{% if item.hr_n %} · <a href="/analysis/{{ aid }}/safety">High Risk</a>{% endif %}</span></div></div>
 
 <section class="panel vc"><h2>Take it apart</h2>
 <form method="get" class="inc-controls" aria-label="Resolution">
-{% if item.timed %}<div class="inc-group" role="group" aria-label="Bar width"><span class="inc-lab">Bar width</span>{% for s, label in steps %}<a class="chip-btn{% if s == step %} on{% endif %}" href="?step={{ s }}&gap={{ gap }}">{{ label }}</a>{% endfor %}</div>{% else %}<p class="small-note">This chat has no usable times, so it can only be read message by message.</p>{% endif %}</form>
-<ul class="track-legend" data-dir="after" data-toggle="inc-{{ aid }}-{{ item.n }}"><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li><li><i class="lg calm"></i>Calm</li><li data-g="highrisk"><i class="lg dark"></i>High Risk behaviours</li></ul>
-<p class="small-note">Tap a name to show or hide it. <i class="flag yellow">Y</i> is where escalation starts, <i class="flag red">R</i> where it turns into conflict{% if flagged %}, <i class="flag black">S</i> a message held for a person{% endif %}.</p>
+{% if item.timed %}<div class="inc-group" role="group" aria-label="Bar width"><span class="inc-lab">Bar width</span>{% for s, label in steps %}<a class="chip-btn{% if s == step %} on{% endif %}" href="?step={{ s }}&gap={{ gap }}&src={{ src }}">{{ label }}</a>{% endfor %}</div>{% else %}<p class="small-note">This chat has no usable times, so it can only be read message by message.</p>{% endif %}</form>
+<ul class="track-legend" data-dir="after" data-toggle="inc-{{ aid }}-{{ item.n }}"><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li><li data-g="deescalation"><i class="lg pos"></i>Deescalation</li><li><i class="lg calm"></i>Calm</li><li data-g="highrisk"><i class="lg dark"></i>High Risk behaviours</li></ul>
+<p class="small-note">Tap a name to show or hide it. <i class="flag yellow">Y</i> is where escalation starts, <i class="flag red">R</i> where it turns into conflict, <i class="flag green">G</i> where someone calms it{% if flagged %}, <i class="flag black">S</i> a message held for a person{% endif %}.</p>
 {{ figure|safe }}</section>
 
 <section class="panel"><h2>The messages, in order</h2>
 <ol class="inc-rows">{% for r in item.rows %}<li class="inc-row {{ 'hot' if r.heated else 'cool' }}{{ ' hostile' if r.hostile else '' }}{{ ' outside' if not r.inside else '' }}">
 <span class="inc-time">{{ r.when.strftime('%H:%M') if item.timed else r.i + 1 }}</span>
 <div class="inc-msg">{% if r.role == 'start' or r.role == 'start-turn' %}<span class="inc-flag y"><i class="flag yellow">Y</i> Escalation starts</span>{% endif %}{% if r.role == 'turn' or r.role == 'start-turn' %}<span class="inc-flag r"><i class="flag red">R</i> Turns into conflict</span>{% endif %}
-{% if r.uid in flagged %}<span class="inc-flag s"><i class="flag black">S</i> High Risk flag, held for a person</span>{% endif %}{% if r.calm_mark %}<span class="inc-flag b"><i class="flag blue">B</i> Someone calms it</span>{% endif %}<p>{{ r.text }}</p>{% if r.tags or by_uid.get(r.uid) %}<span class="inc-tags">{% for t in r.tags %}<em>{{ t }}</em>{% endfor %}{% for b in by_uid.get(r.uid, []) %}<em class="hrc">{{ b }}</em>{% endfor %}</span>{% endif %}</div></li>{% endfor %}</ol>
+{% if r.uid in flagged %}<span class="inc-flag s"><i class="flag black">S</i> High Risk flag, held for a person</span>{% endif %}{% if r.calm_mark %}<span class="inc-flag b"><i class="flag green">G</i> Someone calms it</span>{% endif %}<p>{{ r.text }}</p>{% if r.tags or by_uid.get(r.uid) %}<span class="inc-tags">{% for t in r.tags %}<em>{{ t }}</em>{% endfor %}{% for b in by_uid.get(r.uid, []) %}<em class="hrc">{{ b }}</em>{% endfor %}</span>{% endif %}</div></li>{% endfor %}</ol>
 <p class="small-note">The faded messages are the ones just before and after, for context. An incident is a run of heated messages that follow each other within {{ gap }} minutes. Light tags are the tones the model rated 2 or 3, dark tags are High Risk behaviours. Order shows sequence, never cause. The app does not keep who wrote a message, so it cannot say who escalated. Tags describe wording, never a person.</p>
-{% if found|length > 1 %}<p class="inc-nav">{% if item.n > 1 %}<a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n - 1 }}?step={{ step }}&gap={{ gap }}">{{ icon('back') }} Incident {{ item.n - 1 }}</a>{% endif %}{% if item.n < found|length %} <a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n + 1 }}?step={{ step }}&gap={{ gap }}">Incident {{ item.n + 1 }} {{ icon('arrow') }}</a>{% endif %}</p>{% endif %}</section>
+{% if found|length > 1 %}<p class="inc-nav">{% if item.n > 1 %}<a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n - 1 }}?step={{ step }}&gap={{ gap }}&src={{ src }}">{{ icon('back') }} Incident {{ item.n - 1 }}</a>{% endif %}{% if item.n < found|length %} <a class="btn" href="/analysis/{{ aid }}/incident/{{ item.n + 1 }}?step={{ step }}&gap={{ gap }}&src={{ src }}">Incident {{ item.n + 1 }} {{ icon('arrow') }}</a>{% endif %}</p>{% endif %}</section>
 </div></div>{% endblock %}

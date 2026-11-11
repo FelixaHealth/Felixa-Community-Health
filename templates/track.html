@@ -4,6 +4,7 @@
 {{ assets|safe }}
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ card.name }}</span></nav>
 {% include "_rnav.html" %}
+{% include "_views.html" %}
 <section class="results-head"><div class="rh-main"><div class="eyebrow">Track</div><h1>{{ card.name }}</h1><p class="lead">{{ card.about }}</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results">{{ icon('back') }} Back to results</a></div></section>
 <div class="dash-kpis"><div class="dash-kpi"><small>Latest part</small><strong>{{ card.latest }}</strong><span>per 100 messages</span></div>
@@ -26,11 +27,6 @@
 {% else %}<p>No part of the chat carried a flag.</p>{% endif %}
 <p class="small-note">{% if key == 'escalation' %}Yellow: the rate of heated messages rose 10 points or more above its recent level (the average of up to three parts before), with at least 2 heated messages. Red: a counted heated moment, or a rise of 25 points or more with at least 3 heated messages.{% else %}Yellow: the openly hostile messages reach the Some level for this kind of chat, with at least 2 messages. Red: they reach the Often level, with at least 3 messages.{% endif %} A red flag needs 48 or more messages on the timeline. A flag describes the wording in a part of the chat, never a person.</p></section>{% else %}
 <section class="panel"><div class="eyebrow">About this measure</div><h2>Empathy</h2><p>This page uses the empathy measure this app already keeps: the share of messages that clearly show empathy, part by part. The empathy track of the PBT app is not part of this app yet.</p></section>{% endif %}
-<section class="panel vc"><h2>Trends</h2>
-{{ track_view.compare|safe }}
-<ul class="track-legend" data-toggle="trends-{{ aid }}-{{ key|default('x') }}"><li data-g="empathy"><i class="lg cat3"></i>Empathy</li><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li data-g="deescalation"><i class="lg blue"></i>Deescalation</li>{% endif %}<li data-g="highrisk"><i class="flag black">S</i> High Risk flag (held)</li></ul>
-<p class="small-note">Tap a name to show or hide its line.</p>
-<div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>
-{% if de_view is defined %}{% include "_deesc_traction.html" %}{% endif %}
+
 <section class="panel"><div class="eyebrow">The messages</div><h2>Read the messages behind it</h2><p>{% if key == 'empathy' %}<a class="btn" href="/analysis/{{ aid }}/tone/Empathetic">{{ icon('chat') }} Every empathetic message</a>{% elif key == 'conflict' %}<a class="btn" href="/analysis/{{ aid }}/category/Toxic">{{ icon('chat') }} Every toxic-wording message</a>{% else %}<a class="btn" href="/analysis/{{ aid }}/category/Tense">{{ icon('chat') }} Every tense message</a> <a class="btn" href="/analysis/{{ aid }}/category/Toxic">{{ icon('chat') }} Every toxic-wording message</a>{% endif %}</p></section>
 </div></div>{% endblock %}

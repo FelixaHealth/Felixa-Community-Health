@@ -3,6 +3,7 @@
 <div class="shell"><div class="stage">
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/safety">High Risk</a><span aria-hidden="true">/</span><span aria-current="page">Review</span></nav>
 {% if rnav %}{% include "_rnav.html" %}{% endif %}
+{% include "_views.html" %}
 <section class="results-head"><div class="rh-main"><h1>High Risk review</h1><p class="lead">Messages kept for a person to read. It asks questions and never gives a verdict.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/safety">{{ icon('back') }} High Risk</a></div></section>
 
