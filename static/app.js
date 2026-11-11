@@ -218,3 +218,15 @@ document.addEventListener('click', e => {
   try { same = !!document.referrer && new URL(document.referrer).host === location.host && history.length > 1; } catch (err) { same = false; }
   if (same) { e.preventDefault(); history.back(); }
 });
+
+// A slider that sets the time frame of a graph: it shows its label while it moves and reloads the page at the new value when it is let go.
+document.querySelectorAll('[data-slider]').forEach((box) => {
+  const input = box.querySelector('input[type=range]'), out = box.querySelector('output');
+  const values = box.dataset.values.split(','), labels = box.dataset.labels.split('|');
+  const ticks = box.querySelectorAll('.tf-ticks span');
+  const show = () => { out.textContent = (labels[+input.value] || '').replace('Message by message', 'Each message'); ticks.forEach((t, i) => t.classList.toggle('on', i === +input.value)); };
+  input.addEventListener('input', show);
+  input.addEventListener('change', () => { const u = new URL(location.href); u.searchParams.set(box.dataset.param, values[+input.value]); location.href = u.toString(); });
+  ticks.forEach((t, i) => t.addEventListener('click', () => { input.value = i; show(); input.dispatchEvent(new Event('change')); }));
+  show();
+});

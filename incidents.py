@@ -137,18 +137,19 @@ def bins(incident, step, flagged=None, beh=None):
     if not step or not incident['timed']:
         return [{'label': _clock(r['when']) if incident['timed'] else str(r['i'] + 1), 'n': 1, 'calm': int(not r['heated']), 'heated': int(r['heated'] and not r['hostile']),
                  'hostile': int(r['hostile']), 'black': int(r.get('uid') in (flagged or ())), 'text': r['text'], 'beh': list(beh.get(r.get('uid'), [])),
-                 'start': r.get('role') in ('start', 'start-turn'), 'turn': r.get('role') in ('turn', 'start-turn'), 'calm_mark': bool(r.get('calm_mark'))} for r in rows]
+                 'start': r.get('role') in ('start', 'start-turn'), 'turn': r.get('role') in ('turn', 'start-turn'), 'calm_mark': bool(r.get('calm_mark')), 'tones': list(r.get('tags') or [])} for r in rows]
     first = rows[0]['when'].replace(second=0, microsecond=0)
     base = first - _dt.timedelta(minutes=first.minute % step if step < 60 else first.minute, hours=0)
     last = rows[-1]['when']
     count = int((last - base).total_seconds() // (step * 60)) + 1
     count = min(count, MAX_BARS)
-    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': [], 'start': False, 'turn': False, 'calm_mark': False} for k in range(count)]
+    out = [{'label': _clock(base + _dt.timedelta(minutes=step * k)), 'n': 0, 'calm': 0, 'heated': 0, 'hostile': 0, 'black': 0, 'text': '', 'beh': [], 'start': False, 'turn': False, 'calm_mark': False, 'tones': []} for k in range(count)]
     for r in rows:
         k = min(count - 1, int((r['when'] - base).total_seconds() // (step * 60)))
         b = out[k]
         b['n'] += 1
         b['beh'] += list(beh.get(r.get('uid'), []))
+        b['tones'] += list(r.get('tags') or [])
         if r.get('role') in ('start', 'start-turn'):
             b['start'] = True
         if r.get('role') in ('turn', 'start-turn'):
@@ -183,3 +184,20 @@ def calm_parts(stretch_count, units) -> list:
                 if a <= inc['calm']['i'] < b:
                     out[k] += 1
     return out if any(out) else []
+
+
+TONE_ORDER = (('Aggressive', 'crit'), ('Rude', 'crit'), ('Disrespectful', 'crit'), ('Judgmental', 'crit'), ('Agitated', 'warn'), ('Sarcastic', 'warn'))
+
+
+def tone_lane(bars) -> list:
+    """The tones that feed escalation, for the lane under the incident chart: [(tone, colour role, {bar index: messages})], only the tones that appear. Open hostility is red, agitation and sarcasm yellow."""
+    out = []
+    for name, role in TONE_ORDER:
+        where = {}
+        for k, b in enumerate(bars):
+            n = sum(1 for t in b.get('tones') or [] if t == name)
+            if n:
+                where[k] = n
+        if where:
+            out.append((name, role, where))
+    return out

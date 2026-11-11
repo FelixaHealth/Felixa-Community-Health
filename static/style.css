@@ -1189,3 +1189,12 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .hr-inc.none{background:#e6e2d4;color:#4b5c53}
 .views.sticky{position:sticky;top:8px;z-index:30;padding:6px 0;margin-top:-6px;background:var(--bg,#f7f3e6)}.views.sticky a.back{box-shadow:0 2px 8px rgba(0,0,0,.18)}
 .hr-mode a.hv{padding:4px 12px;border:1px solid #ddd8c8;border-radius:16px;font-size:13px;color:#16251d!important;background:#fff;text-decoration:none}.hr-mode a.hv.on{background:#16251d;color:#fff!important;border-color:#16251d}.hr-sw{gap:8px}.hr-tf{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+
+.tf-slider{margin:10px 0 12px;max-width:640px}.tf-slider label{display:flex;gap:10px;align-items:baseline;font-size:13px;color:#6b7a72;font-weight:600}.tf-slider output{font-size:15px;color:#16251d;font-weight:700}
+.tf-slider input[type=range]{width:100%;accent-color:#16251d;margin:6px 0 2px;height:28px}.tf-ticks{display:flex;justify-content:space-between;font-size:11px;color:#6b7a72}.tf-ticks span{cursor:pointer;padding:2px 0;text-align:center;flex:1}.tf-ticks span:first-child{text-align:left}.tf-ticks span:last-child{text-align:right}.tf-ticks span.on{color:#16251d;font-weight:700}
+/* Key Insight: no empty space between the sentence, the button and the link */
+.insight .ins-body{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:14px 18px;margin-top:10px}
+.insight .ins-body p{flex:1 1 100%;margin:0}
+.insight .ins-body .btn-gold{margin:0}
+.insight .ins-body .fl-link{margin:0;padding:6px 2px;min-height:0}
+.insight .hc-top{margin-bottom:0}

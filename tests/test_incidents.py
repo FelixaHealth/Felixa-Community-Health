@@ -61,7 +61,7 @@ class Pages(AppCase):
             first = self.client.get(f'/analysis/{aid}/incident/1?step=10')
             self.assertIn(first.status_code, (200, 404))
             if first.status_code == 200:
-                self.assertIn('Take it apart', first.text)
+                self.assertIn('data-slider', first.text)
                 self.assertIn('Escalation starts', first.text)
                 self.assertIn('data-back', first.text)
                 self.assertIn('Back to Escalation', first.text)

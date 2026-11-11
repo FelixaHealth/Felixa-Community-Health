@@ -582,7 +582,7 @@ def pole_flag(sc, x, y, role) -> None:
     sc.poly([(x, y), (x + 12, y + 4.5), (x, y + 9)], stroke=role, width=1, fill=role, close=True)
 
 
-def incident_chart(bars, *, width=W, lane=None):
+def incident_chart(bars, *, width=W, lane=None, tones=None):
     """One incident as stacked bars, a bar for each message or each stretch of minutes: openly hostile (red) on top of heated (yellow) on top of calm (grey).
     The yellow flag marks the bar where escalation starts and the red flag the bar where it turns into conflict. `lane` ([(behaviour, {bar index: messages})]) adds a row of dots
     for each High Risk behaviour under the bars, in the same columns. None without bars."""
@@ -590,12 +590,13 @@ def incident_chart(bars, *, width=W, lane=None):
     if not n:
         return None
     lane = lane or []
+    tones = tones or []
     narrow = width < 600
     tick_size, _end = _sizes(width)
     base_h = 190 if narrow else 210
     flags_on = any(b.get('start') or b.get('turn') or b.get('calm_mark') for b in bars)
     row_h = 34
-    height = base_h + (row_h * len(lane) + 10 if lane else 0)
+    height = base_h + (row_h * (len(lane) + len(tones)) + 10 if (lane or tones) else 0)
     ml, mr, mt, mb = 30, 10, 12 + (18 if (flags_on or any(x.get('black') for x in bars)) else 0), 30
     pw, ph = width - ml - mr, base_h - mt - mb
     top = max(max(b['n'] for b in bars), 1)
@@ -608,6 +609,8 @@ def incident_chart(bars, *, width=W, lane=None):
         desc += ' A yellow flag marks where escalation starts, a red flag where it turns into conflict and a green flag where someone calms it.'
     if lane:
         desc += ' Under the bars, a row for each High Risk behaviour shows where it appeared: ' + ', '.join(name for name, _ in lane) + '.'
+    if tones:
+        desc += ' Another row for each tone that feeds escalation shows where it appeared: ' + ', '.join(t[0] for t in tones) + '.'
     sc = Scene(width, height, 'The incident, bar by bar', desc)
     for t in ticks:
         y = mt + ph * (1 - t / top)
@@ -650,6 +653,13 @@ def incident_chart(bars, *, width=W, lane=None):
         sc.line(ml, y0 + row_h - 6, width - mr, y0 + row_h - 6, 'grid', 1)
         for k, count in where.items():
             sc.circle(ml + slot * k + slot / 2, y0 + row_h - 6, 5.5 if count < 2 else 7, 'ink')
+    sc.group('tones')                                            # the tones that feed escalation: open hostility in red, agitation and sarcasm in yellow
+    for r, (name, role, where) in enumerate(tones):
+        y0 = base_h + 4 + (len(lane) + r) * row_h
+        sc.text(ml, y0 + tick_size + 1, name, size=tick_size, fill="ink2")
+        sc.line(ml, y0 + row_h - 6, width - mr, y0 + row_h - 6, 'grid', 1)
+        for k, count in where.items():
+            sc.circle(ml + slot * k + slot / 2, y0 + row_h - 6, 5.5 if count < 2 else 7, role)
     sc.group(None)
     return sc
 

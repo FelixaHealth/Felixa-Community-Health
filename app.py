@@ -1856,10 +1856,11 @@ def incident_page(request: Request, aid: AnalysisId, n: int, step: int = inciden
     by_uid = high_risk.annotate(aid, found)
     bars = incidents.bins(item, step, flagged, by_uid)
     lane = high_risk.lane(bars)
-    figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w, lane=lane))
+    tones = incidents.tone_lane(bars)
+    figure = vibe_check.figure(lambda w: bei_charts.incident_chart(bars, width=w, lane=lane, tones=tones))
     nav = results_nav(aid, ctx, 'incident') if ctx.get('measures') else []
     back = {'safety': (f'/analysis/{aid}/safety', 'High Risk'), 'deescalation': (f'/analysis/{aid}/track/deescalation', 'Deescalation')}.get(src, (f'/analysis/{aid}/track/escalation?gap={gap}', 'Escalation'))
-    return render(request, 'incident.html', back=back, src=src, item=item, found=found, flagged=flagged, by_uid=by_uid, lane=lane, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS],
+    return render(request, 'incident.html', back=back, src=src, item=item, found=found, flagged=flagged, by_uid=by_uid, lane=lane, figure=figure, step=step, gap=gap, steps=[(s, incidents.step_label(s)) for s in incidents.STEPS], step_label=incidents.step_label(step),
                   rnav=nav, **ctx)
 
 
