@@ -1182,3 +1182,6 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .flag.grey{background:#d8d4c6;color:#4b5c53}.ab-off td{color:#6b7a72}
 @media(max-width:640px){.ab-table thead{display:none}.ab-table tr{display:block;padding:8px 0;border-bottom:1px solid #f0ebdc}.ab-table td{display:flex;gap:10px;border:0;padding:3px 4px;width:auto!important}.ab-table td::before{content:attr(data-label);flex:0 0 78px;font-size:11px;text-transform:uppercase;color:#6b7a72;letter-spacing:.04em;padding-top:2px}}
 .ab-group th{text-align:left;background:#f7f3e6;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#6b7a72;padding:8px 10px}
+
+.side-link.sub{margin-left:18px;padding-top:6px;padding-bottom:6px;font-size:14px;opacity:.92}.side-link.sub::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;margin-right:4px;flex:none}
+.family-links{list-style:none;padding:0;margin:10px 0}.family-links li{padding:8px 0;border-top:1px solid #eee9db}.family-links a{color:inherit;text-decoration:none}.family-links em{font-style:normal;color:#a8780f;font-weight:600;margin-left:6px}

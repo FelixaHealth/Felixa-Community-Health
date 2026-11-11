@@ -1,0 +1,13 @@
+{# Escalation and deescalation by family and by tone. Needs `ph` (sentiment_phases.build) and the two figures. #}
+<section class="panel vc" id="phases"><h2>Escalation and deescalation by tone</h2>
+{% if not ph.any %}<p>No incident in this chat yet, so there is no escalating or calming part to compare. An incident is a run of heated messages; see Track, Escalation.</p>
+{% else %}<p class="small-note">The <strong>escalating part</strong> is every message inside an incident before anyone calmed it ({{ ph.n_esc }} messages). The <strong>calming part</strong> is every message from the first calming message on ({{ ph.n_de }} messages, in {{ ph.tried }} of {{ ph.incidents }} incidents). Each bar is how many messages per 100 of that part show the tone (rated 2 or 3).</p>
+<ul class="track-legend" data-scope="panel" data-toggle="sent-{{ aid }}"><li data-g="escalation"><i class="lg warn"></i>Escalation</li><li data-g="deescalation"><i class="lg pos"></i>Deescalation</li></ul>
+<p class="small-note">Tap a name to show or hide it.</p>
+<h3 class="ab-h">The three families</h3>
+<div class="vc">{{ ph_cat_figure|safe }}</div>
+<div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Family</th><th scope="col">Escalation</th><th scope="col">Deescalation</th></tr></thead><tbody>{% for r in ph.categories %}<tr><td data-label="Family"><strong>{{ r.name }}</strong></td><td data-label="Escalation">{{ '%.0f'|format(r.esc_rate) }} per 100 <span class="ab-sub">{{ r.esc_n }} of {{ ph.n_esc }} messages</span></td><td data-label="Deescalation">{{ '%.0f'|format(r.de_rate) }} per 100 <span class="ab-sub">{{ r.de_n }} of {{ ph.n_de }} messages</span></td></tr>{% endfor %}</tbody></table></div>
+<h3 class="ab-h">Each of the 13 tones</h3>
+<div class="vc">{{ ph_attr_figure|safe }}</div>
+<div class="table-wrap"><table class="ab-table"><thead><tr><th scope="col">Tone</th><th scope="col">Family</th><th scope="col">Escalation</th><th scope="col">Deescalation</th></tr></thead><tbody>{% for r in ph.attributes %}<tr><td data-label="Tone"><strong><a href="/analysis/{{ aid }}/tone/{{ r.name }}">{{ r.name }}</a></strong></td><td data-label="Family">{{ r.family }}</td><td data-label="Escalation">{{ '%.0f'|format(r.esc_rate) }} per 100 <span class="ab-sub">{{ r.esc_n }} message{{ '' if r.esc_n == 1 else 's' }}</span></td><td data-label="Deescalation">{{ '%.0f'|format(r.de_rate) }} per 100 <span class="ab-sub">{{ r.de_n }} message{{ '' if r.de_n == 1 else 's' }}</span></td></tr>{% endfor %}</tbody></table></div>
+<p class="small-note">This describes wording in the chat, never a person. The app does not keep who wrote a message.</p>{% endif %}</section>

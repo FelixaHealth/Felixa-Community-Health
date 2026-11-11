@@ -42,6 +42,7 @@ import deescalation
 import incidents
 import high_risk
 import safety_module
+import sentiment_phases
 import flagged
 import detail
 import measures
@@ -1781,7 +1782,7 @@ def results_nav(aid, ctx, current):
     ms = ctx.get('measures')
     has = screens_with_results(ctx)
     out = []
-    for key in ('vibe', 'health', 'sentiment'):
+    for key in ('vibe', 'health'):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
     if ms:
@@ -1814,7 +1815,7 @@ def results_page(request: Request, aid: AnalysisId):
 
 
 @app.get('/analysis/{aid}/results/{screen}', response_class=HTMLResponse)
-def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str = 'previous'):
+def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str = 'previous', view: str = 'overview'):
     """One kind of result on a screen of its own."""
     if screen not in RESULT_SCREENS:
         not_found()
@@ -1825,7 +1826,19 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
     act = None
     if screen == 'alerts' and ctx.get('measures'):
         act = actview.build(ctx, compare)
-    return render(request, 'screen.html', screen=screen, title=RESULT_SCREENS[screen][0], act=act, rnav=nav, **ctx)
+    extra = {}
+    if screen == 'sentiment':
+        view = view if view in ('overview', 'phases') else 'overview'
+        extra['sview'] = view
+        fam = ctx.get('families') or []
+        extra['family_figure'] = vibe_check.figure(lambda w: dashboard.hbars([(f['name'], f['avg_fas'], {'Positive': 'green', 'Tense': 'warn', 'Toxic': 'crit'}.get(f['name'], 'pos'), f"{f['avg_fas']:.1f} · strongest {f['top']}") for f in fam],
+                                                                          title='Average FAS', desc='The average strength (FAS, 0 to 100) of the tones in each family: Positive, Tense and Toxic.', width=w, sort=False)) if fam else ''
+        if view == 'phases':
+            ph = sentiment_phases.build(store.rated_text_units(aid))
+            extra['ph'] = ph
+            extra['ph_cat_figure'] = vibe_check.figure(lambda w: bei_charts.phase_chart(ph['categories'], title='Escalation and deescalation by family', width=w)) if ph['any'] else ''
+            extra['ph_attr_figure'] = vibe_check.figure(lambda w: bei_charts.phase_chart(ph['attributes'], title='Escalation and deescalation by tone', width=w)) if ph['any'] else ''
+    return render(request, 'screen.html', screen=screen, title=RESULT_SCREENS[screen][0], act=act, rnav=nav, **extra, **ctx)
 
 
 @app.get('/analysis/{aid}/incident/{n}', response_class=HTMLResponse)

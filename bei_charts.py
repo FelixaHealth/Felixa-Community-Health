@@ -644,3 +644,32 @@ def incident_chart(bars, *, width=W, lane=None):
             sc.circle(ml + slot * k + slot / 2, y0 + row_h - 6, 5.5 if count < 2 else 7, 'ink')
     sc.group(None)
     return sc
+
+
+def phase_chart(rows, *, title, width=W):
+    """A pair of bars for each row [{'name', 'esc_rate', 'de_rate', 'esc_n', 'de_n'}]: how often it shows in the escalating part (yellow) and in the calming part (green), per 100 messages of that part.
+    The two series carry their names so a reader can switch either off."""
+    if not rows:
+        return None
+    narrow = width < 600
+    label_w = 96 if narrow else 118
+    row_h, bar_h, top = 40, 13, 4
+    top_v = max([5.0] + [max(r['esc_rate'], r['de_rate']) for r in rows])
+    top_v = nice_ticks(top_v, 4)[-1]
+    x0, x1 = label_w + 8, width - 62
+    height = top + row_h * len(rows) + 4
+    sc = Scene(width, height, title, f'{title}: for each row, how many messages per 100 show it in the escalating part and in the calming part of the incidents.')
+    sc.line(x0, top, x0, top + row_h * len(rows), 'axis', 1)
+    for i, r in enumerate(rows):
+        yc = top + i * row_h + row_h / 2
+        sc.text(label_w, yc + 4.5, r['name'], size=12, anchor='end', fill='ink2')
+        tip = {'t': r['name'], 'r': [['Escalation', f"{r['esc_rate']:.0f} per 100 ({r['esc_n']} messages)", 'warn'], ['Deescalation', f"{r['de_rate']:.0f} per 100 ({r['de_n']} messages)", 'green']]}
+        for k, (key, role, g) in enumerate((('esc', 'warn', 'escalation'), ('de', 'green', 'deescalation'))):
+            v = r[f'{key}_rate']
+            y = yc - bar_h - 1 + k * (bar_h + 2)
+            length = max(2.0, (x1 - x0) * min(v, top_v) / top_v)
+            sc.group(g)
+            sc.rect(x0, y, length, bar_h, role, r=(0, 4, 4, 0), tip=tip)
+            sc.text(x0 + length + 6, y + bar_h - 2.5, f'{v:.0f}', size=11, fill='ink', weight=600)
+        sc.group(None)
+    return sc

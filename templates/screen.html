@@ -9,7 +9,8 @@
 {% include "_health_verdict.html" %}
 {% set only = 'health' %}{% include "_over_time.html" %}
 {% elif screen == 'sentiment' %}
-{% if metrics %}{% include "_signals.html" %}{% endif %}
+<nav class="views" aria-label="Views of Sentiment"><a href="?view=overview"{% if sview == 'overview' %} class="on" aria-current="page"{% endif %}>Overview</a><a href="?view=phases"{% if sview == 'phases' %} class="on" aria-current="page"{% endif %}>Escalation &amp; Deescalation</a></nav>
+{% if sview == 'phases' %}{% include "_sentiment_phases.html" %}{% elif metrics %}{% include "_signals.html" %}{% endif %}
 {% elif screen == 'passive' %}
 {% set only = 'passive' %}{% include "_over_time.html" %}
 {% elif screen == 'alerts' %}

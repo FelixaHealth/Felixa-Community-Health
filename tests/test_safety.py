@@ -160,3 +160,27 @@ class Connection(unittest.TestCase):
             high_risk.build = orig
         self.assertEqual(item['hr'], [('Threats', 2), ('Blackmail', 1)])
         self.assertEqual(item['hr_n'], 2)
+
+
+class SentimentPhases(unittest.TestCase):
+    def test_a_tone_is_counted_in_the_escalating_or_the_calming_part(self):
+        import sentiment_phases
+        import analysis
+        units = []
+        for i in range(30):
+            r = dict.fromkeys(analysis.ATTRIBUTES, 0)
+            if 10 <= i <= 14:
+                r['Aggressive'] = 3
+                r['Rude'] = 2
+            if i == 16:
+                r['Empathetic'] = 3
+            units.append({'id': i + 1, 'text': f'm{i}', 'source': 's', 'timestamp': f'2026-11-09T09:{i:02d}:00', 'ratings': r})
+        out = sentiment_phases.build(units)
+        self.assertTrue(out['any'])
+        self.assertEqual([c['name'] for c in out['categories']], ['Positive', 'Tense', 'Toxic'])
+        self.assertEqual(len(out['attributes']), 13)
+        tox = out['categories'][2]
+        self.assertGreater(tox['esc_n'], 0)
+        self.assertEqual(tox['de_n'], 0)
+        emp = next(a for a in out['attributes'] if a['name'] == 'Empathetic')
+        self.assertEqual(emp['esc_n'], 0)
