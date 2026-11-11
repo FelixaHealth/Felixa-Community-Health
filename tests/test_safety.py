@@ -284,4 +284,4 @@ class TrendsAnswer(unittest.TestCase):
         out = track.link(m, ('escalation',))
         self.assertTrue(out['answer'].startswith('Yes, it goes with less'), out['answer'])
         few = track.link({'stretches': [{'rates': {'care': 1, 'hostile': 1, 'heated': 1}}] * 2}, ('escalation',))
-        self.assertEqual(few['answer'], 'Not enough parts yet to say.')
+        self.assertEqual(few['answer'], 'Not enough bars yet to say.')

@@ -45,7 +45,7 @@ class Flags(unittest.TestCase):
         m = chat([(96, {'Polite': 2})])
         for key in ('escalation', 'conflict'):
             self.assertEqual([f['level'] for f in track.flags_for(m, key)], [''] * len(m['stretches']), key)
-            self.assertIn('No part of the chat was flagged', track.summary(m, key)['sentences'][0])
+            self.assertIn('No bar was flagged', track.summary(m, key)['sentences'][0])
             self.assertEqual(track.events(m, key), [])
 
     def test_a_flare_up_raises_yellow_then_red_and_records_when_it_emerged_and_intensified(self):
@@ -111,7 +111,7 @@ class Link(unittest.TestCase):
         out = track.link(chat([CALM, CALM]))
         self.assertFalse(out['ready'] and out['k'] < track.MIN_FOR_LINK)
         if not out['ready']:
-            self.assertIn('parts so far', out['sentences'][0])
+            self.assertIn('bars so far', out['sentences'][0])
 
     def test_a_flat_series_has_nothing_to_compare(self):
         m = chat([(96, {'Polite': 2})])

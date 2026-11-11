@@ -46,6 +46,7 @@ import sentiment_phases
 import flagged
 import detail
 import measures
+import timeframes
 import pipeline
 import prices
 import track
@@ -1906,16 +1907,34 @@ def safety_review_page(request: Request, aid: AnalysisId):
     return render(request, 'safety_review.html', vnav=track_nav(aid, 'safety'), safety=safety_module.build(aid), rnav=nav, **ctx)
 
 
+def frame_context(aid, ctx, by, tf, gap):
+    """The bars the Track graphs draw: stretches of time (default) or incidents. (measures with those bars, de, black, green, picker data)."""
+    ms = ctx['measures']
+    units = store.rated_text_units(aid)
+    r = timeframes.rebase(ms['m'], units, by if by in ('time', 'incident') else 'time', tf, gap, safety_module.flagged_uids(aid))
+    if r['by'] == 'parts':
+        k = len(ms['m']['stretches'])
+        de, black, green = deescalation.series(ms['m'], units), safety_module.part_counts(k, units, safety_module.flagged_uids(aid)), incidents.calm_parts(k, units)
+    else:
+        de, black, green = r['de'], r['black'], r['green']
+    pick = {'by': r['by'], 'asked': by if by in ('time', 'incident') else 'time', 'tf': tf if tf in timeframes.SIZES else 0, 'frames': timeframes.FRAMES, 'used': r['used'], 'bumped': r['bumped'], 'note': r['note'],
+            'used_name': timeframes.frame_name(r['used']) if r['used'] else '', 'timed': ms['m'].get('basis') == 'time', 'gaps': incidents.GAPS, 'gap': gap}
+    return dict(ms, m=r['m']), de, black, green, pick
+
+
 @app.get('/analysis/{aid}/track/trends', response_class=HTMLResponse)
-def trends_page(request: Request, aid: AnalysisId):
+def trends_page(request: Request, aid: AnalysisId, by: str = 'time', tf: int = 0, gap: int = incidents.DEFAULT_GAP):
     """Trends: Escalation, Conflict, Empathy and Deescalation on one graph, with the flags of every view. The graph lives here once."""
     ctx = report_context(aid, 'trends')
-    units = store.rated_text_units(aid)
-    view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], units), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), units, safety_module.flagged_uids(aid)),
-                       green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), units), conflict=False) if ctx.get('measures') else None
+    gap = gap if gap in incidents.GAPS else incidents.DEFAULT_GAP
+    if ctx.get('measures'):
+        ms, de, black, green, pick = frame_context(aid, ctx, by, tf, gap)
+        view = track_views(ms, de=de, black=black, green=green, conflict=False)
+    else:
+        view, pick = None, None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Trends need at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
-    return render(request, 'trends.html', vnav=track_nav(aid, 'trends'), track_view=view, key='trends', rnav=results_nav(aid, ctx, 'trends'), **ctx)
+    return render(request, 'trends.html', vnav=track_nav(aid, 'trends'), track_view=view, pick=pick, key='trends', rnav=results_nav(aid, ctx, 'trends'), **ctx)
 
 
 @app.get('/analysis/{aid}/track/deescalation', response_class=HTMLResponse)
@@ -1930,18 +1949,23 @@ def deescalation_page(request: Request, aid: AnalysisId):
 
 
 @app.get('/analysis/{aid}/track/{key}', response_class=HTMLResponse)
-def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents.DEFAULT_GAP):
+def track_page(request: Request, aid: AnalysisId, key: str, gap: int = incidents.DEFAULT_GAP, by: str = 'time', tf: int = 0):
     """One measure of the Track tab on a page of its own: how it was built up over the chat, its flags, and the three measures together."""
     if key not in track.KEYS:
         not_found()
     ctx = report_context(aid, 'track')
-    view = track_views(ctx['measures'], only=key, de=deescalation.series(ctx['measures']['m'], store.rated_text_units(aid)), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid), safety_module.flagged_uids(aid)), green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), store.rated_text_units(aid))) if ctx.get('measures') else None
+    gap = gap if gap in incidents.GAPS else incidents.DEFAULT_GAP
+    if ctx.get('measures'):
+        ms, de, black, green, pick = frame_context(aid, ctx, by, tf, gap)
+        view = track_views(ms, only=key, de=de, black=black, green=green)
+    else:
+        ms, view, pick = None, None, None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Track needs at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     il = incidents.find(store.rated_text_units(aid), gap) if key == 'escalation' else None
     if il:
         high_risk.annotate(aid, il)
-    return render(request, 'track.html', vnav=track_nav(aid, key), held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, part_msgs=track.part_messages(ctx['measures']['m'], store.rated_text_units(aid), key), incident_list=il, gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
+    return render(request, 'track.html', vnav=track_nav(aid, key), held_texts=safety_module.flagged_texts(aid), track_view=view, story=track.story(ctx['measures']['m'], store.rated_text_units(aid)) if key in ('escalation', 'conflict') else None, pick=pick, part_msgs=(timeframes.messages(ms['m'], store.rated_text_units(aid), key) if ms['m'].get('positions') else track.part_messages(ms['m'], store.rated_text_units(aid), key)), incident_list=il, gap_choices=incidents.GAPS, gap=gap if gap in incidents.GAPS else incidents.DEFAULT_GAP, card=view['cards'][0], key=key, names=track.NAMES, rnav=results_nav(aid, ctx, key), **ctx)
 
 
 def detail_page(request, aid, page, *, attrs, title, kind, blurb, parent=None):

@@ -18,9 +18,9 @@ import measures
 KEYS = ('escalation', 'conflict', 'empathy')
 NAMES = {'escalation': 'Escalation', 'conflict': 'Conflict', 'empathy': 'Empathy'}
 KIND = {'escalation': 'heated', 'conflict': 'hostile', 'empathy': 'care'}
-ABOUT = {'escalation': 'How heated the chat gets, and how fast: messages that are openly hostile, agitated or sarcastic digs, part by part.',
-         'conflict': 'How openly hostile the wording is, part by part: messages that are aggressive, rude, disrespectful or judgmental.',
-         'empathy': 'How much care and understanding people show each other, part by part: messages that clearly show empathy.'}
+ABOUT = {'escalation': 'How heated the chat gets, and how fast: messages that are openly hostile, agitated or sarcastic digs, over time.',
+         'conflict': 'How openly hostile the wording is, over time: messages that are aggressive, rude, disrespectful or judgmental.',
+         'empathy': 'How much care and understanding people show each other, over time: messages that clearly show empathy.'}
 SAYS = {'escalation': 'heated', 'conflict': 'openly hostile', 'empathy': 'caring'}
 YELLOW_CLIMB, RED_CLIMB, YELLOW_MIN, RED_MIN = 10.0, 25.0, 2, 3
 OPEN_YELLOW, OPEN_RED = 20.0, 30.0
@@ -46,6 +46,9 @@ def escalation_flags(m):
     for i, st in enumerate(stretches):
         h, n = st['counts']['heated'], st['n']
         value = _rate(st, 'heated')
+        if m.get('levels'):                                 # bars are incidents: each carries its own flag
+            out.append({'i': i, 'level': m['levels'][i], 'value': value, 'base': None, 'climb': 0.0, 'count': h, 'n': n})
+            continue
         if i == 0:
             base, climb = None, 0.0
             level = 'red' if (m['verdicts'] and value >= OPEN_RED and h >= RED_MIN) else 'yellow' if (value >= OPEN_YELLOW and h >= YELLOW_MIN) else ''
@@ -67,6 +70,9 @@ def conflict_flags(m):
     for i, st in enumerate(m['stretches']):
         c, n = st['counts']['hostile'], st['n']
         value = _rate(st, 'hostile')
+        if m.get('levels'):
+            out.append({'i': i, 'level': 'red' if m['levels'][i] == 'red' else '', 'value': value, 'base': None, 'climb': 0.0, 'count': c, 'n': n})
+            continue
         level = 'red' if (m['verdicts'] and value >= high and c >= RED_MIN) else 'yellow' if (value >= low and c >= YELLOW_MIN) else ''
         out.append({'i': i, 'level': level, 'value': value, 'base': None, 'climb': 0.0, 'count': c, 'n': n})
     return out
@@ -115,7 +121,7 @@ def events(m, key):
         move = ''
         if prev:
             d = f['value'] - prev['value']
-            move = f' That is {abs(d):.0f} {"more" if d > 0 else "fewer"} than in the part before.' if abs(d) >= 1 else ' That is the same as the part before.'
+            move = f' That is {abs(d):.0f} {"more" if d > 0 else "fewer"} than in the bar before.' if abs(d) >= 1 else ' That is the same as the bar before.'
         if state == 'cleared':
             text = f'{f["value"]:.0f} in every 100 messages were {said}, back below the flag level.{move}'
         else:
@@ -137,24 +143,24 @@ def summary(m, key):
     top = max(flags, key=lambda f: (f['value'], -f['i']))
     out = {'k': k, 'red': len(reds), 'yellow': len(yellows), 'latest': flags[-1]['value'], 'highest': top['value'], 'highest_at': st[top['i']]['label'], 'sentences': []}
     if key == 'empathy':
-        out['sentences'].append(f'Empathy was highest in {st[top["i"]]["label"]}, with {top["value"]:.0f} in every 100 messages, and was {flags[-1]["value"]:.0f} in the latest part.')
+        out['sentences'].append(f'Empathy was highest in {st[top["i"]]["label"]}, with {top["value"]:.0f} in every 100 messages, and was {flags[-1]["value"]:.0f} in the latest bar.')
         return out
     flagged = [f for f in flags if f['level']]
     if not flagged:
-        out['sentences'].append(f'No part of the chat was flagged. The highest was {top["value"]:.0f} in every 100 messages, in {st[top["i"]]["label"]}.')
+        out['sentences'].append(f'No bar was flagged. The highest was {top["value"]:.0f} in every 100 messages, in {st[top["i"]]["label"]}.')
         return out
     first = flagged[0]
     out['sentences'].append(f'The first flag, {_level_word(first["level"]).lower()}, appeared in {st[first["i"]]["label"]}.')
     rose = [i for i in range(len(flags)) if _state(flags, i) == 'intensified']
     if rose:
-        out['sentences'].append(f'It intensified in {len(rose)} part{"" if len(rose) == 1 else "s"}, first in {st[rose[0]]["label"]}.')
+        out['sentences'].append(f'It intensified in {len(rose)} bar{"" if len(rose) == 1 else "s"}, first in {st[rose[0]]["label"]}.')
     else:
-        out['sentences'].append('It did not intensify from one part to the next.')
+        out['sentences'].append('It did not intensify from one bar to the next.')
     if reds:
         peak = max(reds, key=lambda f: (f['value'], -f['i']))
         out['sentences'].append(f'The highest red flag was in {st[peak["i"]]["label"]}, at {peak["value"]:.0f} in every 100 messages.')
     last = flags[-1]
-    out['sentences'].append('In the latest part it is flagged ' + _level_word(last['level']).lower().replace(' flag', '') + '.' if last['level'] else 'In the latest part it is not flagged.')
+    out['sentences'].append('In the latest bar it is flagged ' + _level_word(last['level']).lower().replace(' flag', '') + '.' if last['level'] else 'In the latest bar it is not flagged.')
     return out
 
 
@@ -181,36 +187,36 @@ def link(m, kinds=('conflict', 'escalation')):
     care, hostile, heated = ([_rate(s, kind) for s in st] for kind in ('care', 'hostile', 'heated'))
     out = {'k': k, 'ready': k >= MIN_FOR_LINK, 'sentences': [], 'r': {}, 'answer': ''}
     if not out['ready']:
-        out['answer'] = 'Not enough parts yet to say.'
-        out['sentences'].append(f'There are {k} parts so far. With {MIN_FOR_LINK} or more parts the page says whether empathy goes with less ' + ' and '.join(kinds) + '.')
+        out['answer'] = 'Not enough bars yet to say.'
+        out['sentences'].append(f'There are {k} bars so far. With {MIN_FOR_LINK} or more bars the page says whether empathy goes with less ' + ' and '.join(kinds) + '.')
         return out
     for key, series, word in [x for x in (('conflict', hostile, 'conflict'), ('escalation', heated, 'escalation')) if x[0] in kinds]:
         same = _pearson(care, series)
         nxt = _pearson(care[:-1], series[1:])
         out['r'][key] = {'same': same, 'next': nxt}
         if same is None:
-            out['sentences'].append(f'Empathy or {word} did not change from part to part, so there is nothing to compare.')
+            out['sentences'].append(f'Empathy or {word} did not change from bar to bar, so there is nothing to compare.')
             continue
         if abs(same) < 0.3:
             out['sentences'].append(f'Empathy and {word} do not move together in a clear way in this chat.')
         elif same < 0:
-            out['sentences'].append(f'In the parts where empathy was higher, {word} tended to be lower ({_strength(same)} link).')
+            out['sentences'].append(f'In the bars where empathy was higher, {word} tended to be lower ({_strength(same)} link).')
         else:
-            out['sentences'].append(f'In the parts where empathy was higher, {word} tended to be higher too ({_strength(same)} link). That can happen when people talk about hard things with care.')
+            out['sentences'].append(f'In the bars where empathy was higher, {word} tended to be higher too ({_strength(same)} link). That can happen when people talk about hard things with care.')
         if nxt is not None and abs(nxt) >= 0.4 and abs(nxt) > abs(same) + 0.1:
-            out['sentences'].append(f'The link is stronger with the part after: empathy in one part goes with {"less" if nxt < 0 else "more"} {word} in the next.')
+            out['sentences'].append(f'The link is stronger with the bar after: empathy in one bar goes with {"less" if nxt < 0 else "more"} {word} in the next.')
     esc = out['r'].get('escalation')
     if esc is not None:                                                   # the short answer to "Does empathy change escalation?", in one sentence
         r = esc['same']
         if r is None:
-            out['answer'] = 'Too little change from part to part to tell.'
+            out['answer'] = 'Too little change from bar to bar to tell.'
         elif abs(r) < 0.3:
             out['answer'] = 'No clear link: empathy and escalation do not move together in this chat.'
         elif r < 0:
             out['answer'] = f'Yes, it goes with less: where empathy was higher, escalation tended to be lower ({_strength(r)} link).'
         else:
             out['answer'] = f'Not in a way that lowers it: where empathy was higher, escalation tended to be higher too ({_strength(r)} link).'
-    out['caution'] = f'This compares {k} parts of one chat. A link in the numbers is not proof that one thing causes the other.'
+    out['caution'] = f'This compares {k} bars of one chat. A link in the numbers is not proof that one thing causes the other.'
     return out
 
 

@@ -411,9 +411,9 @@ def track_chart(key, name, stretches, flags, *, width=W, black=None):
     X = lambda i: ml + step * (i + 0.5)                          # noqa: E731
     Y = lambda v: mt + ph * (1 - min(max(v, 0.0), top) / top)    # noqa: E731
     red, yellow = sum(1 for f in flags if f['level'] == 'red'), sum(1 for f in flags if f['level'] == 'yellow')
-    desc = (f'{name} in each of {n} parts of the chat, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}. '
-            + ('No part was flagged.' if not (red or yellow) else f'{red} part{"" if red == 1 else "s"} carried a red flag and {yellow} a yellow flag.')
-            if key != 'empathy' else f'{name} in each of {n} parts of the chat, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}.')
+    desc = (f'{name} in each of {n} bars, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}. '
+            + ('No bar was flagged.' if not (red or yellow) else f'{red} bar{"" if red == 1 else "s"} carried a red flag and {yellow} a yellow flag.')
+            if key != 'empathy' else f'{name} in each of {n} bars, as messages per 100. The first part had {_whole(values[0])} and the last had {_whole(values[-1])}.')
     sc = Scene(width, height, f'{name} built up over time', desc)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
@@ -480,10 +480,10 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None, green=No
     X = lambda i: ml + pw * i / (n - 1)                          # noqa: E731
     Y = lambda v: mt + ph * (1 - min(max(v, 0.0), top) / top)    # noqa: E731
     if conflict:
-        desc = ('Escalation, conflict and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, conflict %d, empathy %d.'
+        desc = ('Escalation, conflict and empathy in each of %d bars, as messages per 100. At the end: escalation %d, conflict %d, empathy %d.'
                 % (n, _whole(series['escalation'][-1]), _whole(series['conflict'][-1]), _whole(series['empathy'][-1])))
     else:
-        desc = ('Escalation and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, empathy %d.' % (n, _whole(series['escalation'][-1]), _whole(series['empathy'][-1])))
+        desc = ('Escalation and empathy in each of %d bars, as messages per 100. At the end: escalation %d, empathy %d.' % (n, _whole(series['escalation'][-1]), _whole(series['empathy'][-1])))
     sc = Scene(width, height, 'Escalation, conflict and empathy together' if conflict else 'Escalation and empathy together', desc)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
