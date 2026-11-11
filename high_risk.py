@@ -214,10 +214,10 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
             span = 'the whole chat' if not used else f'{st:%b %-d %H:%M} for {used // 60} h' if used >= 60 and used % 60 == 0 else f'{st:%b %-d %H:%M} for {used} min'
         elif timed:
             a, b = stamps[g[0]], stamps[g[-1]]
-            label = f'High Risk {k + 1}'
+            label = f'Incident {k + 1}'
             span = f'{a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if len(g) > 1 and a.date() == b.date() else (f' to {b:%b %-d %H:%M}' if len(g) > 1 else ''))
         else:
-            label = f'High Risk {k + 1}'
+            label = f'Incident {k + 1}'
             span = f'messages {g[0] + 1} to {g[-1] + 1}' if len(g) > 1 else f'message {g[0] + 1}'
         days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': sorted((n, x['level']) for n, x in incs.items()), 'detail': span})
     n = len(days)
