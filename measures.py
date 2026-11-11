@@ -437,8 +437,14 @@ def cards(m) -> list:
         card = {'key': key, 'name': name, 'meaning': meaning, 'kind': kind, 'series': [s['rates'][kind] for s in stretches]}
         if key == 'escalation':
             eps = m['episodes']
-            peak = max((e['peak'] for e in eps), default=0.0)
-            word = escalation_word(peak)
+            flagged = []                                              # the parts the Track page flags: the card and the graphs now say the same thing
+            if m['has_series'] and m['verdicts']:
+                import track
+                flagged = [(i, f) for i, f in enumerate(track.escalation_flags(m)) if f['level']]
+            peak = max((f['climb'] for _i, f in flagged), default=0.0)
+            word = escalation_word(peak) if flagged else 'none'
+            if flagged and word == 'none':
+                word = 'small'
             card.update({'level': ESCALATION_LABEL[word], 'word': word, 'tone': {'none': 'good', 'small': 'info', 'clear': 'warn', 'steep': 'bad'}[word], 'peak': peak})
             if not m['has_series'] or not m['verdicts']:                # nothing could be judged: never a green 'None'
                 card.update(level=ESCALATION_LABEL['early'], word='early', tone='info')
@@ -446,17 +452,20 @@ def cards(m) -> list:
                 card['headline'] = f'Needs at least {MIN_TIMELINE} messages to follow the mood over time.'
             elif not m['verdicts']:
                 card['headline'] = f'Needs at least {MIN_VERDICT} messages to spot heated moments.'
-            elif not eps:
+            elif not flagged:
                 card['headline'] = 'No heated moments.'
             else:
-                big = max(eps, key=lambda e: e['peak'])
-                card['headline'] = (f'1 heated moment, {big["where"]}.' if len(eps) == 1 else f'{len(eps)} heated moments, the biggest {big["where"]}.')
+                red = sum(1 for _i, f in flagged if f['level'] == 'red')
+                yellow = len(flagged) - red
+                big_i = max(flagged, key=lambda x: x[1]['climb'])[0]
+                said = ' and '.join(x for x in (f'{red} red flag{"" if red == 1 else "s"}' if red else '', f'{yellow} yellow flag{"" if yellow == 1 else "s"}' if yellow else '') if x)
+                card['headline'] = f'{said}, the biggest {where_phrase(big_i, big_i, len(stretches))}.' if len(flagged) > 1 else f'{said}, {where_phrase(big_i, big_i, len(stretches))}.'
             card['trend'] = ''
             hottest = max((s['rates']['heated'] for s in stretches), default=0.0)
             card['note'] = ('The mood was already tense when the messages start. Escalation only counts a rise.' if m['opening_heated'] and m['verdicts'] else
-                            'Some parts were heated, but none climbed sharply above the parts before it, so no heated moment is counted.' if m['verdicts'] and not eps and whole(hottest) >= 30 else '')
-            card['count'] = len(eps) if m['verdicts'] else None
-            if m['opening_heated'] and m['verdicts'] and not eps:       # hot from the first part: a rise could not be seen, so no green mark
+                            'Some parts were heated, but none climbed above the parts before it, so no part is flagged.' if m['verdicts'] and not flagged and whole(hottest) >= 30 else '')
+            card['count'] = len(flagged) if m['verdicts'] else None
+            if m['opening_heated'] and m['verdicts'] and not flagged:       # hot from the first part: a rise could not be seen, so no green mark
                 card['tone'] = 'info'
         else:
             word = level_word(kind, rate(o, kind), m['scale'])
