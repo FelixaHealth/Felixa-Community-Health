@@ -4,7 +4,7 @@
 {{ assets|safe }}
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><a href="/analysis/{{ aid }}/track/escalation">Escalation</a><span aria-hidden="true">/</span><span aria-current="page">Incident {{ item.n }}</span></nav>
 {% include "_rnav.html" %}
-<nav class="views"><a class="back" href="{{ back[0] }}">{{ icon('back') }} Back to {{ back[1] }}</a><span class="views-crumb">Incident {{ item.n }} of {{ found|length }}</span></nav>
+<nav class="views sticky"><a class="back" data-back href="{{ back[0] }}">{{ icon('back') }} Back to {{ back[1] }}</a><span class="views-crumb">Incident {{ item.n }} of {{ found|length }}</span></nav>
 <section class="results-head"><div class="rh-main"><h1>Incident {{ item.n }} of {{ found|length }}</h1><p class="lead">{{ item.range }}{% if item.minutes is not none %} · {{ item.minutes }} min{% endif %} · {{ item.messages }} message{{ '' if item.messages == 1 else 's' }}</p></div>
 <div class="head-actions"></div></section>
 

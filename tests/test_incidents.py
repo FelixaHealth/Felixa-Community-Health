@@ -63,6 +63,9 @@ class Pages(AppCase):
             if first.status_code == 200:
                 self.assertIn('Take it apart', first.text)
                 self.assertIn('Escalation starts', first.text)
+                self.assertIn('data-back', first.text)
+                self.assertIn('Back to Escalation', first.text)
+                self.assertIn('Back to High Risk', self.client.get(f'/analysis/{aid}/incident/1?src=safety').text)
 
 
 if __name__ == '__main__':

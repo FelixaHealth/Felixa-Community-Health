@@ -210,3 +210,11 @@ document.addEventListener('click', e => {
     apply();
   });
 })();
+
+// Back to the previous view: when the reader came from a page of this app, go back to exactly where they were (the same view, the same place on the page).
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a[data-back]'); if (!a) return;
+  let same = false;
+  try { same = !!document.referrer && new URL(document.referrer).host === location.host && history.length > 1; } catch (err) { same = false; }
+  if (same) { e.preventDefault(); history.back(); }
+});
