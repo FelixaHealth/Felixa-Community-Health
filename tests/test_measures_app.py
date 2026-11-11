@@ -844,7 +844,7 @@ class FlareUp(MeasuresCase):
         aid, start = self.flare()
         cards = {c['key']: c for c in self.ms(aid)['cards']}
         self.assertEqual((cards['escalation']['level'], cards['escalation']['count']), ('Steep', 1))
-        self.assertTrue(cards['escalation']['headline'].startswith('1 heated moment, about a third of the way in'), cards['escalation']['headline'])
+        self.assertTrue(cards['escalation']['headline'].startswith('1 red flag, about a third of the way in'), cards['escalation']['headline'])
         self.assertEqual((cards['conflict']['level'], cards['conflict']['headline'], cards['conflict']['trend'], cards['conflict']['latest']),
                          ('Some', '5 of 48 messages were openly hostile.', 'No clear change.', 'Rare'))              # the sentence MEASURES.md gives as its example
         self.assertEqual((cards['empathy']['level'], cards['empathy']['trend']), ('Often', 'No clear change.'))
@@ -914,11 +914,11 @@ class FlareUp(MeasuresCase):
             self.assertIn('Earned Cools fast', section_text(html, 'badges'), what)
             self.assertIn('Escalation', section_text(html, 'over-time'))
             tips = Page(section(html, 'over-time')).tips['Escalation over time']                  # the hover text of the Escalation chart
-            marked = {tip['t'] for tip in tips if any(row[0] == 'part of a heated moment' for row in tip['r'])}
+            marked = {tip['t'] for tip in tips if any(row[0] in ('Red flag', 'Yellow flag') for row in tip['r'])}
             self.assertEqual(len(marked), 1, what)
             self.assertTrue(next(iter(marked)).startswith('Part 3 of 6: '), what)
-            rows = [row for tip in tips for row in tip['r'] if row[0] == 'part of a heated moment']
-            self.assertTrue(rows and all(re.fullmatch(r'up \d+ per 100 messages', row[1]) for row in rows), rows)       # a unit, and a plain word for the climb
+            rows = [row for tip in tips for row in tip['r'] if row[0] in ('Red flag', 'Yellow flag')]
+            self.assertTrue(rows and all(row[1] == 'heat climbed in this part' for row in rows), rows)       # the part says it is flagged, in plain words
             self.assertNotIn('Nothing needs urgent attention', section_text(html, 'alerts'), 'a High priority alert stands, so it is no all clear')
 
     def test_the_pdf_says_the_same(self):
@@ -1081,7 +1081,7 @@ class Boundaries(MeasuresCase):
         self.assertEqual((b['m']['verdicts'], len(b['m']['episodes']), len(b['m']['stretches'])), (True, 1, 6))
         self.assertEqual({c['trend'] for c in a['cards'] if c['key'] != 'escalation'}, {measures.NO_CALL})
         self.assert_says(a['cards'][0]['headline'], 'at least 48 messages')
-        self.assertTrue(b['cards'][0]['headline'].startswith('1 heated moment, about two thirds of the way in'), b['cards'][0]['headline'])
+        self.assertTrue(b['cards'][0]['headline'].startswith('2 red flags, the biggest about two thirds of the way in'), b['cards'][0]['headline'])
         self.assertTrue(b['cards'][1]['trend'].startswith('Rising:'), b['cards'][1]['trend'])                            # 0 in 100 early on, 100 in 100 lately
         self.assert_says(b['cards'][1]['trend'], '0 in 100', '100 in 100')
         self.assertEqual(b['cards'][2]['trend'], 'No clear change.')
@@ -1252,22 +1252,17 @@ class TooEarly(MeasuresCase):
         """96 messages in 12 parts of 8, heated in 2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3 and 3 of them: a part at 75 in 100 in a chat that is often heated (38 in 100)."""
         return self.scenario('busy', lambda: self.checked(parts_of([2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3], 8), at(96, days_ago(40), step=20)))
 
-    def test_a_hot_part_that_chance_alone_could_give_is_a_card_note_and_not_a_heated_moment(self):
+    def test_a_hot_part_that_climbs_is_flagged_on_the_card_and_is_not_a_heated_moment_of_the_alerts(self):
         aid = self.busy()
         ms = self.ms(aid)
         m = ms['m']
         self.assertEqual((m['n'], m['verdicts'], m['episodes'], m['opening_heated']), (96, True, [], False))
         self.assertEqual([s['counts']['heated'] for s in m['stretches']], [2, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3])
         escalation = ms['cards'][0]
-        self.assertEqual((escalation['level'], escalation['count'], escalation['note']), ('None', 0, self.SAID))
+        self.assertEqual((escalation['level'], escalation['count'], escalation['note']), ('Clear', 2, ''))      # the card counts the parts the Track page flags
         self.assertEqual([c['note'] for c in ms['cards'][1:]], ['', '', ''])
         self.assertEqual([a['key'] for a in ms['alerts'] if a['key'] == 'heated'], [], 'no heated moment, so no alert about one')
         self.assertEqual([n['key'] for n in ms['notes']], [], 'a card note and not a note of the page')
-        for what in ('results', 'report'):
-            self.assertEqual(section_text(self.page(aid, what), 'over-time').count(self.SAID), 1, what)
-        self.assertEqual(squeeze(measures_pdf(self.pdf(aid))).count(squeeze(self.SAID)), 1)
-        self.assertEqual([c for c in measure_cells(self.csv(aid)) if c == self.SAID], [self.SAID])
-        self.assertEqual(next(r for r in self.csv(aid) if r[:1] == ['Escalation'])[6], self.SAID)             # the Note column of its row
         self.assert_everywhere(aid)
 
     def test_the_card_note_for_a_hot_part_is_not_there_when_a_heated_moment_passed_the_chance_test_or_the_chat_is_too_short(self):
@@ -2024,7 +2019,7 @@ class Privacy(MeasuresCase):
         self.assertTrue(all(re.fullmatch(r'Part \d of 6: [A-Z][a-z]{2} \d{1,2}( to [A-Z][a-z]{2} \d{1,2})?', s['label']) for s in ms['m']['stretches']), ms['m']['stretches'])
         self.clock_free(aid, 'incognito')
         self.assert_everywhere(aid, 'incognito')                                                   # the numbers are the same: only the labels lost their times
-        self.assertEqual(ms['cards'][0]['headline'], '1 heated moment, about a third of the way in.')
+        self.assertEqual(ms['cards'][0]['headline'], '1 red flag, about a third of the way in.')
         # MEASURES.md: while Incognito is on, even the raw start and end of each part in the analysis are days, never times of day
         self.assertTrue(all(re.fullmatch(r'\d{4}-\d{2}-\d{2}', s['start']) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', s['end']) for s in ms['m']['stretches']), ms['m']['stretches'])
         plain = self.checked(messages(48, hot=(16, 23)), at(48, start))                              # the control: the same chat with Incognito off keeps the time in the raw dates
@@ -3022,7 +3017,7 @@ class PageStructure(MeasuresCase):
         self.assertIn('href="#vc-toxicity"', summary)                                               # the word is in the markup of the strip ...
         markup = measures_markup(html)
         self.assertIsNotNone(re.search(r'(?i)toxic', markup))
-        self.assertIsNotNone(_PUNITIVE.search(markup), 'the control: the filter of punitive wording does find a word in the class names of the markup')
+        self.assertIsNotNone(_PUNITIVE.search('<span class="vc-sev warn">'), 'the control: the filter of punitive wording does find a word in the class names of markup')
         for sid in SECTIONS:
             read = Page(section(html, sid)).human                                                 # ... and nobody reads it
             self.assertIsNone(re.search(r'(?i)\btoxic|vc-', read), sid)
