@@ -87,12 +87,12 @@ import html as _html
 from collections import Counter
 
 _E = _html.escape
-YELLOW, RED, INK = '#fab219', '#d03b3b', '#16251d'
+YELLOW, RED, GREEN, INK = '#fab219', '#d03b3b', '#2e9e5b', '#16251d'
 
 
 def _flag(x, y, kind):
-    c = YELLOW if kind == 'Y' else RED
-    return f'<g data-g="{"escalation" if kind == "Y" else "conflict"}"><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
+    c = {'Y': YELLOW, 'R': RED, 'G': GREEN}[kind]
+    return f'<g data-g="{ {"Y": "escalation", "R": "conflict", "G": "deescalation"}[kind] }"><line x1="{x:.0f}" y1="{y:.0f}" x2="{x:.0f}" y2="{y - 22:.0f}" stroke="{INK}" stroke-width="1.6"/><path d="M{x:.0f} {y - 22:.0f} L{x + 15:.0f} {y - 17:.0f} L{x:.0f} {y - 12:.0f} Z" fill="{c}"/></g>'
 
 
 def _buckets(msgs, timed):
@@ -132,28 +132,29 @@ def over_time(aid, hr) -> dict:
     units = store.rated_text_units(aid)
     msgs, timed = incidents.messages(units)
     uids, by_uid, cat_of = hr['uids'], hr['by_uid'], hr['cat_of']
-    buckets = _buckets(msgs, timed)
-    if not buckets:
-        return {}
-    where = {i: k for k, (_l, idx) in enumerate(buckets) for i in idx}
-    flags: dict = {}
-    for inc in incidents.find(units):
-        if inc['start'] is not None and inc['start']['i'] in where:
-            flags.setdefault(where[inc['start']['i']], set()).add('Y')
-        if inc['turn'] is not None and inc['turn']['i'] in where:
-            flags.setdefault(where[inc['turn']['i']], set()).add('R')
     found = incidents.find(units)
     inc_of = {}
     for inc in found:
         for i in range(inc['start']['i'], inc['end']['i'] + 1):
             inc_of[i] = inc
+    buckets, meta = [], []                                        # one bar for each incident, and one for the High Risk messages that fell outside every incident
+    for inc in found:
+        buckets.append((f'Incident {inc["n"]}', list(range(inc['start']['i'], inc['end']['i'] + 1))))
+        meta.append(inc)
+    outside = [i for i in range(len(msgs)) if i not in inc_of]
+    if any(msgs[i]['uid'] in uids for i in outside):
+        buckets.append(('Outside incidents', outside))
+        meta.append(None)
+    if not buckets:
+        return {}
     days = []
-    for k, (label, idx) in enumerate(buckets):
+    for k, ((label, idx), inc) in enumerate(zip(buckets, meta)):
+        hit = [i for i in idx if msgs[i]['uid'] in uids]
         q = [{'text': msgs[i]['text'], 'when': msgs[i]['when'].strftime('%H:%M') if timed and hasattr(msgs[i]['when'], 'strftime') else '', 'behaviour': ', '.join(by_uid.get(msgs[i]['uid'], [])),
-              'inc': inc_of[i]['n'] if i in inc_of else None, 'turn': bool(i in inc_of and inc_of[i]['turn'] is not None and inc_of[i]['turn']['i'] == i)}
-             for i in idx if msgs[i]['uid'] in uids]
-        links = sorted({(x['inc'], inc_of[i]['level']) for x, i in zip(q, [i for i in idx if msgs[i]['uid'] in uids]) if x['inc']})
-        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': sorted(flags.get(k, []), reverse=True), 'k': k, 'incidents': links, 'detail': _detail(msgs, idx, timed)})
+              'inc': inc['n'] if inc else None, 'turn': bool(inc and inc['turn'] is not None and inc['turn']['i'] == i)} for i in hit]
+        fl = sorted(({'Y'} | ({'R'} if inc['turn'] is not None else set()) | ({'G'} if inc['calm'] else set())) if inc else set(), key=lambda f: 'YRG'.index(f))
+        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': [(inc['n'], inc['level'])] if inc else [],
+                     'detail': _detail(msgs, idx, timed) if inc else f'{len(idx)} messages not in any incident'})
     n = len(days)
     mx = max(d['count'] for d in days) or 1
     # A: bars
@@ -162,7 +163,8 @@ def over_time(aid, hr) -> dict:
     a = ''
     for d in days:
         h = d['count'] / mx * 100
-        x, w = d['k'] * bw + min(10, bw * .15), bw - 2 * min(10, bw * .15)
+        w = min(bw - 2 * min(10, bw * .15), 72)
+        x = d['k'] * bw + (bw - w) / 2
         y = 150 - h
         a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
         if d['count']:
@@ -172,7 +174,7 @@ def over_time(aid, hr) -> dict:
         a += '</g>'
         if n <= 12 or d['k'] % ((n + 9) // 10) == 0 or d['k'] == n - 1:
             a += f'<text x="{d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="middle">{_E(d["label"])}</text>'
-    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found per part of the chat, with flags">{a}</svg>'
+    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each incident, with flags">{a}</svg>'
     # B: dots by category
     rows = [c for c, _b in CATEGORIES if any(cat_of.get(b) == c for i in range(len(msgs)) if msgs[i]['uid'] in uids for b in by_uid.get(msgs[i]['uid'], []))]
     svg_b = ''
@@ -197,13 +199,13 @@ def over_time(aid, hr) -> dict:
                 if msgs[i]['uid'] not in uids:
                     continue
                 m = msgs[i]
-                frac = (m['when'].hour * 60 + m['when'].minute) / 1440 if timed and hasattr(m['when'], 'hour') and (buckets[0][0][:4] != 'Part') else (pos + .5) / max(len(idx), 1)
+                frac = (pos + .5) / max(len(idx), 1)
                 for bname in by_uid.get(m['uid'], [])[:1]:
                     r = rows.index(cat_of[bname])
                     b += f'<circle data-g="highrisk" cx="{lab + k * cw + frac * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(m["text"][:80])}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
-    per = round(sum(len(idx) for _l, idx in buckets) / len(buckets)) if buckets else 0
-    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'per': per, 'n': len(buckets), 'by_day': not buckets[0][0].startswith('Part') and ':' not in buckets[0][0]}
+    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': len(buckets), 'by_incident': True,
+            'gap': f'{incidents.DEFAULT_GAP} minutes' if timed else f'{incidents.QUIET_MESSAGES} messages'}
 
 
 def lane(bars) -> list:
