@@ -1782,12 +1782,9 @@ def results_nav(aid, ctx, current):
     ms = ctx.get('measures')
     has = screens_with_results(ctx)
     out = []
-    for key in ('vibe', 'health'):
+    for key in ('health',):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
-    if ms:
-        out.append(('track', 'Track', 'trend', f'/analysis/{aid}/track/trends', current in TRACK_VIEWS))
-        out.append(('passive', 'Passive-aggressive', 'chat', f'/analysis/{aid}/results/passive', current == 'passive'))
     for key in ('alerts',):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
@@ -1819,6 +1816,8 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
     """One kind of result on a screen of its own."""
     if screen not in RESULT_SCREENS:
         not_found()
+    if screen == 'passive':                                       # Passive-aggressive is a view of Sentiment now
+        return RedirectResponse(f'/analysis/{aid}/results/sentiment?view=passive', 303)
     ctx = results_context(aid, f'{RESULT_SCREENS[screen][0]} screen')
     nav = results_nav(aid, ctx, screen)
     if not screens_with_results(ctx).get(screen):
@@ -1828,7 +1827,9 @@ def results_screen(request: Request, aid: AnalysisId, screen: str, compare: str 
         act = actview.build(ctx, compare)
     extra = {}
     if screen == 'sentiment':
-        view = view if view in ('overview', 'phases') else 'overview'
+        view = view if view in ('overview', 'phases', 'passive') else 'overview'
+        if view == 'passive' and not ctx.get('measures'):
+            view = 'overview'
         extra['sview'] = view
         fam = ctx.get('families') or []
         extra['family_figure'] = vibe_check.figure(lambda w: dashboard.hbars([(f['name'], f['avg_fas'], {'Positive': 'green', 'Tense': 'warn', 'Toxic': 'crit'}.get(f['name'], 'pos'), f"{f['avg_fas']:.1f} · strongest {f['top']}") for f in fam],
