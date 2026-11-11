@@ -5,13 +5,13 @@
 <nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">Track</span></nav>
 {% include "_rnav.html" %}
 {% include "_views.html" %}
-<section class="results-head"><div class="rh-main"><h1>Trends</h1><p class="lead">Escalation, Conflict, Empathy and Deescalation on one graph. Pick a view above to look at one of them closely.</p></div>
+<section class="results-head"><div class="rh-main"><h1>Trends</h1><p class="lead">Escalation, Empathy and Deescalation over time on one graph. Conflict has its own view above.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results">{{ icon('back') }} Back to results</a></div></section>
-<div class="dash-kpis">{% for c in track_view.cards %}<div class="dash-kpi"><small>{{ c.name }}</small><strong>{{ c.latest }}</strong><span>per 100 messages, latest part</span></div>{% endfor %}</div>
+<div class="dash-kpis">{% for c in track_view.cards if c.key != 'conflict' %}<div class="dash-kpi"><small>{{ c.name }}</small><strong>{{ c.latest }}</strong><span>per 100 messages, latest part</span></div>{% endfor %}</div>
 {% if track_view.early %}<p class="small-note"><strong>Early reading.</strong> There are fewer than 48 messages on the timeline, so a part can be flagged yellow but not red yet.</p>{% endif %}
-<section class="panel vc"><h2>Does empathy change conflict and escalation?</h2>
+<section class="panel vc"><h2>Does empathy change escalation?</h2>
 {{ track_view.compare|safe }}
-<ul class="track-legend" data-toggle="trends-{{ aid }}"><li data-g="empathy"><i class="lg cat3"></i>Empathy</li><li data-g="conflict"><i class="lg crit"></i>Conflict</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li data-g="deescalation"><i class="lg blue"></i>Deescalation</li>{% endif %}<li data-g="highrisk"><i class="flag black">R</i> High Risk flag (held)</li></ul>
+<ul class="track-legend" data-toggle="trends-{{ aid }}"><li data-g="empathy"><i class="lg cat3"></i>Empathy</li><li data-g="escalation"><i class="lg warn"></i>Escalation</li>{% if track_view.de %}<li data-g="deescalation"><i class="lg blue"></i>Deescalation</li>{% endif %}<li data-g="highrisk"><i class="flag black">R</i> High Risk flag (held)</li></ul>
 
-<div class="track-link">{% for s in track_view.link.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link.caution %}<p class="small-note">{{ track_view.link.caution }}</p>{% endif %}</div></section>
+<div class="track-link">{% for s in track_view.link_trends.sentences %}<p>{{ s }}</p>{% endfor %}{% if track_view.link_trends.caution %}<p class="small-note">{{ track_view.link_trends.caution }}</p>{% endif %}</div></section>
 </div></div>{% endblock %}

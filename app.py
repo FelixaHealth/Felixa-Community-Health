@@ -1736,12 +1736,12 @@ def report_page(request: Request, aid: AnalysisId):
     return render(request, 'report.html', **ctx)
 
 
-def track_views(ms, only=None, de=None, black=None, green=None):
+def track_views(ms, only=None, de=None, black=None, green=None, conflict=True):
     """What the Track tab and its pages draw: for each of Escalation, Conflict and Empathy the headline numbers, the flags and a figure; and the three together."""
     if not track.available(ms):
         return None
     m = ms['m']
-    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de, black=black, green=green)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'k': len(m['stretches']), 'early': not m['verdicts']}
+    out = {'cards': [], 'compare': vibe_check.figure(lambda w: bei_charts.track_compare(m['stretches'], width=w, deescalation=de, black=black, green=green, conflict=conflict)), 'de': bool(de and len(de) == len(m['stretches'])), 'link': track.link(m), 'link_trends': track.link(m, ('escalation',)), 'k': len(m['stretches']), 'early': not m['verdicts']}
     for key in track.KEYS:
         if only and key != only:
             continue
@@ -1906,7 +1906,7 @@ def trends_page(request: Request, aid: AnalysisId):
     ctx = report_context(aid, 'trends')
     units = store.rated_text_units(aid)
     view = track_views(ctx['measures'], de=deescalation.series(ctx['measures']['m'], units), black=safety_module.part_counts(len(ctx['measures']['m']['stretches']), units, safety_module.flagged_uids(aid)),
-                       green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), units)) if ctx.get('measures') else None
+                       green=incidents.calm_parts(len(ctx['measures']['m']['stretches']), units), conflict=False) if ctx.get('measures') else None
     if not view:
         raise PageError(404, 'Too few messages for a timeline', 'Trends need at least 24 rated messages to follow a chat over time.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     return render(request, 'trends.html', vnav=track_nav(aid, 'trends'), track_view=view, key='trends', rnav=results_nav(aid, ctx, 'trends'), **ctx)

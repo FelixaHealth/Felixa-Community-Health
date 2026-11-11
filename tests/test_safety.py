@@ -184,3 +184,22 @@ class SentimentPhases(unittest.TestCase):
         self.assertEqual(tox['de_n'], 0)
         emp = next(a for a in out['attributes'] if a['name'] == 'Empathetic')
         self.assertEqual(emp['esc_n'], 0)
+
+
+class TrendsWithoutConflict(unittest.TestCase):
+    def test_trends_can_leave_conflict_to_its_own_view(self):
+        import bei_charts
+        import track
+        from vibe_check.charts import to_svg
+        st = [{'label': f'p{i}', 'axis': f'p{i}', 'rates': {'heated': i, 'hostile': i / 2, 'care': 3}} for i in range(5)]
+        svg = to_svg(bei_charts.track_compare(st, width=700, conflict=False), 't3')
+        self.assertNotIn('data-g="conflict"', svg)
+        self.assertNotIn('Conflict', svg)
+        self.assertIn('data-g="escalation"', svg)
+        self.assertIn('data-g="conflict"', to_svg(bei_charts.track_compare(st, width=700), 't4'))
+
+    def test_the_trends_sentences_leave_conflict_out(self):
+        import track
+        m = {'stretches': [{'rates': {'care': i % 3, 'hostile': i % 2, 'heated': i % 4}} for i in range(8)]}
+        out = track.link(m, ('escalation',))
+        self.assertTrue(all('conflict' not in s for s in out['sentences']))

@@ -174,16 +174,16 @@ def _strength(r):
     return 'a strong' if r >= 0.6 else 'a clear' if r >= 0.4 else 'a weak'
 
 
-def link(m):
+def link(m, kinds=('conflict', 'escalation')):
     """Does empathy go with less conflict and escalation? Plain sentences from the per-part rates, or an honest 'not enough parts'. Never a claim of cause."""
     st = m['stretches']
     k = len(st)
     care, hostile, heated = ([_rate(s, kind) for s in st] for kind in ('care', 'hostile', 'heated'))
     out = {'k': k, 'ready': k >= MIN_FOR_LINK, 'sentences': [], 'r': {}}
     if not out['ready']:
-        out['sentences'].append(f'There are {k} parts so far. With {MIN_FOR_LINK} or more parts the page says whether empathy goes with less conflict and escalation.')
+        out['sentences'].append(f'There are {k} parts so far. With {MIN_FOR_LINK} or more parts the page says whether empathy goes with less ' + ' and '.join(kinds) + '.')
         return out
-    for key, series, word in (('conflict', hostile, 'conflict'), ('escalation', heated, 'escalation')):
+    for key, series, word in [x for x in (('conflict', hostile, 'conflict'), ('escalation', heated, 'escalation')) if x[0] in kinds]:
         same = _pearson(care, series)
         nxt = _pearson(care[:-1], series[1:])
         out['r'][key] = {'same': same, 'next': nxt}

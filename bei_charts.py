@@ -455,12 +455,14 @@ def black_flag(sc, x, y) -> None:
     sc.poly([(x, y), (x + 12, y + 4.5), (x, y + 9)], stroke='black', width=1, fill='black', close=True)
 
 
-def track_compare(stretches, *, width=W, deescalation=None, black=None, green=None):
+def track_compare(stretches, *, width=W, deescalation=None, black=None, green=None, conflict=True):
     """Escalation, Conflict and Empathy on one scale (messages per 100), one line each, so that a rise in one can be read against the others."""
     n = len(stretches)
     if n < 2:
         return None
     series = {k: [float(st['rates'][kind]) for st in stretches] for k, kind in (('escalation', 'heated'), ('conflict', 'hostile'), ('empathy', 'care'))}
+    if not conflict:                                                 # the Trends page leaves Conflict to its own view
+        series.pop('conflict')
     if deescalation and len(deescalation) == n:                      # the blue line: calming messages after heat, per 100
         series['deescalation'] = [float(v) for v in deescalation]
     narrow = width < 600
@@ -472,9 +474,12 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None, green=No
     top = ticks[-1]
     X = lambda i: ml + pw * i / (n - 1)                          # noqa: E731
     Y = lambda v: mt + ph * (1 - min(max(v, 0.0), top) / top)    # noqa: E731
-    desc = ('Escalation, conflict and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, conflict %d, empathy %d.'
-            % (n, _whole(series['escalation'][-1]), _whole(series['conflict'][-1]), _whole(series['empathy'][-1])))
-    sc = Scene(width, height, 'Escalation, conflict and empathy together', desc)
+    if conflict:
+        desc = ('Escalation, conflict and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, conflict %d, empathy %d.'
+                % (n, _whole(series['escalation'][-1]), _whole(series['conflict'][-1]), _whole(series['empathy'][-1])))
+    else:
+        desc = ('Escalation and empathy in each of %d parts of the chat, as messages per 100. At the end: escalation %d, empathy %d.' % (n, _whole(series['escalation'][-1]), _whole(series['empathy'][-1])))
+    sc = Scene(width, height, 'Escalation, conflict and empathy together' if conflict else 'Escalation and empathy together', desc)
     for t in ticks:
         sc.line(ml, Y(t), width - mr, Y(t), 'axis' if t == 0 else 'grid', 1)
         sc.text(ml - 8, Y(t) + tick_size * 0.33, _whole(t), size=tick_size, fill='ink2', anchor='end')
@@ -510,8 +515,10 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None, green=No
     sc.group(None)
     step = pw / (n - 1)
     for i, st in enumerate(stretches):
-        rows = [['Escalation', f'{_whole(series["escalation"][i])} per 100', TRACK_LINE['escalation']], ['Conflict', f'{_whole(series["conflict"][i])} per 100', TRACK_LINE['conflict']],
-                ['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']]]
+        rows = [['Escalation', f'{_whole(series["escalation"][i])} per 100', TRACK_LINE['escalation']]]
+        if 'conflict' in series:
+            rows.append(['Conflict', f'{_whole(series["conflict"][i])} per 100', TRACK_LINE['conflict']])
+        rows.append(['Empathy', f'{_whole(series["empathy"][i])} per 100', TRACK_LINE['empathy']])
         if 'deescalation' in series:
             rows.append(['Deescalation', f'{_whole(series["deescalation"][i])} per 100', TRACK_LINE['deescalation']])
         if green and green[i]:
