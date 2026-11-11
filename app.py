@@ -1779,7 +1779,7 @@ def results_nav(aid, ctx, current):
         if has[key]:
             out.append((key, RESULT_SCREENS[key][0], RESULT_SCREENS[key][1], f'/analysis/{aid}/results/{key}', current == key))
     if ms and safety_module.AVAILABLE:
-        out.append(('safety', 'Safety', 'warning', f'/analysis/{aid}/safety', current == 'safety'))
+        out.append(('safety', 'High Risk', 'warning', f'/analysis/{aid}/safety', current == 'safety'))
     return out
 
 
@@ -1856,9 +1856,9 @@ def safety_page(request: Request, aid: AnalysisId):
     """The Safety module: what the FBSI detectors keep for a person to read. Held, never live; questions, never verdicts."""
     ctx = report_context(aid, 'safety')
     if not safety_module.AVAILABLE:
-        raise PageError(404, 'The Safety module is not installed', 'The FBSI engine files are not on this computer. See fbsi/README.md.', back=(f'/analysis/{aid}/results', 'Back to the results'))
+        raise PageError(404, 'The High Risk module is not installed', 'The FBSI engine files are not on this computer. See fbsi/README.md.', back=(f'/analysis/{aid}/results', 'Back to the results'))
     if not store.count_units(aid):
-        raise PageError(404, 'No messages yet', 'Add messages first: the Safety module reads them.', back=(f'/analysis/{aid}/analytics', 'Open Analytics'))
+        raise PageError(404, 'No messages yet', 'Add messages first: the High Risk module reads them.', back=(f'/analysis/{aid}/analytics', 'Open Analytics'))
     nav = results_nav(aid, ctx, 'safety') if ctx.get('measures') else []
     return render(request, 'safety.html', safety=safety_module.build(aid), rnav=nav, **ctx)
 

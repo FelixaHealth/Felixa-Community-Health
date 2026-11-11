@@ -437,7 +437,7 @@ def track_chart(key, name, stretches, flags, *, width=W, black=None):
         if f['level']:
             rows.append(['flag', 'Red flag' if f['level'] == 'red' else 'Yellow flag', 'crit' if f['level'] == 'red' else 'warn'])
         if black and black[i]:
-            rows.append(['Safety flag', f'{black[i]} held', 'black'])
+            rows.append(['High Risk flag', f'{black[i]} held', 'black'])
         sc.hit(max(ml, X(i) - step / 2), mt - 12, min(step, pw), ph + 12, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
@@ -502,7 +502,7 @@ def track_compare(stretches, *, width=W, deescalation=None, black=None):
         if 'deescalation' in series:
             rows.append(['Deescalation', f'{_whole(series["deescalation"][i])} per 100', TRACK_LINE['deescalation']])
         if black and black[i]:
-            rows.append(['Safety flag', f'{black[i]} held', 'black'])
+            rows.append(['High Risk flag', f'{black[i]} held', 'black'])
         sc.hit(max(ml, X(i) - step / 2), mt, min(step, pw), ph, {'t': st['label'], 'r': rows}, X(i))
     sc.cross(mt, mt + ph)
     return sc
@@ -580,7 +580,7 @@ def incident_chart(bars, *, width=W):
     for k, b in enumerate(bars):
         x = ml + slot * k + (slot - bw) / 2
         base = mt + ph
-        tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']] + ([['Safety flag', f"{b['black']} held", 'black']] if b.get('black') else [])
+        tip_rows = [['Openly hostile', str(b['hostile']), 'crit'], ['Heated', str(b['heated']), 'warn'], ['Calm', str(b['calm']), 'grid']] + ([['High Risk flag', f"{b['black']} held", 'black']] if b.get('black') else [])
         for key, role in (('hostile', 'crit'), ('heated', 'warn'), ('calm', 'grid')):
             h = ph * b[key] / top
             if h > 0:

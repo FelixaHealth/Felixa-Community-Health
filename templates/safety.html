@@ -1,13 +1,13 @@
-{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — Safety{% endblock %}
+{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Felixa Community Health — High Risk{% endblock %}
 {% block content %}
 <div class="shell"><div class="stage">
-<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">Safety</span></nav>
+<nav class="crumbs" aria-label="Where you are"><a href="/analysis/{{ aid }}/results">{{ a.person_name }}</a><span aria-hidden="true">/</span><span aria-current="page">High Risk</span></nav>
 {% if rnav %}{% include "_rnav.html" %}{% endif %}
-<section class="results-head"><div class="rh-main"><h1>Safety</h1><p class="lead">Messages the Safety module keeps for a person to read. It asks questions and never gives a verdict.</p></div>
+<section class="results-head"><div class="rh-main"><h1>High Risk</h1><p class="lead">Messages the High Risk module keeps for a person to read. It asks questions and never gives a verdict.</p></div>
 <div class="head-actions"><a class="btn quiet" href="/analysis/{{ aid }}/results">{{ icon('back') }} Back to results</a></div></section>
 
 <section class="panel sf-note"><p><i class="flag black">S</i> <strong>Held, not live.</strong> Nothing here sends an alert, confirms anything or triggers anything. These are unvalidated word rules: they miss a lot and can be wrong, so they only point at messages for a person to read.</p>
-<details class="ts-explain"><summary>Why is everything held?</summary><p class="small-note">A Safety alert may only go live when a named, qualified safeguarding reviewer, an independent second reviewer and an approved emergency protocol exist. This app has none of them, so every item stays held.{% if safety.missing %} Still missing: {{ safety.missing|join('; ') }}.{% endif %} The app does not keep who wrote a message, so it reads every message as one speaker: it can see a single message that threatens, but not an exchange between two people.</p></details></section>
+<details class="ts-explain"><summary>Why is everything held?</summary><p class="small-note">A High Risk alert may only go live when a named, qualified safeguarding reviewer, an independent second reviewer and an approved emergency protocol exist. This app has none of them, so every item stays held.{% if safety.missing %} Still missing: {{ safety.missing|join('; ') }}.{% endif %} The app does not keep who wrote a message, so it reads every message as one speaker: it can see a single message that threatens, but not an exchange between two people.</p></details></section>
 
 <div class="dash-kpis inc-kpis">
 <div class="dash-kpi kpi-black"><small>Held for a person</small><strong>{{ safety.held|length }}</strong><span>black flag on graphs</span></div>
@@ -21,7 +21,7 @@
 {% if i.total > i.quotes|length %}<p class="small-note">and {{ i.total - i.quotes|length }} more message{{ '' if i.total - i.quotes|length == 1 else 's' }}.</p>{% endif %}
 {% if i.note %}<p class="small-note">{{ i.note }}</p>{% endif %}<p class="small-note sf-hold">{{ i.hold_reason }}</p>
 {% if i.questions %}<details class="ts-explain"><summary>Questions for the person who reads it</summary><ul class="ts-about">{% for q in i.questions %}<li>{{ q }}</li>{% endfor %}</ul></details>{% endif %}</li>{% endfor %}</ol>
-{% else %}<p>Nothing is held. No message in this chat matched a Safety rule. That does not mean nothing happened: the rules only read certain wording.</p>{% endif %}</section>
+{% else %}<p>Nothing is held. No message in this chat matched a High Risk rule. That does not mean nothing happened: the rules only read certain wording.</p>{% endif %}</section>
 
 {% if safety.questions %}<section class="panel"><h2>Questions to ask</h2>
 <p class="small-note">A match can only start a question. Each shows the messages behind it.</p>
