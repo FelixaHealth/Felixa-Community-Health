@@ -32,7 +32,7 @@ _CACHE: dict = {}
 
 
 def _speaker(u) -> str:
-    return str(u.get('actor_role') or 'speaker')
+    return str(u.get('sender') or u.get('actor_role') or 'speaker')
 
 
 def _episodes(units):

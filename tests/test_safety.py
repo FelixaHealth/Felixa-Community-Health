@@ -87,14 +87,15 @@ class Pages(AppCase):
                 self.assertIn(needle, page.text, needle)
         else:
             self.assertNotIn('Over time', page.text)
-        self.assertEqual(len(hr['categories']), 8)
+        self.assertEqual(len(hr['categories']), 9)
         names = {b['name'] for c in hr['categories'] for b in c['behaviours']}
         self.assertTrue({'Blackmail', 'Coercion'} & names, names)
 
-    def test_forty_behaviours_in_eight_categories(self):
+    def test_forty_five_behaviours_in_nine_categories(self):
         import high_risk
-        self.assertEqual(len(high_risk.CATEGORIES), 8)
-        self.assertEqual(sum(len(b) for _c, b in high_risk.CATEGORIES), 40)
+        self.assertEqual(len(high_risk.CATEGORIES), 9)
+        self.assertEqual(sum(len(b) for _c, b in high_risk.CATEGORIES), 45)
+        self.assertEqual(high_risk.CATEGORIES[-1][0], 'Cyber Attacks & Security Threats')
 
     def test_the_summary_counts_the_held_items(self):
         aid = self.new_analysis(name='Safety Two')
@@ -203,3 +204,57 @@ class TrendsWithoutConflict(unittest.TestCase):
         m = {'stretches': [{'rates': {'care': i % 3, 'hostile': i % 2, 'heated': i % 4}} for i in range(8)]}
         out = track.link(m, ('escalation',))
         self.assertTrue(all('conflict' not in s for s in out['sentences']))
+
+
+
+class CyberAttacks(unittest.TestCase):
+    CASES = [
+        ('Your account is locked, verify here https://secure-login.example.xyz/a', 'Phishing'),
+        ('Send me your password please', 'Credential or Code Requests'),
+        ('send the code you just received', 'Credential or Code Requests'),
+        ('Run setup_update.exe now', 'Malicious Links or Files'),
+        ("I'll hack your account tonight", 'Hacking Threats'),
+        ('everyone join and spam him', 'Raids and Flooding'),
+        ('they are going to ddos the server', 'Raids and Flooding'),
+    ]
+    HARMLESS = ['Never send your password to anyone', 'Please remember to verify the numbers in the report', 'I will take over the meeting agenda',
+                'we should raid the dungeon tonight', "I'll wipe the whiteboard", 'Do not share the code you just received with anyone']
+
+    def test_each_behaviour_is_read(self):
+        import cyber_rules
+        for text, behaviour in self.CASES:
+            self.assertIn(behaviour, [f['behaviour'] for f in cyber_rules.scan(text)], text)
+
+    def test_warnings_and_everyday_wording_are_not_matches(self):
+        import cyber_rules
+        for text in self.HARMLESS:
+            self.assertEqual(cyber_rules.scan(text), [], text)
+
+    def test_the_same_line_again_and_again_is_flooding(self):
+        import cyber_rules
+        units = [{'id': i, 'text': 'join the raid now join the raid', 'timestamp': f'2026-11-09T09:0{i}:00'} for i in range(1, 5)] + [{'id': 9, 'text': 'a different line altogether', 'timestamp': '2026-11-09T09:06:00'}]
+        self.assertEqual(cyber_rules.flooding(units), {1, 2, 3, 4})
+
+    def test_the_cyber_category_is_listed_and_found_on_the_page(self):
+        import high_risk
+        self.assertTrue(set(cyber_rules_names()) <= high_risk.READ)
+
+
+def cyber_rules_names():
+    import cyber_rules
+    return cyber_rules.BEHAVIOURS
+
+
+class SenderCapture(unittest.TestCase):
+    def test_an_author_column_and_a_reply_column_are_kept(self):
+        from vibe_check import ingest
+        rows = [{'author': 'Ana', 'message': 'You never listen to anyone here, honestly', 'date': '2026-11-09 09:00', 'reply_to': 'Bo'},
+                {'author': 'Bo', 'message': 'Stop it, that is not okay please', 'date': '2026-11-09 09:01'}]
+        units = ingest.units_from_rows(rows, 't')
+        self.assertEqual([(u['sender'], u['reply_to']) for u in units], [('Ana', 'Bo'), ('Bo', None)])
+
+    def test_a_chat_label_and_a_mention_are_read_from_the_text(self):
+        import store
+        self.assertEqual(store._label_of('Alice Brown: hello there'), 'Alice Brown')
+        self.assertIsNone(store._label_of('Note: remember this'))
+        self.assertEqual(store._mention_of('hey @carol look at this'), 'carol')

@@ -133,3 +133,9 @@ Until a named reviewer, a second reviewer and an approved emergency protocol exi
 1. Is a High Risk incident its own bar on the Over time graph, separate from escalation incidents? (Recommended: yes.)
 2. Should upload capture sender and reply-to? It unlocks the two-person detectors and the strict form of the cyberbullying pattern.
 3. Is there an existing Felixa security detector for the Cyber Attacks category, or does the app build its own rules?
+
+## Decisions taken
+
+1. The Over time graph has one bar for each **High Risk incident**, separate from escalation incidents. A bar carries the flags of the escalation incident it sits in. Built.
+2. Uploads keep **who wrote** each message and **who it answers**: from `sender`, `author`, `user`, `from` or `name` columns, from a chat line label ("Alice: ..."), and from a reply column or a first @mention. With Incognito on, the stored names become "Member N". Built.
+3. The cyberbullying pattern is **not built**. **Cyber Attacks & Security Threats** is built as the ninth category with five behaviours: Phishing, Credential or Code Requests, Malicious Links or Files, Hacking Threats, Raids and Flooding. The app's own word and link rules read them (`cyber_rules.py`); they are unvalidated, every match is held for a person to read, and none gives a black flag. The AI reading of Stages 1 and 2 is still design only.

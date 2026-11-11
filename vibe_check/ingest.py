@@ -34,6 +34,8 @@ ID_KEYS = ('unit_id', 'id')
 TEXT_KEYS = ('text', 'comment', 'content', 'message', 'transcript', 'body')
 TIME_KEYS = ('timestamp', 'date', 'created_at', 'datetime', 'time')
 ROLE_KEYS = ('actor_role', 'role')
+SENDER_KEYS = ('sender', 'author', 'username', 'user', 'from', 'speaker', 'member', 'nick', 'nickname', 'name')
+REPLY_KEYS = ('reply_to', 'in_reply_to', 'replying_to', 'reply_to_user', 'replied_to', 'reply')
 SOURCE_KEYS = ('source', 'channel', 'channel_name', 'room', 'thread')
 CSV_DELIMITERS = ',;\t|'      # what can separate the columns of a CSV; a comma comes first and wins a tie (see _csv_reader)
 # The byte order marks that name the encoding of a text file (see _read_text). The UTF-32 marks come first, because the UTF-32 LE mark
@@ -183,13 +185,14 @@ def passages(text) -> list[str]:
     return [p for p in (_pack_sentences(t) if len(t) > MAX_UNIT_CHARS else [t]) if has_signal(p)]
 
 
-def _unit(text, source, timestamp=None, role=None, clean=True, external_id=None):
+def _unit(text, source, timestamp=None, role=None, clean=True, external_id=None, sender=None, reply_to=None):
     """clean=True: masked mentions and links (up to STORE_CHARS), the view Vibe Check analyses; the engine cuts long text into passages.
     clean=False: the text as written (up to STORE_CHARS), for storage."""
     body = _mask(text)[:STORE_CHARS] if clean else str(text or '').strip()[:STORE_CHARS]
     if not body or not has_signal(body):
         return None
-    return {'text': body, 'source': source, 'timestamp': timestamp or None, 'role': role or None, 'external_id': external_id or None}
+    return {'text': body, 'source': source, 'timestamp': timestamp or None, 'role': role or None, 'external_id': external_id or None,
+            'sender': (str(sender).strip()[:80] or None) if sender else None, 'reply_to': (str(reply_to).strip()[:80] or None) if reply_to else None}
 
 
 def units_from_text(text, source: str = 'Pasted text', *, timestamp=None, role=None, mode: str = 'auto', clean: bool = True) -> list[dict]:
@@ -234,7 +237,7 @@ def units_from_rows(rows, source: str = 'Upload', *, clean: bool = True) -> list
     out = []
     for r in rows:
         body = _first(r, text_keys)
-        u = _unit(body, _first(r, SOURCE_KEYS) or source, _first(r, TIME_KEYS), _first(r, ROLE_KEYS).upper() or None, clean, _first(r, ID_KEYS))
+        u = _unit(body, _first(r, SOURCE_KEYS) or source, _first(r, TIME_KEYS), _first(r, ROLE_KEYS).upper() or None, clean, _first(r, ID_KEYS), _first(r, SENDER_KEYS), _first(r, REPLY_KEYS))
         if u:
             out.append(u)
     return out

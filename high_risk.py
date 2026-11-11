@@ -1,9 +1,10 @@
-"""The High Risk page: 40 behaviours in 8 categories, and the exact messages found for each.
+"""The High Risk page: 45 behaviours in 9 categories, and the exact messages found for each.
 
 Three readers feed it: the Vibe Check flags, the Aggressive tone of the 13 tones, and the Felixa Behavioural Intelligence detectors (via safety_module). A behaviour with no reader says so;
 a zero never means "checked and clear" for those. Held items and questions are not here: they live on the Review page."""
 from __future__ import annotations
 
+import cyber_rules
 import store
 
 CATEGORIES = [
@@ -15,13 +16,15 @@ CATEGORIES = [
     ('Extremism & Dangerous Recruitment', ['Extremist Recruitment', 'Radicalization Attempts', 'Predatory Recruitment']),
     ('Privacy, Deception & Digital Abuse', ['Stalking', 'Doxxing', 'Privacy Violations', 'Impersonation', 'Fraud and Scams']),
     ('Self-Harm & Dangerous Activities', ['Self-Harm Encouragement', 'Suicide Encouragement', 'Dangerous Challenges']),
+    ('Cyber Attacks & Security Threats', list(cyber_rules.BEHAVIOURS)),
 ]
-assert sum(len(b) for _c, b in CATEGORIES) == 40
+TOTAL = sum(len(b) for _c, b in CATEGORIES)
+assert TOTAL == 45
 
 VIBE = {'threat': 'Threats', 'harassment': 'Harassment', 'hate_speech': 'Hate Speech', 'bullying': 'Bullying', 'profanity': 'Profanity', 'insult': 'Personal Attacks'}
 FBSI = {'D01': 'Threats', 'D03': 'Manipulation', 'D06': 'Social Exclusion', 'D07': 'Personal Attacks', 'D15': 'Blackmail', 'D16': 'Coercion', 'D17': 'Coercion', 'D18': 'Bullying'}
 TONE = {'Aggressive': 'Aggression'}
-READ = set(VIBE.values()) | set(FBSI.values()) | set(TONE.values())
+READ = set(VIBE.values()) | set(FBSI.values()) | set(TONE.values()) | set(cyber_rules.BEHAVIOURS)
 
 
 def _when(u) -> str:
@@ -51,6 +54,13 @@ def build(aid, safety=None) -> dict:
             text = ' '.join(str(f.get('message') or '').split())
             uid = by_text.get(text)
             add(beh, uid, text, str(f.get('timestamp') or '')[:16].replace('T', ' '), f.get('source') or '')
+    ordered = list(base.values())
+    for u in ordered:                                           # the word and link rules of Cyber Attacks & Security Threats
+        for f in cyber_rules.scan(u['text']):
+            add(f['behaviour'], u['id'], u['text'], _when(u), u.get('source_label') or '')
+    for uid in cyber_rules.flooding(ordered):                   # the same line, again and again
+        u = base[uid]
+        add('Raids and Flooding', uid, u['text'], _when(u), u.get('source_label') or '')
     if safety:
         for it in safety.get('items', []):
             beh = FBSI.get(it['detector'])
@@ -79,7 +89,7 @@ def build(aid, safety=None) -> dict:
         rows.sort(key=lambda r: -r['count'])
         cats.append({'name': name, 'count': sum(r['count'] for r in rows), 'behaviours': rows, 'none': none, 'readable': any(b in READ for b in behs)})
     return {'categories': cats, 'messages': len(all_uids) + len(texts), 'behaviours': sum(len(c['behaviours']) for c in cats), 'hit_categories': sum(1 for c in cats if c['count']),
-            'uids': all_uids, 'by_uid': by_uid, 'cat_of': cat_of, 'unread_categories': [c['name'] for c in cats if not c['readable']], 'unread_behaviours': 40 - len(READ)}
+            'uids': all_uids, 'by_uid': by_uid, 'cat_of': cat_of, 'unread_categories': [c['name'] for c in cats if not c['readable']], 'unread_behaviours': TOTAL - len(READ), 'total': TOTAL, 'n_categories': len(CATEGORIES)}
 
 
 import datetime as _dt
@@ -125,39 +135,57 @@ def _detail(msgs, idx, timed) -> str:
     return words
 
 
-def over_time(aid, hr) -> dict:
-    """The Over time views: bars per day (A) and dots per category (B), both with the Trends flags (yellow where an escalation starts, red where it turns into conflict).
-    {'svg_a', 'svg_b', 'days': [{'label','count','quotes'}], 'has_flags'}; {} when there is nothing to draw."""
+def _clusters(ordered, stamps, timed, uids) -> list:
+    """The High Risk incidents: runs of matched messages that follow each other within the quiet gap (30 minutes, or 5 messages without times), as lists of positions in `ordered`."""
     import incidents
-    units = store.rated_text_units(aid)
-    msgs, timed = incidents.messages(units)
+    groups, cur = [], []
+    for i, u in enumerate(ordered):
+        if u['id'] not in uids:
+            continue
+        if cur:
+            near = ((stamps[i] - stamps[cur[-1]]).total_seconds() / 60.0 <= incidents.DEFAULT_GAP) if timed else (i - cur[-1] <= incidents.QUIET_MESSAGES)
+            if not near:
+                groups.append(cur)
+                cur = []
+        cur.append(i)
+    if cur:
+        groups.append(cur)
+    return groups
+
+
+def over_time(aid, hr) -> dict:
+    """The Over time views: one bar for each High Risk incident (A) and dots by category inside each (B). A High Risk incident is a run of matches that follow each other within the quiet gap.
+    A bar carries the flags of the escalation incident it sits in: yellow where it starts, red where it turns into conflict, green where someone calms it.
+    {'svg_a', 'svg_b', 'days': [{'label','count','quotes','flags','incidents','detail'}], 'has_flags', 'n', 'gap'}; {} when nothing matched."""
+    import incidents
+    import measures
     uids, by_uid, cat_of = hr['uids'], hr['by_uid'], hr['cat_of']
-    found = incidents.find(units)
-    inc_of = {}
-    for inc in found:
-        for i in range(inc['start']['i'], inc['end']['i'] + 1):
-            inc_of[i] = inc
-    buckets, meta = [], []                                        # one bar for each incident, and one for the High Risk messages that fell outside every incident
-    for inc in found:
-        buckets.append((f'Incident {inc["n"]}', list(range(inc['start']['i'], inc['end']['i'] + 1))))
-        meta.append(inc)
-    outside = [i for i in range(len(msgs)) if i not in inc_of]
-    if any(msgs[i]['uid'] in uids for i in outside):
-        buckets.append(('Outside incidents', outside))
-        meta.append(None)
-    if not buckets:
+    ordered, stamps, basis, _left = measures.order_units(store.units_for(aid))
+    timed = basis == 'time'
+    groups = _clusters(ordered, stamps, timed, uids)
+    if not groups:
         return {}
+    inc_of = {}
+    for inc in incidents.find(store.rated_text_units(aid)):
+        for r in inc['rows']:
+            if r.get('inside') and r.get('uid') is not None:
+                inc_of[r['uid']] = inc
     days = []
-    for k, ((label, idx), inc) in enumerate(zip(buckets, meta)):
-        hit = [i for i in idx if msgs[i]['uid'] in uids]
-        q = [{'text': msgs[i]['text'], 'when': msgs[i]['when'].strftime('%H:%M') if timed and hasattr(msgs[i]['when'], 'strftime') else '', 'behaviour': ', '.join(by_uid.get(msgs[i]['uid'], [])),
-              'inc': inc['n'] if inc else None, 'turn': bool(inc and inc['turn'] is not None and inc['turn']['i'] == i)} for i in hit]
-        fl = sorted(({'Y'} | ({'R'} if inc['turn'] is not None else set()) | ({'G'} if inc['calm'] else set())) if inc else set(), key=lambda f: 'YRG'.index(f))
-        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': [(inc['n'], inc['level'])] if inc else [],
-                     'detail': _detail(msgs, idx, timed) if inc else f'{len(idx)} messages not in any incident'})
+    for k, g in enumerate(groups):
+        mine = [ordered[i] for i in g]
+        incs = {inc_of[u['id']]['n']: inc_of[u['id']] for u in mine if u['id'] in inc_of}
+        fl = (['Y'] if incs else []) + (['R'] if any(x['turn'] is not None for x in incs.values()) else []) + (['G'] if any(x['calm'] for x in incs.values()) else [])
+        q = [{'text': ' '.join(str(u['text'] or '').split()), 'when': stamps[i].strftime('%H:%M') if timed else '', 'behaviour': ', '.join(by_uid.get(u['id'], [])),
+              'inc': inc_of[u['id']]['n'] if u['id'] in inc_of else None,
+              'turn': bool(u['id'] in inc_of and inc_of[u['id']]['turn'] is not None and inc_of[u['id']]['turn'].get('uid') == u['id'])} for i, u in zip(g, mine)]
+        if timed:
+            a, b = stamps[g[0]], stamps[g[-1]]
+            span = f'{a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if len(g) > 1 and a.date() == b.date() else (f' to {b:%b %-d %H:%M}' if len(g) > 1 else ''))
+        else:
+            span = f'messages {g[0] + 1} to {g[-1] + 1}' if len(g) > 1 else f'message {g[0] + 1}'
+        days.append({'label': f'High Risk {k + 1}', 'count': len(q), 'quotes': q, 'flags': fl, 'k': k, 'incidents': sorted((n, x['level']) for n, x in incs.items()), 'detail': span})
     n = len(days)
     mx = max(d['count'] for d in days) or 1
-    # A: bars
     W, H = 640, 190
     bw = W / n
     a = ''
@@ -167,16 +195,14 @@ def over_time(aid, hr) -> dict:
         x = d['k'] * bw + (bw - w) / 2
         y = 150 - h
         a += f'<g class="hr-bar" data-g="highrisk" data-day="{d["k"]}"><rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" rx="4" fill="#1f3a2e"><title>{_E(d["label"])}: {d["count"]}</title></rect>'
-        if d['count']:
-            a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
+        a += f'<text class="v" x="{x + w / 2:.0f}" y="{y - 5:.0f}" text-anchor="middle">{d["count"]}</text>'
         for j, f in enumerate(d['flags']):
-            a += _flag(x + w / 2 + (j * 17 - (len(d['flags']) - 1) * 8), (y - 22 if d['count'] else 146), f)
+            a += _flag(x + w / 2 + (j * 17 - (len(d['flags']) - 1) * 8), y - 22, f)
         a += '</g>'
         if n <= 12 or d['k'] % ((n + 9) // 10) == 0 or d['k'] == n - 1:
             a += f'<text x="{d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="middle">{_E(d["label"])}</text>'
-    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each incident, with flags">{a}</svg>'
-    # B: dots by category
-    rows = [c for c, _b in CATEGORIES if any(cat_of.get(b) == c for i in range(len(msgs)) if msgs[i]['uid'] in uids for b in by_uid.get(msgs[i]['uid'], []))]
+    svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each High Risk incident, with flags">{a}</svg>'
+    rows = [c for c, _b in CATEGORIES if any(cat_of.get(b) == c for u in ordered if u['id'] in uids for b in by_uid.get(u['id'], []))]
     svg_b = ''
     if rows:
         top, rowh, lab = 44, 34, 150
@@ -194,17 +220,14 @@ def over_time(aid, hr) -> dict:
         for r, c in enumerate(rows):
             y = top + r * rowh + rowh / 2
             b += f'<text x="0" y="{y + 4:.0f}">{_E(c if len(c) < 24 else c[:22] + "…")}</text><line x1="{lab}" y1="{y:.0f}" x2="{Wb}" y2="{y:.0f}" stroke="#f1ecdd"/>'
-        for k, (_l, idx) in enumerate(buckets):
-            for pos, i in enumerate(idx):
-                if msgs[i]['uid'] not in uids:
-                    continue
-                m = msgs[i]
-                frac = (pos + .5) / max(len(idx), 1)
-                for bname in by_uid.get(m['uid'], [])[:1]:
+        for k, g in enumerate(groups):
+            for pos, i in enumerate(g):
+                u = ordered[i]
+                for bname in by_uid.get(u['id'], [])[:1]:
                     r = rows.index(cat_of[bname])
-                    b += f'<circle data-g="highrisk" cx="{lab + k * cw + frac * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(m["text"][:80])}</title></circle>'
+                    b += f'<circle data-g="highrisk" cx="{lab + k * cw + (pos + .5) / len(g) * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(str(u["text"] or "")[:80])}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
-    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': len(buckets), 'by_incident': True,
+    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': n, 'by_incident': True,
             'gap': f'{incidents.DEFAULT_GAP} minutes' if timed else f'{incidents.QUIET_MESSAGES} messages'}
 
 

@@ -151,7 +151,8 @@ CREATE INDEX IF NOT EXISTS idx_vibehist_analysis ON vibe_history(analysis_id);
 ADDED_COLUMNS = {'analyses': [('vibe_sensitivity', "TEXT DEFAULT 'medium'"), ('rated_units_total', 'INTEGER'), ('channel', 'TEXT'), ('user_name', 'TEXT'),
                               ('user_role', 'TEXT'), ('check_volume', 'INTEGER'), ('incognito', 'INTEGER DEFAULT 0'), ('engine', 'TEXT'), ('period_tz', 'INTEGER'), ('cloud_ok', 'INTEGER DEFAULT 0'),
                               ('members', 'INTEGER'), ('time_zone', 'TEXT')], 'jobs': [('cancel_requested', 'INTEGER DEFAULT 0')],
-                 'sources': [('content_hash', 'TEXT')], 'measure_history': [('gen', 'INTEGER')]}
+                 'sources': [('content_hash', 'TEXT')], 'measure_history': [('gen', 'INTEGER')],
+                 'communication_units': [('sender', 'TEXT'), ('reply_to', 'TEXT')]}
 
 
 @contextlib.contextmanager
@@ -391,6 +392,23 @@ def count_units(aid) -> int:
         return c.execute('SELECT COUNT(*) n FROM communication_units WHERE analysis_id=?', (aid,)).fetchone()['n']
 
 
+def _label_of(text):
+    """Who wrote a chat line, from its speaker label ("Alice: ..." or a WhatsApp "12/03/2026, 10:15 - Alice Brown: ..."), or None."""
+    import privacy
+    m = privacy.LABEL.match(str(text or ''))
+    if not m:
+        return None
+    name = m.group('name').strip()
+    return None if (name.lower() in privacy.NOT_NAMES or len(name) > 40) else name
+
+
+def _mention_of(text):
+    """Who a message answers or addresses: the first @mention in it, or None."""
+    import privacy
+    m = privacy.MENTION.search(str(text or ''))
+    return m.group(0).lstrip('@').strip('<>!&@') if m else None
+
+
 def add_units(aid, units, source_type: str) -> int:
     """Inserts vibe_check-style units ({'text','source','timestamp','role','external_id'}). Returns how many were stored,
     never exceeding the per-analysis cap."""
@@ -399,12 +417,13 @@ def add_units(aid, units, source_type: str) -> int:
     start = count_units(aid)
     for i, u in enumerate(units[:room], 1):
         role = str(u.get('role') or '').upper()   # no role stays NULL: a chat with many authors is not 'the person'
+        sender, reply_to = u.get('sender') or _label_of(u['text']), u.get('reply_to') or _mention_of(u['text'])
         rows.append((aid, str(u.get('external_id') or f'U{start + i:05d}')[:80], role if role in ('SUBJECT', 'AUDIENCE') else None,
-                     source_type, str(u.get('source') or 'Upload')[:200], str(u.get('timestamp') or ''), u['text']))
+                     source_type, str(u.get('source') or 'Upload')[:200], str(u.get('timestamp') or ''), u['text'], sender, reply_to))
     if rows:
         with db() as c:
-            c.executemany('INSERT INTO communication_units(analysis_id,external_id,actor_role,source_type,source_label,timestamp,text) '
-                          'VALUES(?,?,?,?,?,?,?)', rows)
+            c.executemany('INSERT INTO communication_units(analysis_id,external_id,actor_role,source_type,source_label,timestamp,text,sender,reply_to) '
+                          'VALUES(?,?,?,?,?,?,?,?,?)', rows)
     return len(rows)
 
 
@@ -522,15 +541,19 @@ def delete_analysis(aid) -> bool:
 
 
 def anonymise_units(aid) -> int:
-    """Incognito mode: replaces names in the stored messages (see privacy.scrub), for good. Returns how many messages changed."""
+    """Incognito mode: replaces names in the stored messages (see privacy.scrub) and in the sender and reply-to columns, for good. Returns how many messages changed."""
     import privacy
     names, changed = privacy.Pseudonyms(), 0
+
+    def hide(name):
+        return name if (not name or privacy.MEMBER.fullmatch(name.strip())) else names.label(name)
     with db() as c:
-        rows = c.execute('SELECT id, text FROM communication_units WHERE analysis_id=? ORDER BY id', (aid,)).fetchall()
+        rows = c.execute('SELECT id, text, sender, reply_to FROM communication_units WHERE analysis_id=? ORDER BY id', (aid,)).fetchall()
         for row in rows:
             clean = privacy.scrub(row['text'], names)
-            if clean != row['text']:
-                c.execute('UPDATE communication_units SET text=? WHERE id=?', (clean, row['id']))
+            sender, reply_to = hide(row['sender']), hide(row['reply_to'])
+            if clean != row['text'] or sender != row['sender'] or reply_to != row['reply_to']:
+                c.execute('UPDATE communication_units SET text=?, sender=?, reply_to=? WHERE id=?', (clean, sender, reply_to, row['id']))
                 changed += 1
     if changed:
         empty_log()                                     # the old text must not linger in the write-ahead log
