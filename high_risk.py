@@ -109,7 +109,20 @@ def _buckets(msgs, timed):
                 out[(d - first).days // step][1].append(i)
             return [(a, b) for a, b in out]
     spans = measures.cut(len(msgs))
+    if timed and msgs and spans:                    # one day of messages: each part is named by the time it starts
+        return [(msgs[a]['when'].strftime('%H:%M') if hasattr(msgs[a]['when'], 'strftime') else f'Part {k + 1}', list(range(a, b))) for k, (a, b) in enumerate(spans)]
     return [(f'Part {k + 1}', list(range(a, b))) for k, (a, b) in enumerate(spans or [])]
+
+
+def _detail(msgs, idx, timed) -> str:
+    """What a part or a day holds, in words: its messages by number, and its times when the chat has them."""
+    if not idx:
+        return ''
+    words = f'messages {idx[0] + 1} to {idx[-1] + 1}' if len(idx) > 1 else f'message {idx[0] + 1}'
+    if timed and hasattr(msgs[idx[0]]['when'], 'strftime'):
+        a, b = msgs[idx[0]]['when'], msgs[idx[-1]]['when']
+        words += f', {a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if a.date() == b.date() and len(idx) > 1 else (f' to {b:%b %-d %H:%M}' if len(idx) > 1 else ''))
+    return words
 
 
 def over_time(aid, hr) -> dict:
@@ -140,7 +153,7 @@ def over_time(aid, hr) -> dict:
               'inc': inc_of[i]['n'] if i in inc_of else None, 'turn': bool(i in inc_of and inc_of[i]['turn'] is not None and inc_of[i]['turn']['i'] == i)}
              for i in idx if msgs[i]['uid'] in uids]
         links = sorted({(x['inc'], inc_of[i]['level']) for x, i in zip(q, [i for i in idx if msgs[i]['uid'] in uids]) if x['inc']})
-        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': sorted(flags.get(k, []), reverse=True), 'k': k, 'incidents': links})
+        days.append({'label': label, 'count': len(q), 'quotes': q, 'flags': sorted(flags.get(k, []), reverse=True), 'k': k, 'incidents': links, 'detail': _detail(msgs, idx, timed)})
     n = len(days)
     mx = max(d['count'] for d in days) or 1
     # A: bars
@@ -189,7 +202,8 @@ def over_time(aid, hr) -> dict:
                     r = rows.index(cat_of[bname])
                     b += f'<circle data-g="highrisk" cx="{lab + k * cw + frac * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(m["text"][:80])}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
-    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days)}
+    per = round(sum(len(idx) for _l, idx in buckets) / len(buckets)) if buckets else 0
+    return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'per': per, 'n': len(buckets), 'by_day': not buckets[0][0].startswith('Part') and ':' not in buckets[0][0]}
 
 
 def lane(bars) -> list:

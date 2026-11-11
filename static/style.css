@@ -1185,3 +1185,4 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 
 .side-link.sub{margin-left:18px;padding-top:6px;padding-bottom:6px;font-size:14px;opacity:.92}.side-link.sub::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;margin-right:4px;flex:none}
 .family-links{list-style:none;padding:0;margin:10px 0}.family-links li{padding:8px 0;border-top:1px solid #eee9db}.family-links a{color:inherit;text-decoration:none}.family-links em{font-style:normal;color:#a8780f;font-weight:600;margin-left:6px}
+.hr-det{color:#6b7a72;font-weight:400;margin-left:6px;font-size:12px}

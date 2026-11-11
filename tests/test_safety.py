@@ -83,7 +83,7 @@ class Pages(AppCase):
         if ot:
             self.assertTrue(ot['svg_a'].startswith('<svg'))
             self.assertLessEqual(sum(d['count'] for d in ot['days']), len(hr['uids']))
-            for needle in ('By day', 'Escalation starts', 'Turns into conflict', 'Exact messages, day by day'):
+            for needle in ('By day', 'Escalation starts', 'Turns into conflict', 'Exact messages in each'):
                 self.assertIn(needle, page.text, needle)
         else:
             self.assertNotIn('Over time', page.text)
