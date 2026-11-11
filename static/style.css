@@ -1181,3 +1181,4 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .ab-sub{display:block;color:#4b5c53;font-size:13px;margin-top:2px}.ab-try summary{cursor:pointer;color:#6d4a07;font-weight:600;font-size:13px;margin-top:4px}.ab-try p{margin:4px 0 0;font-size:13px}
 .flag.grey{background:#d8d4c6;color:#4b5c53}.ab-off td{color:#6b7a72}
 @media(max-width:640px){.ab-table thead{display:none}.ab-table tr{display:block;padding:8px 0;border-bottom:1px solid #f0ebdc}.ab-table td{display:flex;gap:10px;border:0;padding:3px 4px;width:auto!important}.ab-table td::before{content:attr(data-label);flex:0 0 78px;font-size:11px;text-transform:uppercase;color:#6b7a72;letter-spacing:.04em;padding-top:2px}}
+.ab-group th{text-align:left;background:#f7f3e6;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#6b7a72;padding:8px 10px}
