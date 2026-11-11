@@ -13,6 +13,7 @@
 {% if card.flagged %}<p class="small-note"><span class="flag-key"><i class="flag red">R</i> Red flag</span> <span class="flag-key"><i class="flag yellow">Y</i> Yellow flag</span> The bar colour deepens as the rate climbs{% if key == 'escalation' %}; the thin line is the recent level each part is measured against{% endif %}.</p>{% else %}<p class="small-note">The bar colour deepens as the rate climbs.</p>{% endif %}
 {{ card.figure|safe }}
 {% for s in card.summary.sentences %}<p>{{ s }}</p>{% endfor %}</section>
+{% if story %}{% include "_track_story.html" %}{% endif %}
 {% if card.flagged %}<section class="panel"><div class="eyebrow">When and how</div><h2>Where it emerged and intensified</h2>
 {% if card.events %}<ol class="track-events">{% for e in card.events %}<li class="te {{ e.level or 'clear' }}"><span class="te-flag">{% if e.level %}<i class="flag {{ e.level }}">{{ 'R' if e.level == 'red' else 'Y' }}</i>{% else %}<i class="flag ok">{{ icon('check') }}</i>{% endif %}</span><div><strong>{{ e.label }}</strong> <em class="te-state st-{{ e.state }}">{{ {'emerged': 'Emerged', 'intensified': 'Intensified', 'holding': 'Holding', 'easing': 'Easing', 'cleared': 'Cleared'}[e.state] }}</em><p>{{ e.text }}</p></div></li>{% endfor %}</ol>
 {% else %}<p>No part of the chat carried a flag.</p>{% endif %}

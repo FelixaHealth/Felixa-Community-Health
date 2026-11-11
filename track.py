@@ -209,3 +209,82 @@ def card(m, key):
     now = flags[-1]
     return {'key': key, 'name': NAMES[key], 'about': ABOUT[key], 'latest': round(now['value']), 'level': now['level'], 'red': s['red'], 'yellow': s['yellow'], 'k': s['k'],
             'highest': round(s['highest']), 'highest_at': s['highest_at'], 'flagged': key != 'empathy'}
+
+
+# ---- the story of one chat: calm, escalation starts (yellow), turns into conflict (red), eases ---------------------
+GENERIC = [
+    {'key': 'calm', 'examples': ['Anyone free to look at the build later?', 'Sure, I will take it after lunch.']},
+    {'key': 'yellow', 'examples': ['That is the third time this has slipped. Great, thanks a lot.', 'I am getting tired of chasing this.']},
+    {'key': 'red', 'examples': ['You never listen. You always do this.', 'This is useless and you know it.']},
+    {'key': 'ease', 'examples': ['Sorry for snapping earlier. Let us sort it out together.', 'Thanks for saying that. I would like to talk it through.']}]
+STAGES = {'calm': ('Calm', 'People talk normally. Nothing is flagged.'),
+          'yellow': ('Yellow flag: escalation starts', 'The mood begins to heat up. Messages turn agitated, sarcastic or sharp, but not openly hostile yet.'),
+          'red': ('Red flag: it turns into conflict', 'Heat becomes open hostility: blame, insults, put-downs. This is the moment to step in.'),
+          'ease': ('Easing', 'Someone steadies the conversation, and the hostile wording falls away.')}
+
+
+def _quote(text, limit=150):
+    text = ' '.join(str(text or '').split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
+
+
+def _pick(group, ok, n=2, used=None):
+    used = set() if used is None else used
+    out = []
+    for u in group:
+        if len(out) < n and ok(u) and id(u) not in used:
+            used.add(id(u))
+            out.append(_quote(u['text']))
+    return out
+
+
+def story(m, units):
+    """The progression of this chat as four stages with real example messages: [{'key', 'title', 'about', 'part', 'examples', 'real'}].
+    Stages the chat never reached are left out. When it reached none of the flagged ones, a made-up example is shown, marked as one."""
+    complete = [u for u in (units or []) if all(a in (u.get('ratings') or {}) and u['ratings'][a] is not None for a in measures.analysis.ATTRIBUTES)]
+    ordered = measures.order_units(complete)[0]
+    spans = measures.cut(len(ordered))
+    if not spans or len(spans) != len(m['stretches']):
+        return {'stages': _generic(), 'real': False}
+    parts = [ordered[a:b] for a, b in spans]
+    esc, con = escalation_flags(m), conflict_flags(m)
+    f = [measures.message_flags(u['ratings']) for u in ordered]
+    flag_of = {id(u): f[i] for i, u in enumerate(ordered)}
+    def label(i):
+        return m['stretches'][i]['label']
+    yellow = next((i for i, e in enumerate(esc) if e['level']), None)
+    red = next((i for i in range(len(esc)) if (con[i]['level'] or esc[i]['level'] == 'red') and (yellow is None or i >= yellow)), None)
+    if yellow is None and red is None:
+        return {'stages': _generic(), 'real': False}
+    start = yellow if yellow is not None else red
+    stages, used = [], set()
+    calm_at = next((i for i in range(start - 1, -1, -1) if not esc[i]['level'] and not con[i]['level']), None) if start else None
+    if calm_at is not None:
+        ex = _pick(parts[calm_at], lambda u: not flag_of[id(u)]['heated'] and not flag_of[id(u)]['neg'], used=used)
+        if ex:
+            stages.append({'key': 'calm', 'part': label(calm_at), 'examples': ex, 'real': True})
+    ex = _pick(parts[start], lambda u: flag_of[id(u)]['heated'] and not flag_of[id(u)]['hostile'], n=1, used=used) or _pick(parts[start], lambda u: flag_of[id(u)]['heated'], n=1, used=used)
+    if yellow is not None and ex:
+        stages.append({'key': 'yellow', 'part': label(start), 'examples': ex, 'real': True})
+    if red is not None:
+        ex = _pick(parts[red], lambda u: flag_of[id(u)]['hostile'], used=used) or _pick(parts[red], lambda u: flag_of[id(u)]['heated'], used=used)
+        if ex:
+            stages.append({'key': 'red', 'part': label(red), 'examples': ex, 'real': True})
+        ease_at = next((i for i in range(red + 1, len(parts)) if not con[i]['level'] and not esc[i]['level']), None)
+        if ease_at is not None:
+            ex = _pick(parts[ease_at], lambda u: flag_of[id(u)]['care'] or flag_of[id(u)]['polite'], used=used) or _pick(parts[ease_at], lambda u: not flag_of[id(u)]['heated'], used=used)
+            if ex:
+                stages.append({'key': 'ease', 'part': label(ease_at), 'examples': ex, 'real': True})
+    if not any(s['key'] in ('yellow', 'red') for s in stages):
+        return {'stages': _generic(), 'real': False}
+    for s in stages:
+        s['title'], s['about'] = STAGES[s['key']]
+    return {'stages': stages, 'real': True}
+
+
+def _generic():
+    out = []
+    for g in GENERIC:
+        title, about = STAGES[g['key']]
+        out.append({'key': g['key'], 'title': title, 'about': about, 'part': '', 'examples': g['examples'], 'real': False})
+    return out
