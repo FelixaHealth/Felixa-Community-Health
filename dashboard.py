@@ -12,7 +12,7 @@ import html as _html
 import measures
 import store
 from vibe_check import data_table, figure
-from vibe_check.charts import Scene, nice_ticks, sentiment_bar
+from vibe_check.charts import Scene, nice_ticks, sentiment_bar, text_w
 from vibe_check.common import long_date, parse_ts, short_date
 
 RANGES = (('30', 'Last 30 days', 30), ('90', 'Last 90 days', 90), ('365', 'Last year', 365), ('all', 'All time', None))
@@ -176,22 +176,53 @@ def lines(series, *, title, desc, y_min=0.0, y_max=100.0, ticks=None, places=0, 
     return sc
 
 
+def _wrap(label, room, size=12, lines=2):
+    """The label split into at most `lines` lines that each fit `room` pixels; the last one ends in an ellipsis when something is left."""
+    words, out, cur = str(label).split(), [], ''
+    for w in words:
+        while text_w(w, size) > room and len(w) > 3:                 # one very long word: cut it
+            k = len(w)
+            while k > 1 and text_w(w[:k], size) > room:
+                k -= 1
+            out.append(w[:k])
+            w = w[k:]
+        trial = (cur + ' ' + w).strip()
+        if text_w(trial, size) <= room:
+            cur = trial
+        else:
+            out.append(cur)
+            cur = w
+    if cur:
+        out.append(cur)
+    if len(out) > lines:
+        out = out[:lines]
+        while out[-1] and text_w(out[-1] + '…', size) > room:
+            out[-1] = out[-1][:-1]
+        out[-1] = out[-1].rstrip() + '…'
+    return out
+
+
 def hbars(items, *, title, desc, unit='', vmax=None, places=0, width=720):
-    """One horizontal bar per item, longest first: [(label, value, role)]. The value sits at the tip."""
+    """One horizontal bar per item, longest first: [(label, value, role)]. A long label wraps onto a second line inside the graph; the value sits at the tip."""
     items = [i for i in items if i[1] is not None]
     if not items:
         return None
     items.sort(key=lambda i: -i[1])
-    row_h, bar_h, top, label_w = 28, 15, 4, (150 if width >= 600 else 100)
-    x0, x1 = label_w + 14, width - 70
+    label_w = 150 if width >= 600 else 104
+    wrapped = [_wrap(i[0], label_w - 6) for i in items]
+    row_h = 38 if any(len(w) > 1 for w in wrapped) else 28
+    bar_h, top = 15, 4
+    x0, x1 = label_w + 10, width - 58
     mx = vmax or max(max(v for _l, v, _r in items), 1e-9)
     sc = Scene(width, top + row_h * len(items) + 4, title, desc)
     sc.line(x0, top, x0, top + row_h * len(items), 'axis', 1)
-    for i, (label, v, role) in enumerate(items):
+    for i, ((label, v, role), lines_) in enumerate(zip(items, wrapped)):
         yc = top + i * row_h + row_h / 2
         length = max(4.0, (x1 - x0) * min(v, mx) / mx)
         sc.rect(x0, yc - bar_h / 2, length, bar_h, role, r=(0, 4, 4, 0), tip={'t': label, 'r': [[title, f'{_fmt(v, places)}{unit}', role]]})
-        sc.text(label_w, yc + 4.5, (label if len(label) <= 24 else label[:23] + '…'), anchor='end', fill='ink2')
+        first = yc - (len(lines_) - 1) * 7 + 4.5
+        for k, line in enumerate(lines_):
+            sc.text(label_w, first + k * 14, line, size=12, anchor='end', fill='ink2')
         sc.text(x0 + length + 8, yc + 4.5, f'{_fmt(v, places)}{unit}', fill='ink', weight=600)
     return sc
 

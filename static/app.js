@@ -158,3 +158,13 @@ document.querySelectorAll('input[name=volume_custom]').forEach(n => n.addEventLi
 
 // The Track dropdown in the results row closes when anything else is tapped.
 document.addEventListener('click', e => { document.querySelectorAll('.rn-more[open]').forEach(d => { if (!d.contains(e.target)) d.removeAttribute('open'); }); });
+
+// Back to the top: a round arrow that appears once the page has been scrolled down.
+(() => {
+  const btn = document.querySelector('[data-to-top]');
+  if (!btn) return;
+  const sync = () => { btn.hidden = window.scrollY < 400; };
+  window.addEventListener('scroll', sync, { passive: true });
+  btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  sync();
+})();
