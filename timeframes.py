@@ -18,6 +18,8 @@ from vibe_check.common import short_date
 FRAMES = ((0, 'Auto'), (5, '5 min'), (30, '30 min'), (60, '1 hour'), (180, '3 hours'), (720, '12 hours'), (1440, '1 day'), (10080, '1 week'), (43200, '1 month'))
 SIZES = tuple(v for v, _ in FRAMES if v)
 MIN_AUTO, MAX_AUTO, MAX_BARS = 4, 24, 60
+MSG_FRAMES = ((0, 'Auto'), (10, '10 messages'), (20, '20'), (50, '50'), (100, '100'), (200, '200'))     # for a chat without times: messages in each bar
+MSG_SIZES = tuple(v for v, _ in MSG_FRAMES if v)
 
 
 def frame_name(minutes) -> str:
@@ -107,9 +109,21 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
         else:
             note = 'Everything happened in one stretch of time, so the incident view is shown.'
             by = 'incident'
-    elif by == 'time':
-        note = 'This chat has no usable times, so the timeframe view is not available. The incident view is shown.'
-        by = 'incident'
+    elif by == 'time':                                  # no times: bars of a chosen number of messages instead
+        n = len(ordered)
+        size = tf if tf in MSG_SIZES else max(5, -(-n // 16 // 5) * 5)
+        while -(-n // size) > MAX_BARS:
+            size *= 2
+        edges = list(range(0, n, size))
+        if len(edges) >= 2 and n - edges[-1] < max(2, size // 3):          # a short last bar joins the one before it
+            edges.pop()
+        groups = [(None, list(range(a, edges[i + 1] if i + 1 < len(edges) else n))) for i, a in enumerate(edges)]
+        if len(groups) >= 2:
+            out['used'], by = size, 'messages'
+        else:
+            groups = None
+            note = 'This chat has no usable times and too few messages to cut into bars, so the incident view is shown.'
+            by = 'incident'
     levels = None
     if by == 'incident':
         found = incidents.find(units, gap)
@@ -127,7 +141,11 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
     multi = timed and stamps[0].date() != stamps[-1].date()
     stretches = []
     for i, (head, positions) in enumerate(groups):
-        if by == 'incident':
+        if by == 'messages':
+            first = last = None
+            label = f'Messages {positions[0] + 1} to {positions[-1] + 1}'
+            axis = f'#{positions[0] + 1}'
+        elif by == 'incident':
             inc = head
             first, last = ordered_stamp(stamps, positions, timed)
             label = f'Incident {inc["n"]}: ' + inc['range']
@@ -136,7 +154,7 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
             first = last = head
             axis, label = _label(head, out['used'], incognito, multi)
         stretches.append(_bar(i, positions, flags, label, axis, first, last, incognito, timed))
-    if by != 'incident':
+    if by == 'time':
         _thin(stretches)
     hit = deescalation._reacting(msgs, timed)
     out['positions'] = [p for _, p in groups]
@@ -144,7 +162,7 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
     out['black'] = [sum(1 for p in pos if msgs[p].get('uid') in flagged) for pos in out['positions']] if flagged else []
     if by == 'incident':
         out['green'] = [1 if (inc['calm'] and inc['calm']['i'] in set(pos)) else 0 for (inc, pos) in groups]
-    else:
+    else:     # by time or by messages
         calm_at = [inc['calm']['i'] for inc in incidents.find(units, gap) if inc['calm']]
         out['green'] = [sum(1 for c in calm_at if c in set(pos)) for pos in out['positions']]
     if not any(out['green']):

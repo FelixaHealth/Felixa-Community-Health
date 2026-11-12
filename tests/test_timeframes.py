@@ -65,11 +65,12 @@ class Bars(unittest.TestCase):
         self.assertTrue(r['m']['stretches'][0]['label'].startswith('Incident 1'))
         self.assertEqual([f['level'] for f in track.escalation_flags(r['m'])], ['red', 'red'])
 
-    def test_a_chat_without_times_falls_back_to_incidents_and_says_so(self):
+    def test_a_chat_without_times_falls_back_to_messages_and_incidents(self):
         u = units(PLAN, timed=False)
         r = timeframes.rebase(measures.analyse(u, today=datetime.date(2026, 3, 20)), u, 'time', 0)
-        self.assertNotEqual(r['by'], 'time')
-        self.assertIn('no usable times', r['note'])
+        self.assertEqual(r['by'], 'messages')
+        r = timeframes.rebase(measures.analyse(u, today=datetime.date(2026, 3, 20)), u, 'incident', 0)
+        self.assertEqual(r['by'], 'incident')
 
     def test_no_part_wording_in_the_new_bars(self):
         r = timeframes.rebase(self.m, self.units, 'time', 60)
@@ -81,3 +82,16 @@ class Bars(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WithoutTimes(unittest.TestCase):
+    def test_a_chat_without_times_gets_bars_of_messages_you_can_resize(self):
+        u = units(PLAN, timed=False)
+        m = measures.analyse(u, today=datetime.date(2026, 3, 20))
+        auto = timeframes.rebase(m, u, 'time', 0)
+        self.assertEqual(auto['by'], 'messages')
+        self.assertGreaterEqual(len(auto['m']['stretches']), 2)
+        big = timeframes.rebase(m, u, 'time', 50)
+        self.assertEqual(big['used'], 50)
+        self.assertEqual(sum(s['n'] for s in big['m']['stretches']), len(u))
+        self.assertTrue(big['m']['stretches'][0]['label'].startswith('Messages 1 to'))

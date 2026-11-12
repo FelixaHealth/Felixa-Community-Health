@@ -1917,8 +1917,8 @@ def frame_context(aid, ctx, by, tf, gap):
         de, black, green = deescalation.series(ms['m'], units), safety_module.part_counts(k, units, safety_module.flagged_uids(aid)), incidents.calm_parts(k, units)
     else:
         de, black, green = r['de'], r['black'], r['green']
-    pick = {'by': r['by'], 'asked': by if by in ('time', 'incident') else 'time', 'tf': tf if tf in timeframes.SIZES else 0, 'frames': timeframes.FRAMES, 'used': r['used'], 'bumped': r['bumped'], 'note': r['note'],
-            'used_name': timeframes.frame_name(r['used']) if r['used'] else '', 'timed': ms['m'].get('basis') == 'time', 'gaps': incidents.GAPS, 'gap': gap}
+    pick = {'by': r['by'], 'asked': by if by in ('time', 'incident') else 'time', 'tf': tf if tf in (timeframes.MSG_SIZES if r['by'] == 'messages' else timeframes.SIZES) else 0, 'frames': timeframes.MSG_FRAMES if r['by'] == 'messages' else timeframes.FRAMES, 'used': r['used'], 'bumped': r['bumped'], 'note': r['note'],
+            'used_name': (f"{r['used']} messages" if r['by'] == 'messages' else timeframes.frame_name(r['used'])) if r['used'] else '', 'timed': ms['m'].get('basis') == 'time', 'gaps': incidents.GAPS, 'gap': gap}
     return dict(ms, m=r['m']), de, black, green, pick
 
 
