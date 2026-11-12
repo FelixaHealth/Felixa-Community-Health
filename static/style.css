@@ -1228,3 +1228,13 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .pick-list{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;max-height:220px;overflow:auto}.pick-list label{display:flex;gap:8px;align-items:center;font-size:14.5px}.pick-list small{color:var(--muted)}
 
 .hr-mode span.hv.off{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border:1px dashed #cfc9b6;border-radius:16px;font-size:13px;color:#8a8f86;background:transparent;cursor:not-allowed}.hr-mode span.hv.off svg{width:13px;height:13px}.frame-off{display:flex;gap:6px;align-items:center}.frame-off svg{width:13px;height:13px;flex:none}
+
+/* Number cards fill the row they are in: as many in one row as fit, no empty slots, and an odd one out stretches across on a phone. */
+.dash-kpis,.hr-kpis,.inc-kpis{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))!important}
+@media(min-width:1500px){.dash-kpis{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))!important}}
+@media(max-width:560px){.dash-kpis,.hr-kpis,.inc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.dash-kpis>:last-child:nth-child(odd),.hr-kpis>:last-child:nth-child(odd),.inc-kpis>:last-child:nth-child(odd){grid-column:1/-1}}
+@media(min-width:701px){.vc .vc-kpis.vc-summary-kpis,.vc-summary-kpis,.kpi-row{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))}}
+/* Six cards: two even rows of three when they cannot all fit in one row, never five and one. */
+.dash-kpis:has(>:nth-child(6):last-child){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+@media(min-width:1400px){.dash-kpis:has(>:nth-child(6):last-child){grid-template-columns:repeat(6,minmax(0,1fr))!important}}
+@media(max-width:560px){.dash-kpis:has(>:nth-child(6):last-child){grid-template-columns:repeat(2,minmax(0,1fr))!important}}
