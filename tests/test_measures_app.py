@@ -2153,7 +2153,7 @@ class Dates(MeasuresCase):
 
     def test_strange_dates_never_break_a_page_the_pdf_or_the_csv(self):
         odd = ['0001-01-01T00:00:00', '9999-12-31T23:59:59', '1970-01-01T00:00:00', 'not a date at all', '0001-01-01T00:00:00+05:00', '9999-12-31T23:59:59-05:00',
-               '2026-13-45', '31/12/1999 23:59', 'yesterday', '2099-01-01T00:00:00', '']
+               '2026-13-45', '31/02/1999 23:59', 'yesterday', '2099-01-01T00:00:00', '']
         stamps = at(48, days_ago(40))
         for k, value in enumerate(odd[:9]):
             stamps[3 * k + 1] = value                                                              # nine of the 48 are odd: 39 are usable

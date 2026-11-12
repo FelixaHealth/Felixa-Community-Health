@@ -428,10 +428,12 @@ def _mention_of(text):
 def add_units(aid, units, source_type: str) -> int:
     """Inserts vibe_check-style units ({'text','source','timestamp','role','external_id'}). Returns how many were stored,
     never exceeding the per-analysis cap."""
+    import timestamps
     room = max(0, config.max_units() - count_units(aid))
     rows = []
     start = count_units(aid)
-    for i, u in enumerate(units[:room], 1):
+    units = timestamps.normalize(units[:room])['units']        # dates such as 25/03/2026 10:15 become ISO, so the time views can read them
+    for i, u in enumerate(units, 1):
         role = str(u.get('role') or '').upper()   # no role stays NULL: a chat with many authors is not 'the person'
         sender, reply_to = u.get('sender') or _label_of(u['text']), u.get('reply_to') or _mention_of(u['text'])
         rows.append((aid, str(u.get('external_id') or f'U{start + i:05d}')[:80], role if role in ('SUBJECT', 'AUDIENCE') else None,
