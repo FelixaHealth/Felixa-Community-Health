@@ -1256,3 +1256,15 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .hr-node>.hr-fl{min-width:44px;flex:none}.hr-run summary{font-size:13px;color:#6b7268;cursor:pointer;padding:2px 0}.hr-run blockquote{margin:6px 0;color:#3a4a40;font-size:13.5px}
 .frame-off{display:block!important}.frame-off svg{display:inline-block;vertical-align:-2px;margin-right:4px}
 @media(max-width:600px){.hr-icard>summary .hr-sum{flex:1 1 100%;order:3}.hr-sw{gap:8px}}
+
+/* High Risk: tighter, no empty bands */
+.hr-seq{gap:4px;margin:8px 0}.hr-msg{padding:0 0 0 10px}.hr-msg>.hr-tones,.hr-msg>.hr-types{display:inline}
+.hr-q{display:inline-block;margin-left:4px}.hr-q[open]{display:block;margin:4px 0 0}.hr-q summary{display:inline}
+.hr-node .hr-fl{padding-top:3px;min-width:40px}
+.hr-icard>summary{padding:9px 0}.hr-facts{margin:4px 0 6px}.hr-icard>p{margin:0 0 8px}.hr-icard .btn{padding:4px 12px}
+svg.hr-over{max-height:190px;width:100%;display:block;margin:0 auto}
+.hr-va,.hr-vb{margin:0}.hr-leg{margin:4px 0 8px;gap:6px}.hr-leg li{padding:3px 10px;font-size:13px}
+.hr-sw{margin-bottom:4px}.hr-kpis{margin-bottom:10px}.hr-cards{margin-top:8px}.frame-off{margin:4px 0}
+.hr-trow.cat{margin-top:4px;padding:7px 8px}.hr-table details.hr-beh summary{padding:7px 12px}
+.hr-node>.hr-fl{width:58px;min-width:58px;flex:none}.hr-icard>p{margin:0 0 8px}.hr-icard>p .btn{margin:0}
+@media(max-width:600px){.hr-node>.hr-fl{width:50px;min-width:50px}}
