@@ -230,3 +230,20 @@ document.querySelectorAll('[data-slider]').forEach((box) => {
   ticks.forEach((t, i) => t.addEventListener('click', () => { input.value = i; show(); input.dispatchEvent(new Event('change')); }));
   show();
 });
+
+// Changing a view option or a slider reloads the page; keep the reader where they were instead of jumping to the top.
+(() => {
+  const KEY = 'felixa-keep-scroll';
+  const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify({ path: location.pathname, y: window.scrollY })); } catch (e) { /* private mode */ } };
+  document.addEventListener('click', (e) => { if (e.target.closest('.hr-mode a, .hr-tf a, .tf-ticks span, .inc-gap button')) keep(); });
+  document.querySelectorAll('[data-slider] input[type=range]').forEach((r) => r.addEventListener('change', keep, true));
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+    sessionStorage.removeItem(KEY);
+    if (saved && saved.path === location.pathname) {
+      const go = () => window.scrollTo(0, saved.y);
+      go();
+      window.addEventListener('load', go);
+    }
+  } catch (e) { /* nothing saved */ }
+})();
