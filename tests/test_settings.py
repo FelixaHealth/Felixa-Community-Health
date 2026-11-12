@@ -68,6 +68,20 @@ class Settings(AppCase):
         self.assertEqual(self.store.workplaces(), [])
         self.assertEqual(self.store.setting('default_sensitivity'), 'low', 'the settings stay')
 
+    def test_delete_only_the_ticked_workplaces(self):
+        a = self.new_analysis(name='Keep Me')
+        b = self.new_analysis(name='Drop Me')
+        page = self.client.get('/settings').text
+        self.assertIn('Delete the workplaces I choose', page)
+        self.assertIn(f'value="{b}"', page)
+        self.assertIn('Nothing was deleted', flash(self.client.post('/settings/delete-selected', data={'ids': [str(b)], 'confirm': 'no'})))
+        self.assertIn('Nothing was deleted', flash(self.client.post('/settings/delete-selected', data={'confirm': 'delete'})))
+        self.assertIn('Deleted 1 workplace', flash(self.client.post('/settings/delete-selected', data={'ids': [str(b), '99999'], 'confirm': ' Delete '})))
+        names = [w['person_name'] for w in self.store.workplaces()]
+        self.assertIn('Keep Me', names)
+        self.assertNotIn('Drop Me', names)
+        self.assertTrue(self.store.get_analysis(a))
+
 
 if __name__ == '__main__':
     unittest.main()

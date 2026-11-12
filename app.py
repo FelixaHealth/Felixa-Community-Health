@@ -909,7 +909,7 @@ def settings_page(request: Request):
     return render(request, 'settings.html', rail={'steps': [], 'foot': None, 'setup': False}, engine_choices=choices, default_engine=current,
                   default_sensitivity=store.setting('default_sensitivity') if store.setting('default_sensitivity') in store.SENSITIVITIES else 'medium',
                   default_incognito=store.setting('default_incognito') == '1', sens_options=[(k, SENSITIVITY_LABELS[k], workplace.SENSITIVITY_HELP[k]) for k in pipeline.SENSITIVITIES],
-                  version=config.VERSION, data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), claude_cli=bool(cloud.cli_path()),
+                  version=config.VERSION, data_folder=str(config.data_dir()), workplace_count=len(store.workplaces()), workplaces_list=store.workplaces(), claude_cli=bool(cloud.cli_path()),
                   login_offered=cloud.login_offered(), login_ready=cloud.login_available(), local_enabled=config.local_model_enabled(), hosted=bool(os.getenv('FELIXA_PASSWORD')))
 
 
@@ -939,6 +939,20 @@ async def settings_save(request: Request):
     store.set_setting('default_sensitivity', sens)
     store.set_setting('default_incognito', '1' if form.get('default_incognito') else '0')
     return redirect('/settings', 'Settings saved. New workplaces and new checks start with them.')
+
+
+@app.post('/settings/delete-selected')
+async def settings_delete_selected(request: Request):
+    form = await request.form()
+    if str(form.get('confirm', '')).strip().lower() != 'delete':
+        return redirect('/settings#danger', 'Nothing was deleted. Type delete in the box to confirm.')
+    known = {w['id'] for w in store.workplaces(limit=1000)}
+    ids = [int(x) for x in form.getlist('ids') if str(x).isdigit() and int(x) in known]
+    if not ids:
+        return redirect('/settings#danger', 'Nothing was deleted. Tick the workplaces to delete.')
+    done = sum(1 for aid in ids if store.delete_analysis(aid))
+    left = len(ids) - done
+    return redirect('/settings#danger', f'Deleted {done} workplace{"" if done == 1 else "s"} with everything saved for them.' + (f' {left} could not be deleted while a task was running for it. Try again when it finishes.' if left else ''))
 
 
 @app.post('/settings/delete-all')

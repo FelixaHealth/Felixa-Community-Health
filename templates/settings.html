@@ -24,6 +24,9 @@
 </section>
 
 <section class="danger-panel" id="danger" aria-labelledby="danger-title"><div class="danger-head"><span class="danger-ic">{{ icon('warning') }}</span><div><h2 id="danger-title">Danger zone</h2><p>This is permanent. Download the PDFs or CSVs you need first.</p></div></div>
+{% if workplaces_list %}<div class="danger-row"><div class="dr-text"><h3>Delete the workplaces I choose</h3><p>Tick the ones to erase, with their messages, results and the numbers of earlier checks. The others stay.</p></div>
+<details class="delete-confirm"><summary class="btn danger-outline">{{ icon('trash') }} Choose and delete…</summary>
+<form method="post" action="/settings/delete-selected"><ul class="pick-list">{% for w in workplaces_list %}<li><label><input type="checkbox" name="ids" value="{{ w.id }}"> {{ w.person_name }}{% if w.channel %} <small>{{ w.channel }}</small>{% endif %}</label></li>{% endfor %}</ul><p>This cannot be undone. Type <strong>delete</strong> to confirm.</p><input class="confirm-box" type="text" name="confirm" autocomplete="off" aria-label="Type delete to confirm"><button class="btn danger">Delete the ticked workplaces</button></form></details></div>{% endif %}
 <div class="danger-row"><div class="dr-text"><h3>Delete all workplaces</h3><p>Erases every workplace, its messages, results and the numbers of earlier checks. Your settings stay.</p></div>
 <details class="delete-confirm"><summary class="btn danger-outline">{{ icon('trash') }} Delete everything…</summary>
 <form method="post" action="/settings/delete-all"><p>This deletes {{ workplace_count }} workplace{{ '' if workplace_count == 1 else 's' }}. It cannot be undone. Type <strong>delete everything</strong> to confirm.</p><input class="confirm-box" type="text" name="confirm" id="confirm-all" autocomplete="off" aria-label="Type delete everything to confirm"><button class="btn danger">Yes, delete everything</button></form></details></div></section>

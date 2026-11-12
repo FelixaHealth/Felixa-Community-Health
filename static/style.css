@@ -1224,3 +1224,5 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 
 .home-row.links .bar-light strong{white-space:normal;overflow-wrap:anywhere}
 .home-row.links .bd-count{width:auto;min-width:28px;text-align:center}
+
+.pick-list{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;max-height:220px;overflow:auto}.pick-list label{display:flex;gap:8px;align-items:center;font-size:14.5px}.pick-list small{color:var(--muted)}
