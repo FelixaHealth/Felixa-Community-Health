@@ -36,14 +36,27 @@ def _tags(ratings):
     return out
 
 
+def _blocked(units) -> set:
+    """Messages that cannot be the calming step: they carry a High Risk match (an insult or profanity is not a way of calming things). Only for chats read from the app's own store."""
+    aid = next((u.get('aid') for u in units if u.get('aid')), None)
+    if not aid:
+        return set()
+    try:
+        import high_risk
+        return high_risk.matched_uids(aid)
+    except Exception:                                           # the High Risk module is optional: without it every calming tone counts, as before
+        return set()
+
+
 def messages(units):
     """The rated messages in time order: [{'i', 'text', 'when', 'heated', 'hostile', 'tags'}], and whether the chat has usable times."""
     complete = [u for u in (units or []) if all(a in (u.get('ratings') or {}) and u['ratings'][a] is not None for a in analysis.ATTRIBUTES)]
     ordered, stamps, basis, _ = measures.order_units(complete)
+    blocked = _blocked(complete)
     out = []
     for i, (u, s) in enumerate(zip(ordered, stamps)):
         f = measures.message_flags(u['ratings'])
-        calming = (not f['heated']) and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
+        calming = (not f['heated']) and u.get('id') not in blocked and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
         out.append({'i': i, 'uid': u.get('id'), 'text': ' '.join(str(u.get('text') or '').split()), 'when': s, 'heated': bool(f['heated']), 'hostile': bool(f['hostile']),
                     'calming': calming, 'calm_tags': [a for a in CALMING_TONES if int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN], 'tags': _tags(u['ratings']), 'source': u.get('source') or ''})
     return out, basis == 'time'

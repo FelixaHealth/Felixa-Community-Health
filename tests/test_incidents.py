@@ -68,6 +68,20 @@ class Pages(AppCase):
                 self.assertIn('Back to High Risk', self.client.get(f'/analysis/{aid}/incident/1?src=safety').text)
 
 
+class CalmingAndHighRisk(unittest.TestCase):
+    def test_a_message_with_a_high_risk_match_is_not_the_calming_step(self):
+        from unittest import mock
+        import high_risk
+        plan = [dict(Rude=3, Agitated=2), dict(Rude=3), dict(Polite=3, Funny=3), dict(Empathetic=3)]
+        units = [dict(unit(i, f'm{i}', **r), id=i + 1, aid=7) for i, r in enumerate(plan)]
+        with mock.patch.object(high_risk, 'matched_uids', return_value={3}):
+            msgs, _ = incidents.messages(units)
+        self.assertEqual([m['calming'] for m in msgs], [False, False, False, True])
+        with mock.patch.object(high_risk, 'matched_uids', return_value=set()):
+            msgs, _ = incidents.messages(units)
+        self.assertEqual([m['calming'] for m in msgs], [False, False, True, True])
+
+
 if __name__ == '__main__':
     unittest.main()
 

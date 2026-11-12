@@ -31,6 +31,27 @@ def _when(u) -> str:
     return (u.get('timestamp') or '')[:16].replace('T', ' ')
 
 
+_MATCHED: dict = {}
+
+
+def matched_uids(aid) -> set:
+    """The messages that carry a High Risk match found without the held-item detectors (Vibe Check flags and the cyber rules): such a message is never counted as the calming step of an
+    incident, whatever its tone. Kept per chat until its messages or its Vibe Check flags change."""
+    base = store.units_for(aid) or []
+    vibe = store.latest_vibe(aid) or {}
+    flagged = (vibe.get('flagged') or []) if vibe.get('status') == 'ok' else []
+    key = (aid, len(base), len(flagged))
+    if _MATCHED.get('key') == key:
+        return _MATCHED['uids']
+    by_text = {' '.join((u['text'] or '').split()): u['id'] for u in base}
+    uids = {by_text[t] for t in (' '.join(str(f.get('message') or '').split()) for f in flagged if VIBE.get(f.get('type'))) if t in by_text}
+    uids |= {u['id'] for u in base if cyber_rules.scan(u['text'] or '')}
+    uids |= set(cyber_rules.flooding(base))
+    _MATCHED.clear()
+    _MATCHED.update(key=key, uids=uids)
+    return uids
+
+
 def build(aid, safety=None) -> dict:
     """{'categories': [{'name','count','behaviours':[{'name','count','quotes':[{'text','when','source','uid'}]}],'none':[names]}], 'messages', 'behaviours', 'hit_categories', 'by_uid', 'unread_categories'}"""
     units = store.rated_text_units(aid) or []

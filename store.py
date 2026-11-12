@@ -458,7 +458,7 @@ def rated_text_units(aid) -> list:
     for row in rows:
         unit = by_id.get(row['id'])
         if unit is None:
-            unit = by_id[row['id']] = {'id': row['id'], 'text': row['text'] or '', 'source': row['source_label'] or '', 'timestamp': row['timestamp'] or '', 'ratings': {}}
+            unit = by_id[row['id']] = {'id': row['id'], 'aid': aid, 'text': row['text'] or '', 'source': row['source_label'] or '', 'timestamp': row['timestamp'] or '', 'ratings': {}}
             units.append(unit)
         unit['ratings'][row['attribute']] = row['rating']
     return units
