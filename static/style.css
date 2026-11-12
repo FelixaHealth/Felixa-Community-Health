@@ -1226,3 +1226,5 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .home-row.links .bd-count{width:auto;min-width:28px;text-align:center}
 
 .pick-list{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;max-height:220px;overflow:auto}.pick-list label{display:flex;gap:8px;align-items:center;font-size:14.5px}.pick-list small{color:var(--muted)}
+
+.hr-mode span.hv.off{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border:1px dashed #cfc9b6;border-radius:16px;font-size:13px;color:#8a8f86;background:transparent;cursor:not-allowed}.hr-mode span.hv.off svg{width:13px;height:13px}.frame-off{display:flex;gap:6px;align-items:center}.frame-off svg{width:13px;height:13px;flex:none}

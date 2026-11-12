@@ -109,7 +109,7 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
         else:
             note = 'Everything happened in one stretch of time, so the incident view is shown.'
             by = 'incident'
-    elif by == 'time':                                  # no times: bars of a chosen number of messages instead
+    elif by in ('time', 'messages'):                    # bars of a chosen number of messages: asked for, or the only way when the chat has no times
         n = len(ordered)
         size = tf if tf in MSG_SIZES else max(5, -(-n // 16 // 5) * 5)
         while -(-n // size) > MAX_BARS:
@@ -142,7 +142,7 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
     stretches = []
     for i, (head, positions) in enumerate(groups):
         if by == 'messages':
-            first = last = None
+            first, last = ordered_stamp(stamps, positions, timed)
             label = f'Messages {positions[0] + 1} to {positions[-1] + 1}'
             axis = f'#{positions[0] + 1}'
         elif by == 'incident':

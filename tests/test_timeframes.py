@@ -84,6 +84,15 @@ if __name__ == '__main__':
     unittest.main()
 
 
+class Messages(unittest.TestCase):
+    def test_a_chat_with_times_can_also_be_cut_by_messages(self):
+        u = units(PLAN)
+        m = measures.analyse(u, today=datetime.date(2026, 3, 20))
+        r = timeframes.rebase(m, u, 'messages', 50)
+        self.assertEqual((r['by'], r['used']), ('messages', 50))
+        self.assertEqual(sum(s['n'] for s in r['m']['stretches']), len(u))
+
+
 class WithoutTimes(unittest.TestCase):
     def test_a_chat_without_times_gets_bars_of_messages_you_can_resize(self):
         u = units(PLAN, timed=False)
