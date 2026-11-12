@@ -235,7 +235,7 @@ document.querySelectorAll('[data-slider]').forEach((box) => {
 (() => {
   const KEY = 'felixa-keep-scroll';
   const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify({ path: location.pathname, y: window.scrollY })); } catch (e) { /* private mode */ } };
-  document.addEventListener('click', (e) => { if (e.target.closest('.hr-mode a, .hr-tf a, .tf-ticks span, .inc-gap button')) keep(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('.tf-ticks span, .inc-gap button') || e.target.closest('a[href^="?"]:not([href*="page="])')) keep(); });     // every link that only changes the options of this page
   document.querySelectorAll('[data-slider] input[type=range]').forEach((r) => r.addEventListener('change', keep, true));
   try {
     const saved = JSON.parse(sessionStorage.getItem(KEY) || 'null');
