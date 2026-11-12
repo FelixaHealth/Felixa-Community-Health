@@ -1909,7 +1909,7 @@ def safety_page(request: Request, aid: AnalysisId, view: str = 'incident', tf: s
     hr = high_risk.build(aid, sb)
     view = view if view in ('incident', 'time') else 'incident'
     minutes = {str(m): m for m, _l in high_risk.TIMEFRAMES}.get(tf, 60)
-    return render(request, 'safety.html', vnav=track_nav(aid, 'safety'), hr=hr, over=high_risk.over_time(aid, hr, view, minutes), view=view, tf=minutes, timeframes=high_risk.TIMEFRAMES, held=len(sb['held']), rnav=nav, **ctx)
+    return render(request, 'safety.html', vnav=track_nav(aid, 'safety'), hr=hr, over=high_risk.over_time(aid, hr, view, minutes), view=view, timed=bool(ctx.get('measures') and ctx['measures']['m'].get('basis') == 'time'), tf=minutes, timeframes=high_risk.TIMEFRAMES, held=len(sb['held']), rnav=nav, **ctx)
 
 
 @app.get('/analysis/{aid}/safety/review', response_class=HTMLResponse)
