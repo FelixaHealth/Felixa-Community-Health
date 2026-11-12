@@ -1262,9 +1262,11 @@ main .eyebrow,.stage .eyebrow,.panel .eyebrow,.hcard .eyebrow{display:none!impor
 .hr-q{display:inline-block;margin-left:4px}.hr-q[open]{display:block;margin:4px 0 0}.hr-q summary{display:inline}
 .hr-node .hr-fl{padding-top:3px;min-width:40px}
 .hr-icard>summary{padding:9px 0}.hr-facts{margin:4px 0 6px}.hr-icard>p{margin:0 0 8px}.hr-icard .btn{padding:4px 12px}
-svg.hr-over{max-height:190px;width:100%;display:block;margin:0 auto}
+svg.hr-over{width:100%;display:block;margin:0 auto}.hr-va svg.hr-over{max-height:190px}.hr-vb{overflow-x:auto}.hr-vb svg.hr-over{min-width:560px}
 .hr-va,.hr-vb{margin:0}.hr-leg{margin:4px 0 8px;gap:6px}.hr-leg li{padding:3px 10px;font-size:13px}
 .hr-sw{margin-bottom:4px}.hr-kpis{margin-bottom:10px}.hr-cards{margin-top:8px}.frame-off{margin:4px 0}
 .hr-trow.cat{margin-top:4px;padding:7px 8px}.hr-table details.hr-beh summary{padding:7px 12px}
 .hr-node>.hr-fl{width:58px;min-width:58px;flex:none}.hr-icard>p{margin:0 0 8px}.hr-icard>p .btn{margin:0}
 @media(max-width:600px){.hr-node>.hr-fl{width:50px;min-width:50px}}
+
+.lg.ring{background:#1f3a2e;box-shadow:0 0 0 2px #d03b3b}

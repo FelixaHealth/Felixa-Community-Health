@@ -183,6 +183,11 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
     import incidents
     import measures
     uids, by_uid, cat_of = hr['uids'], hr['by_uid'], hr['cat_of']
+    try:
+        import safety_module
+        held = safety_module.flagged_uids(aid) if safety_module.AVAILABLE else set()
+    except Exception:
+        held = set()
     ordered, stamps, basis, _left = measures.order_units(store.units_for(aid))
     timed = basis == 'time'
     starts, used = None, None
@@ -239,7 +244,8 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
             a += _flag(x + w / 2 + (j * 17 - (len(d['flags']) - 1) * 8), y - 22, f)
         a += '</g>'
         if d['k'] % lab_step == 0 or d['k'] == n - 1:
-            a += f'<text x="{d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="middle">{_E(d["label"])}</text>'
+            end = d['k'] == n - 1 and n > 3 and mode == 'time'                       # the last long time label would run off the edge
+            a += f'<text x="{(W - 2) if end else d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="{"end" if end else "middle"}">{_E(d["label"])}</text>'
     svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each bar, with flags">{a}</svg>'
     type_count = Counter(bname for u in ordered if u['id'] in uids for bname in by_uid.get(u['id'], []))
     rows = [bname for _c, bs in CATEGORIES for bname in bs if type_count.get(bname)]
@@ -272,8 +278,9 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
                 if len(ys) > 1:                         # one message with several types: the dots are joined by a line
                     b += f'<line data-g="highrisk" x1="{cx:.0f}" y1="{min(ys):.0f}" x2="{cx:.0f}" y2="{max(ys):.0f}" stroke="#1f3a2e" stroke-width="2" opacity=".55"/>'
                 text = _E(str(u['text'] or '')[:120])
+                ring = ' stroke="#d03b3b" stroke-width="3"' if u['id'] in held else ''           # a ring: this message is held (the black flag)
                 for x, yy in zip(mine, ys):
-                    dots += f'<circle data-g="highrisk" cx="{cx:.0f}" cy="{yy:.0f}" r="6" fill="#1f3a2e" opacity=".9"><title>{_E(x)}: {text}</title></circle>'
+                    dots += f'<circle data-g="highrisk" cx="{cx:.0f}" cy="{yy:.0f}" r="6" fill="#1f3a2e" opacity=".9"{ring}><title>{_E(x)}: {text}</title></circle>'
         svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Each match by type, when, with flags">{b}{dots}</svg>'
     return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': n, 'by_incident': mode == 'incident', 'mode': mode, 'used': used, 'timed': timed,
             'gap': f'{incidents.DEFAULT_GAP} minutes' if timed else f'{incidents.QUIET_MESSAGES} messages'}
