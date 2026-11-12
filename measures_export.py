@@ -19,7 +19,7 @@ notes and the seven rows): it starts on the page where it fits whole and moves t
 score tile never starts a page: the second row of cards stays with it, and on a first check 'Since your last check' and its sentence follow in the same block.
 
 With Incognito on, no clock time may appear in any of it. This module never formats a time: the names of the parts of the chat come from measures.py
-(`label`, `axis`), which leaves times out under Incognito. As a second guard, a name that still held one would be cut back to 'Part 3 of 9'. The days of the
+(`label`, `axis`), which leaves times out under Incognito. As a second guard, a name that still held one would be cut back to its day. The days of the
 checks in the CSV are dates only.
 """
 import re
@@ -65,9 +65,9 @@ def _blank(value):
 
 
 def _label(stretch, incognito) -> str:
-    """The name of a part of the chat, as measures.py built it. A clock time never goes out under Incognito: should one turn up, only 'Part 3 of 9' is kept."""
+    """The name of a part of the chat, as measures.py built it. A clock time never goes out under Incognito: should one turn up, only the day is kept."""
     text = str(stretch.get('label') or '')
-    return text.split(': ')[0] if incognito and CLOCK.search(text) else text
+    return re.split(r'\s\d{1,2}:\d{2}', text)[0] if incognito and CLOCK.search(text) else text
 
 
 def _parts(m) -> list:

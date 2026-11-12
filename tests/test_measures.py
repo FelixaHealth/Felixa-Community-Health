@@ -1322,23 +1322,23 @@ MONTH_DAY = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a
 class LabelTests(unittest.TestCase):
     """What the stretches are called, and where a clock time may appear."""
 
-    def test_a_stretch_is_named_part_n_of_k(self):
+    def test_a_stretch_is_named_by_its_time_or_its_messages(self):
         for dated in (False, True):
             m = an(chat(72, dated=dated))
             self.assertEqual(len(m['stretches']), 9)
             for i, s in enumerate(m['stretches']):
                 with self.subTest(dated=dated, i=i):
-                    self.assertTrue(s['label'].startswith(f'Part {i + 1} of 9'), s['label'])
+                    self.assertTrue(s['label'] and 'Part' not in s['label'], s['label'])
                     self.assertEqual(s['i'], i)
 
     def test_messages_ordered_by_upload_are_labelled_by_their_numbers(self):
         # 288 messages are 24 stretches of 12: the third covers messages 25 to 36 -- the example in the spec
         m = an(chat(288, dated=False))
         self.assertEqual(m['basis'], 'order')
-        self.assertIn('rated messages 25 to 36', m['stretches'][2]['label'])
+        self.assertIn('Messages 25 to 36', m['stretches'][2]['label'])
         parts = measures.cut(288)
         for s, (a, b) in zip(m['stretches'], parts):
-            self.assertIn(f'rated messages {a + 1} to {b}', s['label'])
+            self.assertIn(f'Messages {a + 1} to {b}', s['label'])
             self.assertNotRegex(s['label'] + s['axis'], CLOCK)
             self.assertNotRegex(s['label'], MONTH_DAY)
 
@@ -1369,7 +1369,7 @@ class LabelTests(unittest.TestCase):
         for s in m['stretches']:
             self.assertNotRegex(s['axis'], CLOCK)
             self.assertRegex(s['axis'], MONTH_DAY)
-            self.assertTrue(s['label'].startswith('Part '))
+            self.assertNotIn('Part', s['label'])
         self.assertRegex(m['stretches'][0]['axis'], MONTH_DAY)
 
     def test_dates_without_a_time_never_show_a_time(self):
@@ -1388,7 +1388,7 @@ class LabelTests(unittest.TestCase):
                 for s in quiet['stretches']:
                     self.assertNotRegex(s['axis'], CLOCK)
                     self.assertNotRegex(s['label'], CLOCK)
-                    self.assertTrue(s['label'].startswith('Part '))
+                    self.assertNotIn('Part', s['label'])
                 self.assertRegex(quiet['stretches'][0]['label'], MONTH_DAY, 'the day stays')
                 if step in (1, 75):
                     self.assertTrue(any(CLOCK.search(s['axis']) for s in loud['stretches']), 'the same chat shows its times when Incognito is off')
@@ -3290,7 +3290,7 @@ class BuildTests(unittest.TestCase):
                 self.assertRegex(added, r'(?i)rated message')
                 self.assertRegex(added, r'(?i)\border\b')
                 self.assertNotIn('UTC', key)
-                self.assertTrue(all('rated messages' in s['label'] for s in ctx['m']['stretches']), 'and the labels are numbers of rated messages')
+                self.assertTrue(all('Messages' in s['label'] for s in ctx['m']['stretches']), 'and the labels are numbers of messages')
         self.assertEqual(build_with(undated_tail(100, 60))['chart_key'], CHART_KEY, '60 of 100 dated is enough for the clock')
 
     def test_the_chart_key_says_times_are_utc_only_when_every_time_of_day_carried_an_offset(self):
@@ -4082,7 +4082,7 @@ class FuzzTests(unittest.TestCase):
         else:
             check(stretches == [], k, 'no stretches below 24')
         for i, s in enumerate(stretches):
-            check(s['i'] == i and s['label'].startswith(f'Part {i + 1} of {len(stretches)}'), k, 'stretch label')
+            check(s['i'] == i and s['label'] and 'Part' not in s['label'], k, 'stretch label')
             check(0.0 <= s['health'] <= 100.0, k, 'stretch health')
             check(s['climb'] >= 0 and (s['counted'] <= m['verdicts']), k, 'climb and counted')
             for kind in KINDS:

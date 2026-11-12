@@ -247,34 +247,39 @@ def _uses_clock(firsts, lasts, incognito) -> bool:
 
 
 def stretch_labels(spans, stamps, basis, utc=False, incognito=False):
-    """For each stretch: (axis label, tooltip and table label). The axis label is '' where the previous stretch has the same one. Clock times appear
-    only when the data has them, the stretches fall within three days, and Incognito is off."""
+    """For each stretch: (axis label, tooltip and table label, start text, end text). The label names the time the stretch covers, or its messages when the data has
+    no times. The axis label is '' where the previous stretch has the same one. Clock times appear only when the data has them, the stretches fall within three days,
+    and Incognito is off."""
     k = len(spans)
     if basis == 'order' or not spans:
-        return [(f'#{a + 1}' if i % max(1, k // 6) == 0 else '', f'Part {i + 1} of {k}: rated messages {a + 1} to {b}') for i, (a, b) in enumerate(spans)]
+        return [(f'#{a + 1}' if i % max(1, k // 6) == 0 else '', f'Messages {a + 1} to {b}', f'Message {a + 1}', f'message {b}') for i, (a, b) in enumerate(spans)]
     firsts, lasts = [stamps[a] for a, _ in spans], [stamps[b - 1] for _, b in spans]
     clock = _uses_clock(firsts, lasts, incognito)
-    day = lambda d: _day(d, (lasts[-1].date() - firsts[0].date()).days > 300)      # noqa: E731  a chat of more than a year names the year, or two parts could share a label
+    day = lambda d: _day(d, (lasts[-1].date() - firsts[0].date()).days > 300)      # noqa: E731  a chat of more than a year names the year, or two stretches could share a label
     tz = ' UTC' if utc else ''
+
+    def start(a):
+        return f'{day(a)} {a:%H:%M}' if clock else day(a)
+
+    def end(a, b):
+        if not clock:
+            return day(b)
+        return f'{b:%H:%M}{tz}' if a.date() == b.date() else f'{day(b)} {b:%H:%M}{tz}'
 
     def span(a, b):
         if not clock:
             return day(a) if a.date() == b.date() else f'{day(a)} to {day(b)}'
-        if a.date() == b.date():
-            return f'{day(a)} {a:%H:%M} to {b:%H:%M}{tz}'
-        return f'{day(a)} {a:%H:%M} to {day(b)} {b:%H:%M}{tz}'
+        return f'{start(a)} to {end(a, b)}'
     axis, seen = [], None
     single_day = firsts[0].date() == lasts[-1].date()
     for i, s in enumerate(firsts):
         if clock:
             text = f'{s:%H:%M}' if single_day else f'{day(s)} {s:%H:%M}'
-        elif single_day:
-            text = f'Part {i + 1}'
         else:
             text = day(s)
         axis.append(text if text != seen else '')
         seen = text
-    return [(axis[i], f'Part {i + 1} of {k}: ' + span(firsts[i], lasts[i])) for i in range(k)]
+    return [(axis[i], span(firsts[i], lasts[i]), start(firsts[i]), end(firsts[i], lasts[i])) for i in range(k)]
 
 
 def _stamp_text(stamp, incognito) -> str:
@@ -355,7 +360,7 @@ def analyse(units, sensitivity='medium', today=None, incognito=False) -> dict | 
     for i, (a, b) in enumerate(spans):
         t = tally([flags[u['id']] for u in ordered[a:b]])
         tallies.append(t)
-        stretches.append({'i': i, 'n': t['n'], 'axis': labels[i][0], 'label': labels[i][1], 'health': health_mean(t),
+        stretches.append({'i': i, 'n': t['n'], 'axis': labels[i][0], 'label': labels[i][1], 'from': labels[i][2], 'to': labels[i][3], 'health': health_mean(t),
                           'start': _stamp_text(stamps[a], incognito) if basis == 'time' else None, 'end': _stamp_text(stamps[b - 1], incognito) if basis == 'time' else None,
                           'counts': {x: t[x] for x in KINDS}, 'rates': {x: rate(t, x) for x in KINDS}})
     timeline_n = len(ordered)
@@ -368,7 +373,7 @@ def analyse(units, sensitivity='medium', today=None, incognito=False) -> dict | 
     for e in eps:
         e['where'] = where_phrase(e['first'], e['last'], k)
         e['dates'] = dates_phrase(stretches, e['first'], e['last'], long_span) if basis == 'time' else ''
-        e['label'] = stretches[e['first']]['label'] if e['first'] == e['last'] else stretches[e['first']]['label'].split(': ')[0] + ' to ' + stretches[e['last']]['label'].split(': ')[0]
+        e['label'] = stretches[e['first']]['label'] if e['first'] == e['last'] else stretches[e['first']]['from'] + ' to ' + stretches[e['last']]['to']
     for s, st in zip(stretches, steps):
         s['climb'] = st['climb'] if any(e['first'] <= s['i'] <= e['last'] for e in eps) else 0.0
         s['counted'] = bool(s['climb'])

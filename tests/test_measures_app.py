@@ -916,7 +916,7 @@ class FlareUp(MeasuresCase):
             tips = Page(section(html, 'over-time')).tips['Escalation over time']                  # the hover text of the Escalation chart
             marked = {tip['t'] for tip in tips if any(row[0] in ('Red flag', 'Yellow flag') for row in tip['r'])}
             self.assertEqual(len(marked), 1, what)
-            self.assertTrue(next(iter(marked)).startswith('Part 3 of 6: '), what)
+            self.assertTrue(next(iter(marked)) and 'Part' not in next(iter(marked)), what)
             rows = [row for tip in tips for row in tip['r'] if row[0] in ('Red flag', 'Yellow flag')]
             self.assertTrue(rows and all(row[1] == 'heat climbed in this part' for row in rows), rows)       # the part says it is flagged, in plain words
             self.assertNotIn('Nothing needs urgent attention', section_text(html, 'alerts'), 'a High priority alert stands, so it is no all clear')
@@ -984,7 +984,7 @@ class FlareUp(MeasuresCase):
         ms = self.ms(aid)
         self.assertFalse(ms['m']['incognito'])
         first = ms['m']['stretches'][0]
-        self.assertRegex(first['label'], r'^Part 1 of 6: [A-Z][a-z]{2} \d{1,2} 18:00 to 21:30$')
+        self.assertRegex(first['label'], r'^[A-Z][a-z]{2} \d{1,2} 18:00 to 21:30$')
         html = self.page(aid, 'results')
         over = section(html, 'over-time')
         tips = [tip['t'] for tip in Page(over).tips['Conflict over time']]
@@ -1138,7 +1138,7 @@ class Boundaries(MeasuresCase):
         self.assertEqual([n['key'] for n in b['notes']], ['undated'])
         self.assert_says(b['notes'][0]['text'], 'Only 60 of 100 messages have a date', 'still count all 100')
         self.assert_says(a['notes'][0]['text'], 'Only 59 of 100 messages have a usable date', 'the order you added them')
-        self.assertTrue(all(s['label'].startswith(f'Part {s["i"] + 1} of 12: rated messages ') for s in a['m']['stretches']))
+        self.assertTrue(all(s['label'].startswith('Messages ') for s in a['m']['stretches']))
         self.assertEqual([s['axis'] for s in a['m']['stretches'] if s['axis']], ['#1', '#17', '#34', '#51', '#67', '#84'])
         self.assertFalse(any(s['axis'].startswith('#') for s in b['m']['stretches']))
         self.assertTrue(all(MONTH_DAY.search(s['label']) for s in b['m']['stretches']))
@@ -2016,7 +2016,7 @@ class Privacy(MeasuresCase):
         self.assertTrue(ms['m']['incognito'])
         self.assertEqual((ms['m']['basis'], len(ms['m']['stretches']), [a['key'] for a in ms['alerts']]), ('time', 6, ['heated']))
         self.assertTrue(all(not CLOCK.search(s['label'] + s['axis']) for s in ms['m']['stretches']))
-        self.assertTrue(all(re.fullmatch(r'Part \d of 6: [A-Z][a-z]{2} \d{1,2}( to [A-Z][a-z]{2} \d{1,2})?', s['label']) for s in ms['m']['stretches']), ms['m']['stretches'])
+        self.assertTrue(all(re.fullmatch(r'[A-Z][a-z]{2} \d{1,2}( to [A-Z][a-z]{2} \d{1,2})?', s['label']) for s in ms['m']['stretches']), ms['m']['stretches'])
         self.clock_free(aid, 'incognito')
         self.assert_everywhere(aid, 'incognito')                                                   # the numbers are the same: only the labels lost their times
         self.assertEqual(ms['cards'][0]['headline'], '1 red flag, about a third of the way in.')
@@ -2088,7 +2088,7 @@ class Dates(MeasuresCase):
         self.assertEqual((m['basis'], m['timeline_n'], m['left_off'], m['has_series'], m['verdicts']), ('order', 48, 0, True, True))
         self.assertEqual([n['key'] for n in ms['notes']], ['order'])
         self.assertEqual([s['axis'] for s in m['stretches']], ['#1', '#9', '#17', '#25', '#33', '#41'])
-        self.assertEqual([s['label'] for s in m['stretches']], [f'Part {i + 1} of 6: rated messages {8 * i + 1} to {8 * i + 8}' for i in range(6)])
+        self.assertEqual([s['label'] for s in m['stretches']], [f'Messages {8 * i + 1} to {8 * i + 8}' for i in range(6)])
         (alert,) = ms['alerts']
         self.assertEqual((alert['key'], alert['when']), ('heated', 'about a third of the way in'))      # where in the check, and no day: there are none
         self.assert_everywhere(aid)
@@ -2106,7 +2106,7 @@ class Dates(MeasuresCase):
             self.assertNotIn('Where in the chat: about a third of the way in (', html)
         text = measures_pdf(self.pdf(aid))
         self.assertEqual(MONTH_DAY.findall(text) + CLOCK.findall(text), [])
-        self.assertIn(squeeze('rated messages 17 to 24'), squeeze(' '.join(measure_cells(self.csv(aid)))))
+        self.assertIn(squeeze('Messages 17 to 24'), squeeze(' '.join(measure_cells(self.csv(aid)))))
         self.assertEqual([c for c in measure_cells(self.csv(aid)) if MONTH_DAY.search(c) or CLOCK.search(c)], [])
 
     def test_a_chat_with_thirty_percent_undated_says_so_and_still_counts_every_message(self):

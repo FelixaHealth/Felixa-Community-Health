@@ -1248,7 +1248,7 @@ class MeasuresExport(AppCase):
 
     # -- Incognito -----------------------------------------------------------------------------------
     def test_with_incognito_on_no_clock_time_is_in_the_csv_or_the_pdf_pages(self):
-        """Every part of the chat is named by its place ('Part 3 of 9') and its day: the hour and minute of a message stay out of everything this feature writes."""
+        """Every part of the chat is named by its day: the hour and minute of a message stay out of everything this feature writes."""
         ms = self.ms('incognito')
         self.assertTrue(ms['m']['incognito'])
         self.assertTrue(ms['m']['has_series'])
@@ -1258,7 +1258,7 @@ class MeasuresExport(AppCase):
         pages = our_pages(self.pdf('incognito')[1])
         self.assertEqual([t for t in pages if CLOCK.search(t)], [])
         parts = table_after(rows, PARTS_HEAD)
-        self.assertTrue(parts and all(r[0].startswith('Part ') for r in parts))
+        self.assertTrue(parts and all(r[0] and 'Part' not in r[0] for r in parts))
         for stretch in ms['m']['stretches']:
             self.assertNotRegex(stretch['label'], CLOCK)
             self.assertNotRegex(stretch['axis'], CLOCK)
@@ -1294,7 +1294,7 @@ class MeasuresExport(AppCase):
         m['incognito'] = True
         rows = measures_export.csv_rows(ctx['measures'])
         parts = table_after(rows, PARTS_HEAD)
-        self.assertEqual([r[0] for r in parts], [f'Part {i} of {len(parts)}' for i in range(1, len(parts) + 1)])
+        self.assertTrue(all(r[0] and not CLOCK.search(r[0]) and 'Part' not in r[0] for r in parts))
         self.assertEqual([r for r in rows if any(CLOCK.search(str(c)) for c in r)], [])
         pages = our_pages(page_texts(report_export.pdf(ctx, ROOT)))
         self.assertEqual([t for t in pages if CLOCK.search(t)], [])
