@@ -73,20 +73,28 @@ class Pages(AppCase):
         self.assertEqual(self.run_job(aid, path='check/6', engine='')['status'], 'complete')
         page = self.client.get(f'/analysis/{aid}/safety')
         self.assertEqual(page.status_code, 200)
-        for needle in ('Aggression &amp; Violence', 'Self-Harm &amp; Dangerous Activities', 'Quotes', 'Messages found', 'Review', 'no reader yet'):
-            self.assertIn(needle, page.text, needle)
+        cat = self.client.get(f'/analysis/{aid}/safety?view=category&sub=totals')
+        self.assertEqual(cat.status_code, 200)
+        for needle in ('Quotes', 'Messages', 'Matches', 'Types', 'By incident', 'By category', 'Totals', 'Review', 'no reader yet'):
+            self.assertIn(needle, cat.text, needle)
+        self.assertIn('Blackmail', cat.text)
+        self.assertNotIn('Over time', page.text)
         for noise in ('Held for a person', 'A question to ask', 'flag black'):
             self.assertNotIn(noise, page.text, noise)
+        self.assertEqual(self.client.get(f'/analysis/{aid}/safety?view=category&sub=type').status_code, 200)
         import high_risk
         hr = high_risk.build(aid, safety_module.build(aid))
         ot = high_risk.over_time(aid, hr)
+        story = high_risk.stories(aid, hr)
+        self.assertTrue(story['cards'] or story['outside'])
+        self.assertIn('Not in an escalation incident', page.text) if story['outside'] else None
+        for node in (story['outside'] or {'nodes': []})['nodes']:
+            self.assertTrue(node['types'])
         if ot:
             self.assertTrue(ot['svg_a'].startswith('<svg'))
             self.assertLessEqual(sum(d['count'] for d in ot['days']), len(hr['uids']))
-            for needle in ('By incident', 'Escalation starts', 'Turns into conflict', 'Exact messages in each'):
+            for needle in ('By incident', 'Escalation starts', 'Turns into conflict'):
                 self.assertIn(needle, page.text, needle)
-        else:
-            self.assertNotIn('Over time', page.text)
         self.assertEqual(len(hr['categories']), 9)
         names = {b['name'] for c in hr['categories'] for b in c['behaviours']}
         self.assertTrue({'Blackmail', 'Coercion'} & names, names)
@@ -111,6 +119,20 @@ class Absent(unittest.TestCase):
         with mock.patch.object(safety_module, 'AVAILABLE', False):
             self.assertEqual(safety_module.build(1)['held'], [])
             self.assertEqual(safety_module.flagged_uids(1), set())
+
+
+class Story(unittest.TestCase):
+    def test_long_runs_of_plain_matches_collapse_and_flagged_steps_stay(self):
+        import high_risk
+        plain = {'flags': [], 'held': False, 'types': ['Insults'], 'text': 'x', 'when': ''}
+        flagged = {'flags': ['R'], 'held': False, 'types': [], 'text': 'y', 'when': ''}
+        held = {'flags': [], 'held': True, 'types': ['Threats'], 'text': 'z', 'when': ''}
+        out = high_risk._collapse([flagged] + [dict(plain) for _ in range(6)] + [held])
+        self.assertEqual([bool(n.get('run')) for n in out], [False, False, True, False])
+        self.assertEqual(out[2]['run'], 5)
+        self.assertEqual(high_risk._after(0, True), 'at once')
+        self.assertEqual(high_risk._after(14, True), 'after 14 min')
+        self.assertEqual(high_risk._after(3, False), 'after 3 messages')
 
 
 if __name__ == '__main__':

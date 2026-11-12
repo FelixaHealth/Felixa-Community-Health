@@ -87,8 +87,8 @@ def build(aid, safety=None) -> dict:
             else:
                 none.append(b)
         rows.sort(key=lambda r: -r['count'])
-        cats.append({'name': name, 'count': sum(r['count'] for r in rows), 'behaviours': rows, 'none': none, 'readable': any(b in READ for b in behs)})
-    return {'categories': cats, 'messages': len(all_uids) + len(texts), 'behaviours': sum(len(c['behaviours']) for c in cats), 'hit_categories': sum(1 for c in cats if c['count']),
+        cats.append({'name': name, 'count': sum(r['count'] for r in rows), 'messages': len({(x['uid'] if x['uid'] is not None else x['text']) for r in rows for x in r['quotes']}), 'behaviours': rows, 'none': none, 'readable': any(b in READ for b in behs)})
+    return {'categories': cats, 'matches': sum(c['count'] for c in cats), 'messages': len(all_uids) + len(texts), 'behaviours': sum(len(c['behaviours']) for c in cats), 'hit_categories': sum(1 for c in cats if c['count']),
             'uids': all_uids, 'by_uid': by_uid, 'cat_of': cat_of, 'unread_categories': [c['name'] for c in cats if not c['readable']], 'unread_behaviours': TOTAL - len(READ), 'total': TOTAL, 'n_categories': len(CATEGORIES)}
 
 
@@ -241,10 +241,11 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
         if d['k'] % lab_step == 0 or d['k'] == n - 1:
             a += f'<text x="{d["k"] * bw + bw / 2:.0f}" y="172" text-anchor="middle">{_E(d["label"])}</text>'
     svg_a = f'<svg class="hr-over" viewBox="0 0 {W} {H}" role="img" aria-label="Messages found in each bar, with flags">{a}</svg>'
-    rows = [c for c, _b in CATEGORIES if any(cat_of.get(b) == c for u in ordered if u['id'] in uids for b in by_uid.get(u['id'], []))]
+    type_count = Counter(bname for u in ordered if u['id'] in uids for bname in by_uid.get(u['id'], []))
+    rows = [bname for _c, bs in CATEGORIES for bname in bs if type_count.get(bname)]
     svg_b = ''
     if rows:
-        top, rowh, lab = 44, 34, 150
+        top, rowh, lab = 44, 30, 150
         Wb = 640
         cw = (Wb - lab) / n
         Hb = top + rowh * len(rows) + 34
@@ -256,16 +257,24 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
                 b += f'<text x="{cx:.0f}" y="{Hb - 10}" text-anchor="middle">{_E(d["label"])}</text>'
             for j, f in enumerate(d['flags']):
                 b += _flag(cx + (j * 17 - (len(d['flags']) - 1) * 8), top - 12, f)
-        for r, c in enumerate(rows):
+        for r, name in enumerate(rows):
             y = top + r * rowh + rowh / 2
-            b += f'<text x="0" y="{y + 4:.0f}">{_E(c if len(c) < 24 else c[:22] + "…")}</text><line x1="{lab}" y1="{y:.0f}" x2="{Wb}" y2="{y:.0f}" stroke="#f1ecdd"/>'
+            b += f'<text x="0" y="{y + 4:.0f}">{_E(name if len(name) < 24 else name[:22] + "…")}</text><line x1="{lab}" y1="{y:.0f}" x2="{Wb}" y2="{y:.0f}" stroke="#f1ecdd"/>'
+        dots = ''
         for k, g in enumerate(groups):
             for pos, i in enumerate(g):
                 u = ordered[i]
-                for bname in by_uid.get(u['id'], [])[:1]:
-                    r = rows.index(cat_of[bname])
-                    b += f'<circle data-g="highrisk" cx="{lab + k * cw + (pos + .5) / len(g) * cw:.0f}" cy="{top + r * rowh + rowh / 2:.0f}" r="6" fill="#1f3a2e" opacity=".85"><title>{_E(bname)}: {_E(str(u["text"] or "")[:80])}</title></circle>'
-        svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Which behaviour, when, with flags">{b}</svg>'
+                mine = [x for x in by_uid.get(u['id'], []) if x in rows]
+                if not mine:
+                    continue
+                cx = lab + k * cw + (pos + .5) / len(g) * cw
+                ys = [top + rows.index(x) * rowh + rowh / 2 for x in mine]
+                if len(ys) > 1:                         # one message with several types: the dots are joined by a line
+                    b += f'<line data-g="highrisk" x1="{cx:.0f}" y1="{min(ys):.0f}" x2="{cx:.0f}" y2="{max(ys):.0f}" stroke="#1f3a2e" stroke-width="2" opacity=".55"/>'
+                text = _E(str(u['text'] or '')[:120])
+                for x, yy in zip(mine, ys):
+                    dots += f'<circle data-g="highrisk" cx="{cx:.0f}" cy="{yy:.0f}" r="6" fill="#1f3a2e" opacity=".9"><title>{_E(x)}: {text}</title></circle>'
+        svg_b = f'<svg class="hr-over" viewBox="0 0 {Wb} {Hb}" role="img" aria-label="Each match by type, when, with flags">{b}{dots}</svg>'
     return {'svg_a': svg_a, 'svg_b': svg_b, 'days': days, 'has_flags': any(d['flags'] for d in days), 'n': n, 'by_incident': mode == 'incident', 'mode': mode, 'used': used, 'timed': timed,
             'gap': f'{incidents.DEFAULT_GAP} minutes' if timed else f'{incidents.QUIET_MESSAGES} messages'}
 
@@ -295,3 +304,101 @@ def annotate(aid, found) -> dict:
         item['hr'] = c.most_common()
         item['hr_n'] = n
     return by_uid
+
+
+# ---- the story of each incident: what led to the black flag, how long it lasted, how soon it calmed -------------------------------------------------------
+BANTER_TONES = ('Funny', 'Polite', 'Encouraging', 'Empathetic')
+
+
+def _after(n, timed) -> str:
+    return 'at once' if int(n) <= 0 else 'after ' + _span(n, timed)
+
+
+def _span(n, timed) -> str:
+    n = int(n)
+    if timed:
+        return 'at once' if n <= 0 else (f'{n} min' if n < 120 else f'{n // 60} h {n % 60} min' if n % 60 else f'{n // 60} h')
+    return 'at once' if n <= 0 else f'{n} message{"" if n == 1 else "s"}'
+
+
+def _collapse(nodes, keep=2) -> list:
+    """A long run of plain matches (no flag, not held) becomes one line that opens to its quotes: the story stays short."""
+    out, run = [], []
+
+    def close():
+        if len(run) > keep + 1:
+            out.extend(run[:1])
+            rest = run[1:]
+            out.append({'run': len(rest), 'texts': [{'text': x['text'], 'when': x['when'], 'types': x['types']} for x in rest], 'flags': [], 'types': [], 'held': False})
+        else:
+            out.extend(run)
+        run.clear()
+    for n in nodes:
+        if n['flags'] or n['held']:
+            close()
+            out.append(n)
+        else:
+            run.append(n)
+    close()
+    return out
+
+
+def stories(aid, hr) -> dict:
+    """{'cards': [...], 'outside': {...} or None}: each escalation incident as a line of steps (first heated message, turn into conflict, High Risk matches, calm) with the
+    facts under it; and the High Risk messages that sit in no escalation incident. A node is {'flags': ['Y','R','D'], 'tones', 'types', 'held', 'banter', 'text', 'when'}.
+    `held` is the black flag: the message is kept for a person to read in Review. A match that is not held is only a match."""
+    import incidents
+    try:
+        import safety_module
+        held = safety_module.flagged_uids(aid) if safety_module.AVAILABLE else set()
+    except Exception:
+        held = set()
+    units = store.rated_text_units(aid)
+    by_uid = hr['by_uid']
+    rated = {u['id']: u['ratings'] for u in units}
+    placed, cards = set(), []
+    for inc in incidents.find(units):
+        timed, start = inc['timed'], inc['start']
+        offset = (lambda r: round((r['when'] - start['when']).total_seconds() / 60.0)) if timed else (lambda r: r['i'] - start['i'])
+        nodes, first_held, first_match = [], None, None
+        for r in inc['rows']:
+            uid = r.get('uid')
+            types = list(by_uid.get(uid, []))
+            flags = (['Y'] if r.get('role') in ('start', 'start-turn') else []) + (['R'] if r.get('role') in ('turn', 'start-turn') else []) + (['D'] if r.get('calm_mark') else [])
+            if not (types or flags):
+                continue
+            ok = uid in held
+            pos = [t for t in BANTER_TONES if int((rated.get(uid) or {}).get(t) or 0) >= 2]
+            if types:
+                placed.add(uid)
+                first_match = offset(r) if first_match is None else first_match
+                if ok and first_held is None:
+                    first_held = offset(r)
+            nodes.append({'flags': flags, 'tones': (list(r.get('tags') or []) if not r.get('calm_mark') else list(r.get('calm_tags') or [])) if flags else [], 'types': types, 'held': ok,
+                          'banter': bool(types and int((rated.get(uid) or {}).get('Funny') or 0) >= 2), 'positive': pos, 'text': r['text'], 'when': r['when'].strftime('%H:%M') if timed else ''})
+        found_nodes = nodes
+        nodes = _collapse(nodes)
+        facts = []
+        facts.append(('Conflict lasted' if inc['turn'] else 'Heated for', _span(inc['minutes'] if timed else inc['messages'], timed)))
+        if first_held is not None:
+            facts.append(('Black flag', _after(first_held, timed)))
+        elif first_match is not None:
+            facts.append(('First High Risk match', _after(first_match, timed)))
+        c = inc['calm']
+        if c:
+            after = c['minutes_after'] if timed else c['i'] - inc['end']['i']
+            facts.append(('Calmed', ('right after' if int(after) <= 0 else _span(after, timed) + ' after') + ' the last heated message' + (', and it held' if c['held'] else ', but the heat came back')))
+        else:
+            facts.append(('Calmed', 'not yet'))
+        cards.append({'n': inc['n'], 'when': inc['when'], 'level': inc['level'], 'nodes': nodes, 'facts': facts, 'matches': sum(1 for x in found_nodes if x['types']), 'held': sum(1 for x in found_nodes if x['held'])})
+    outside = None
+    rest = []
+    for u in store.units_for(aid):
+        if u['id'] in by_uid and u['id'] not in placed:
+            pos = [t for t in BANTER_TONES if int((rated.get(u['id']) or {}).get(t) or 0) >= 2]
+            rest.append({'flags': [], 'tones': [], 'types': list(by_uid[u['id']]), 'held': u['id'] in held, 'banter': int((rated.get(u['id']) or {}).get('Funny') or 0) >= 2, 'positive': pos,
+                         'text': ' '.join(str(u['text'] or '').split()), 'when': _when(u)})
+    if rest:
+        outside = {'nodes': rest, 'matches': len(rest), 'held': sum(1 for x in rest if x['held'])}
+    best = max(cards, key=lambda c: (c['held'], c['matches'], -c['n']), default=None)
+    return {'cards': cards, 'outside': outside, 'open': best['n'] if best else None}
