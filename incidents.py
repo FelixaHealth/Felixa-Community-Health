@@ -56,7 +56,7 @@ def messages(units):
     out = []
     for i, (u, s) in enumerate(zip(ordered, stamps)):
         f = measures.message_flags(u['ratings'])
-        calming = (not f['heated']) and u.get('id') not in blocked and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
+        calming = (not f['heated']) and u.get('id') not in blocked and 'fake_apology' not in (u.get('labels') or ()) and any(int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN for a in CALMING_TONES)
         out.append({'i': i, 'uid': u.get('id'), 'text': ' '.join(str(u.get('text') or '').split()), 'when': s, 'heated': bool(f['heated']), 'hostile': bool(f['hostile']),
                     'calming': calming, 'calm_tags': [a for a in CALMING_TONES if int(u['ratings'].get(a) or 0) >= measures.FLAG_MIN], 'tags': _tags(u['ratings']), 'source': u.get('source') or ''})
     return out, basis == 'time'

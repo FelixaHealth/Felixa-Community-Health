@@ -152,7 +152,7 @@ ADDED_COLUMNS = {'analyses': [('vibe_sensitivity', "TEXT DEFAULT 'medium'"), ('r
                               ('user_role', 'TEXT'), ('check_volume', 'INTEGER'), ('incognito', 'INTEGER DEFAULT 0'), ('engine', 'TEXT'), ('period_tz', 'INTEGER'), ('cloud_ok', 'INTEGER DEFAULT 0'),
                               ('members', 'INTEGER'), ('time_zone', 'TEXT')], 'jobs': [('cancel_requested', 'INTEGER DEFAULT 0')],
                  'sources': [('content_hash', 'TEXT')], 'measure_history': [('gen', 'INTEGER')],
-                 'communication_units': [('sender', 'TEXT'), ('reply_to', 'TEXT')]}
+                 'communication_units': [('sender', 'TEXT'), ('reply_to', 'TEXT'), ('reading', 'TEXT')]}
 
 
 @contextlib.contextmanager
@@ -364,20 +364,36 @@ def timestamp_span(aid):
     return (min(stamps), max(stamps)) if stamps else None
 
 
+def ensure_readings(aid):
+    """Reads the wording of every message of the analysis that has not been read yet, once, and saves the labels of the context rules (`context_rules`): 'mention', 'self',
+    'fake_apology', or '-' for none. Only these labels leave this function: the measures still never see a message text."""
+    import context_rules
+    with db() as c:
+        todo = c.execute('SELECT id, text FROM communication_units WHERE analysis_id=? AND reading IS NULL', (aid,)).fetchall()
+        for row in todo:
+            c.execute('UPDATE communication_units SET reading=? WHERE id=?', (context_rules.encode(context_rules.classify(row['text'])), row['id']))
+
+
 def rated_units(aid) -> list:
     """The units of an analysis that have at least one signal rating, in upload order: [{'id', 'timestamp', 'ratings': {signal: 0..3}}].
     A unit with no rating at all is left out. A unit with only some of its 13 ratings is returned with the ones it has, and `measures.analyse` leaves out
-    the incomplete ones and counts them (`m['incomplete']`). No message text is read."""
+    the incomplete ones and counts them (`m['incomplete']`). No message text is read here: a message that only mentions an insult, or aims it at the speaker, comes back with its
+    open-hostility tones at 0 (the context rules were read from its wording when it was first seen; see `ensure_readings`)."""
+    import context_rules
+    ensure_readings(aid)
     with db() as c:
-        rows = c.execute('SELECT cu.id, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
+        rows = c.execute('SELECT cu.id, cu.timestamp, cu.reading, ur.attribute, ur.rating FROM communication_units cu '
                          'JOIN unit_ratings ur ON ur.unit_id=cu.id WHERE cu.analysis_id=? ORDER BY cu.id', (aid,)).fetchall()
-    units, by_id = [], {}
+    units, by_id, labels = [], {}, {}
     for row in rows:
         unit = by_id.get(row['id'])
         if unit is None:
             unit = by_id[row['id']] = {'id': row['id'], 'timestamp': row['timestamp'] or '', 'ratings': {}}
             units.append(unit)
+            labels[row['id']] = context_rules.labels_from(row['reading'])
         unit['ratings'][row['attribute']] = row['rating']
+    for unit in units:                                          # a unit stays an id, a date and ratings: the labels are used here and not handed on
+        unit['ratings'] = context_rules.apply(unit['ratings'], labels[unit['id']])
     return units
 
 
@@ -450,17 +466,22 @@ def add_upload(aid, name: str, units, digest: str):
 
 
 def rated_text_units(aid) -> list:
-    """The rated messages with their text, for the flags: [{'id', 'text', 'source', 'timestamp', 'ratings': {signal: 0..3}}], in upload order."""
+    """The rated messages with their text, for the flags: [{'id', 'text', 'source', 'timestamp', 'labels', 'ratings': {signal: 0..3}}], in upload order. The ratings are read through the
+    context rules, as in `rated_units`; `labels` says which rules applied."""
+    import context_rules
+    ensure_readings(aid)
     with db() as c:
-        rows = c.execute('SELECT cu.id, cu.text, cu.source_label, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
+        rows = c.execute('SELECT cu.id, cu.text, cu.reading, cu.source_label, cu.timestamp, ur.attribute, ur.rating FROM communication_units cu '
                          'JOIN unit_ratings ur ON ur.unit_id=cu.id WHERE cu.analysis_id=? ORDER BY cu.id', (aid,)).fetchall()
     units, by_id = [], {}
     for row in rows:
         unit = by_id.get(row['id'])
         if unit is None:
-            unit = by_id[row['id']] = {'id': row['id'], 'aid': aid, 'text': row['text'] or '', 'source': row['source_label'] or '', 'timestamp': row['timestamp'] or '', 'ratings': {}}
+            unit = by_id[row['id']] = {'id': row['id'], 'aid': aid, 'text': row['text'] or '', 'source': row['source_label'] or '', 'timestamp': row['timestamp'] or '', 'labels': sorted(context_rules.labels_from(row['reading'])), 'ratings': {}}
             units.append(unit)
         unit['ratings'][row['attribute']] = row['rating']
+    for unit in units:
+        unit['ratings'] = context_rules.apply(unit['ratings'], unit['labels'])
     return units
 
 

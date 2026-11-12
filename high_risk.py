@@ -37,14 +37,16 @@ _MATCHED: dict = {}
 def matched_uids(aid) -> set:
     """The messages that carry a High Risk match found without the held-item detectors (Vibe Check flags and the cyber rules): such a message is never counted as the calming step of an
     incident, whatever its tone. Kept per chat until its messages or its Vibe Check flags change."""
+    store.ensure_readings(aid)
     base = store.units_for(aid) or []
+    neutral = {u['id'] for u in base if {'mention', 'self'} & {x for x in str(u.get('reading') or '').split(',')}}
     vibe = store.latest_vibe(aid) or {}
     flagged = (vibe.get('flagged') or []) if vibe.get('status') == 'ok' else []
-    key = (aid, len(base), len(flagged))
+    key = (aid, len(base), len(flagged), len(neutral))
     if _MATCHED.get('key') == key:
         return _MATCHED['uids']
     by_text = {' '.join((u['text'] or '').split()): u['id'] for u in base}
-    uids = {by_text[t] for t in (' '.join(str(f.get('message') or '').split()) for f in flagged if VIBE.get(f.get('type'))) if t in by_text}
+    uids = {by_text[t] for t in (' '.join(str(f.get('message') or '').split()) for f in flagged if VIBE.get(f.get('type'))) if t in by_text} - neutral
     uids |= {u['id'] for u in base if cyber_rules.scan(u['text'] or '')}
     uids |= set(cyber_rules.flooding(base))
     _MATCHED.clear()
@@ -64,6 +66,7 @@ def build(aid, safety=None) -> dict:
         key = uid if uid is not None else text
         slot.setdefault(key, {'text': ' '.join(str(text or '').split()), 'when': when, 'source': source, 'uid': uid})
 
+    neutral = {u['id'] for u in units if {'mention', 'self'} & set(u.get('labels') or ())}          # a mentioned insult, or one aimed at the speaker, is not a match
     for u in units:
         for tone, beh in TONE.items():
             if (u['ratings'].get(tone) or 0) >= 2:
@@ -74,6 +77,8 @@ def build(aid, safety=None) -> dict:
         if beh:
             text = ' '.join(str(f.get('message') or '').split())
             uid = by_text.get(text)
+            if uid in neutral:
+                continue
             add(beh, uid, text, str(f.get('timestamp') or '')[:16].replace('T', ' '), f.get('source') or '')
     ordered = list(base.values())
     for u in ordered:                                           # the word and link rules of Cyber Attacks & Security Threats
