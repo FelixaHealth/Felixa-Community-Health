@@ -53,7 +53,17 @@ def escalation_flags(m):
             base, climb = None, 0.0
             level = 'red' if (m['verdicts'] and value >= OPEN_RED and h >= RED_MIN) else 'yellow' if (value >= OPEN_YELLOW and h >= YELLOW_MIN) else ''
         else:
-            before = stretches[max(0, i - measures.BASELINE_STRETCHES):i]
+            lo = max(0, i - measures.BASELINE_STRETCHES)
+            for j in range(i, lo, -1):                          # a gap of quiet time ends the recent level: the bars before it are not compared
+                if stretches[j].get('after_gap'):
+                    lo = j
+                    break
+            before = stretches[lo:i]
+            if not before:                                      # the first bar after a gap has no recent level: it is read like the first bar of the chat
+                value_here = value
+                level = 'red' if (m['verdicts'] and value_here >= OPEN_RED and h >= RED_MIN) else 'yellow' if (value_here >= OPEN_YELLOW and h >= YELLOW_MIN) else ''
+                out.append({'i': i, 'level': level, 'value': value, 'base': None, 'climb': 0.0, 'count': h, 'n': n})
+                continue
             base = 100.0 * sum(s['counts']['heated'] for s in before) / max(1, sum(s['n'] for s in before))
             climb = value - base
             counted = bool(st.get('counted'))

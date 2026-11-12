@@ -84,6 +84,22 @@ if __name__ == '__main__':
     unittest.main()
 
 
+class Gaps(unittest.TestCase):
+    def test_the_level_before_a_gap_is_not_the_recent_level_after_it(self):
+        # a hot hour, 20 quiet hours (no bar at all), then another hot hour: the second one must be flagged by itself, not measured against the first
+        plan = [(30, CALM, 2, 0), (12, HOT, 1, 0), (6, CALM, 2, 0), (12, HOT, 1, 20 * 60)]
+        u = units(plan)
+        m = measures.analyse(u, today=datetime.date(2026, 3, 20))
+        r = timeframes.rebase(m, u, 'time', 60)
+        bars = r['m']['stretches']
+        gap_bars = [i for i, s in enumerate(bars) if s.get('after_gap')]
+        self.assertTrue(gap_bars, 'the bar after the 20 quiet hours says it follows a gap')
+        flags = track.escalation_flags(r['m'])
+        after = gap_bars[0]
+        self.assertIsNone(flags[after]['base'], 'no recent level across a gap')
+        self.assertTrue(flags[after]['level'], 'the second hot hour is flagged on its own')
+
+
 class Messages(unittest.TestCase):
     def test_a_chat_with_times_can_also_be_cut_by_messages(self):
         u = units(PLAN)

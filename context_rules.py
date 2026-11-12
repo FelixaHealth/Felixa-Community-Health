@@ -32,11 +32,18 @@ _SELF_TALK = re.compile(r"\b(?:i hate myself|i suck|my stupid|i'm so dumb|stupid
 _SECOND_PERSON = re.compile(r"\byou(?:'re|’re| are| r|rself)?\b|\bu\s*r\b|\byour\b", re.I)
 # 3. fake apology: starts like repair, then attacks or brushes off
 _FAKE = [
-    re.compile(rf"\b(?:{_APOLOGY}|no offen[cs]e|with all due respect|don'?t take this the wrong way|not to be rude|i hate to say)\b[^.!?]{{0,25}}\bbut\b", re.I),     # sorry, but ... / no offense, but ...
-    re.compile(r"\bwith all due respect\b", re.I),                                                                          # a brush-off before an attack
-    re.compile(r"\bsorry\s+(?:that\s+|if\s+|you\s+|u\s+)(?:you\s+|u\s+)?(?:feel|felt|are|'re|re|think|got|take|took|can't|cannot|don't|didn't|couldn't)\b", re.I),   # sorry you feel that way / sorry if you are offended
-    re.compile(r"\b(?:sorry|apolog\w+)\b[^.!?]{0,30}\b(?:you(?:'re| are)|u r)\s+(?:so\s+|too\s+|just\s+)?(?:" + HOSTILE_WORDS + r"|sensitive|slow|dense|weak)\b", re.I),   # sorry you are so sensitive
+    re.compile(rf"\b{_APOLOGY}\b[^.!?]{{0,25}}\bbut\b[^.!?]*\b(?:you|your|you're|u|ur)\b", re.I),                                 # sorry, but you ... (a "but" about oneself is only an excuse: "sorry, but I can't join")
+    re.compile(r"\b(?:no offen[cs]e|with all due respect|don'?t take this the wrong way|not to be rude|i hate to say)\b", re.I),   # a brush-off before an attack
+    re.compile(r"\bsorry,?\s+not\s+sorry\b|\bnot\s+(?:even\s+)?sorry\b", re.I),
+    re.compile(r"\bsorry,?\s+(?:that\s+)?(?:if\s+)?you(?:'re|’re| are| were)?\s+(?:so\s+|too\s+)?(?:offended|upset|sensitive|mad|slow|dense|weak|hurt by)\b", re.I),   # sorry you are so sensitive
+    re.compile(r"\bsorry\s+(?:that\s+)?you\s+(?:feel|felt)\s+(?:that\s+way|like that)\b|\bsorry\s+you\s+(?:can'?t|cannot|couldn'?t)\s+(?:take|handle)\b|\bsorry\s+if\s+you\b", re.I),   # sorry you feel that way / sorry if you ...
+    re.compile(rf"\b{_APOLOGY}\b,?\s+(?:that\s+)?(?:you(?:'re| are)|u r)\s+(?:so\s+|too\s+|just\s+)?(?:" + HOSTILE_WORDS + r")\b", re.I),   # sorry you are pathetic
 ]
+# a plain complaint about being called something, and a quoted insult, are about the words too
+_COMPLAINT = re.compile(r"\b(?:don'?t|do not|stop|quit|never|why (?:did|would|do) (?:you|he|she|they))\s+(?:you\s+)?call(?:ing)?\s+(?:me|him|her|them|us|people|anyone)\b", re.I)
+_QUOTED = re.compile(r"\b(?:sa(?:id|ys|ying)|wr(?:ote|ites)|text(?:ed|s)|sent|posted|replied|called)\b\s*[:,]?\s*[“\"'‘][^“\"'”’]{3,}[”\"'’]", re.I)
+_REPORT_CLAUSE = re.compile(rf"\b(?:{_REPORTING}|{_APOLOGY})\b[^,;.!?]*?(?=\s+(?:and|but)\s+|[,;.!?]|$)", re.I)
+_DIRECT = re.compile(rf"\byou(?:'re|’re| are| r)\s+(?:so\s+|such\s+|really\s+)?(?:an?\s+)?(?:{HOSTILE_WORDS}|one(?:\s+too)?)\b|\byou\s+(?:{HOSTILE_WORDS})\b|\bshut up\b", re.I)
 
 
 def classify(text) -> set:
@@ -48,8 +55,9 @@ def classify(text) -> set:
     fake = any(p.search(t) for p in _FAKE)
     if fake:
         out.add('fake_apology')
-    elif any(p.search(t) for p in _MENTION):
-        out.add('mention')
+    elif any(p.search(t) for p in _MENTION) or _COMPLAINT.search(t) or _QUOTED.search(t):
+        if not _DIRECT.search(_REPORT_CLAUSE.sub(' ', t)):         # a mention that also insults the reader ("he called me an idiot and you're one too") is not a mention
+            out.add('mention')
     if not out and (_SELF.search(t) or _SELF_TALK.search(t)) and not _SECOND_PERSON.search(re.sub(_SELF, '', t)):
         out.add('self')
     return out

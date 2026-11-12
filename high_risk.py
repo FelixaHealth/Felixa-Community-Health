@@ -4,6 +4,8 @@ Three readers feed it: the Vibe Check flags, the Aggressive tone of the 13 tones
 a zero never means "checked and clear" for those. Held items and questions are not here: they live on the Review page."""
 from __future__ import annotations
 
+import re
+
 import cyber_rules
 import store
 
@@ -27,8 +29,15 @@ TONE = {'Aggressive': 'Aggression'}
 READ = set(VIBE.values()) | set(FBSI.values()) | set(TONE.values()) | set(cyber_rules.BEHAVIOURS)
 
 
-def _when(u) -> str:
-    return (u.get('timestamp') or '')[:16].replace('T', ' ')
+def _incognito(aid) -> bool:
+    a = store.get_analysis(aid)
+    return bool(a and a['incognito'])
+
+
+def _when(u, hide=False) -> str:
+    """The date and time of a message; only the date while Incognito is on (no clock time may leave this module then)."""
+    t = (u.get('timestamp') or '')[:16].replace('T', ' ')
+    return t[:10] if hide else t
 
 
 _MATCHED: dict = {}
@@ -45,8 +54,10 @@ def matched_uids(aid) -> set:
     key = (aid, len(base), len(flagged), len(neutral))
     if _MATCHED.get('key') == key:
         return _MATCHED['uids']
-    by_text = {' '.join((u['text'] or '').split()): u['id'] for u in base}
-    uids = {by_text[t] for t in (' '.join(str(f.get('message') or '').split()) for f in flagged if VIBE.get(f.get('type'))) if t in by_text} - neutral
+    by_text: dict = {}
+    for u in base:
+        by_text.setdefault(' '.join((u['text'] or '').split()), []).append(u['id'])
+    uids = {i for t in (' '.join(str(f.get('message') or '').split()) for f in flagged if VIBE.get(f.get('type'))) for i in by_text.get(t, [])} - neutral
     uids |= {u['id'] for u in base if cyber_rules.scan(u['text'] or '')}
     uids |= set(cyber_rules.flooding(base))
     _MATCHED.clear()
@@ -58,7 +69,10 @@ def build(aid, safety=None) -> dict:
     """{'categories': [{'name','count','behaviours':[{'name','count','quotes':[{'text','when','source','uid'}]}],'none':[names]}], 'messages', 'behaviours', 'hit_categories', 'by_uid', 'unread_categories'}"""
     units = store.rated_text_units(aid) or []
     base = {u['id']: u for u in store.units_for(aid)}
-    by_text = {' '.join((u['text'] or '').split()): u['id'] for u in base.values()}
+    by_text: dict = {}
+    for u in base.values():                                     # two messages with the same words are both found
+        by_text.setdefault(' '.join((u['text'] or '').split()), []).append(u['id'])
+    hide = _incognito(aid)
     found: dict = {}
 
     def add(beh, uid, text, when, source):
@@ -70,23 +84,24 @@ def build(aid, safety=None) -> dict:
     for u in units:
         for tone, beh in TONE.items():
             if (u['ratings'].get(tone) or 0) >= 2:
-                add(beh, u['id'], u['text'], _when(u), u['source'])
+                add(beh, u['id'], u['text'], _when(u, hide), u['source'])
     vibe = store.latest_vibe(aid)
     for f in ((vibe or {}).get('flagged') or []) if (vibe or {}).get('status') == 'ok' else []:
         beh = VIBE.get(f.get('type'))
         if beh:
             text = ' '.join(str(f.get('message') or '').split())
-            uid = by_text.get(text)
-            if uid in neutral:
-                continue
-            add(beh, uid, text, str(f.get('timestamp') or '')[:16].replace('T', ' '), f.get('source') or '')
+            when = str(f.get('timestamp') or '')[:16].replace('T', ' ')
+            for uid in (by_text.get(text) or [None]):
+                if uid in neutral:
+                    continue
+                add(beh, uid, text, when[:10] if hide else when, f.get('source') or '')
     ordered = list(base.values())
     for u in ordered:                                           # the word and link rules of Cyber Attacks & Security Threats
         for f in cyber_rules.scan(u['text']):
-            add(f['behaviour'], u['id'], u['text'], _when(u), u.get('source_label') or '')
+            add(f['behaviour'], u['id'], u['text'], _when(u, hide), u.get('source_label') or '')
     for uid in cyber_rules.flooding(ordered):                   # the same line, again and again
         u = base[uid]
-        add('Raids and Flooding', uid, u['text'], _when(u), u.get('source_label') or '')
+        add('Raids and Flooding', uid, u['text'], _when(u, hide), u.get('source_label') or '')
     if safety:
         for it in safety.get('items', []):
             beh = FBSI.get(it['detector'])
@@ -94,7 +109,7 @@ def build(aid, safety=None) -> dict:
                 for uid in it['uids']:
                     u = base.get(uid)
                     if u:
-                        add(beh, uid, u['text'], _when(u), u.get('source_label') or '')
+                        add(beh, uid, u['text'], _when(u, hide), u.get('source_label') or '')
     cat_of = {b: c for c, bs in CATEGORIES for b in bs}
     by_uid: dict = {}
     for beh, slot in found.items():
@@ -209,6 +224,7 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
     import incidents
     import measures
     uids, by_uid, cat_of = hr['uids'], hr['by_uid'], hr['cat_of']
+    hide = _incognito(aid)
     try:
         import safety_module
         held = safety_module.flagged_uids(aid) if safety_module.AVAILABLE else set()
@@ -236,17 +252,17 @@ def over_time(aid, hr, mode='incident', minutes=0) -> dict:
         mine = [ordered[i] for i in g]
         incs = {inc_of[u['id']]['n']: inc_of[u['id']] for u in mine if u['id'] in inc_of}
         fl = (['Y'] if incs else []) + (['R'] if any(x['turn'] is not None for x in incs.values()) else []) + (['D'] if any(x['calm'] for x in incs.values()) else [])
-        q = [{'text': ' '.join(str(u['text'] or '').split()), 'when': stamps[i].strftime('%H:%M') if timed else '', 'behaviour': ', '.join(by_uid.get(u['id'], [])),
+        q = [{'text': ' '.join(str(u['text'] or '').split()), 'when': stamps[i].strftime('%H:%M') if timed and not hide else '', 'behaviour': ', '.join(by_uid.get(u['id'], [])),
               'inc': inc_of[u['id']]['n'] if u['id'] in inc_of else None,
               'turn': bool(u['id'] in inc_of and inc_of[u['id']]['turn'] is not None and inc_of[u['id']]['turn'].get('uid') == u['id'])} for i, u in zip(g, mine)]
         if mode == 'time':
             st = starts[k]
-            label = 'All time' if not used else (f'{st:%b %-d}' if used >= 1440 else f'{st:%b %-d %H:%M}')
-            span = 'the whole chat' if not used else f'{st:%b %-d %H:%M} for {used // 60} h' if used >= 60 and used % 60 == 0 else f'{st:%b %-d %H:%M} for {used} min'
+            label = 'All time' if not used else (f'{st:%b %-d}' if used >= 1440 or hide else f'{st:%b %-d %H:%M}')
+            span = 'the whole chat' if not used else f'{st:%b %-d}' if hide else f'{st:%b %-d %H:%M} for {used // 60} h' if used >= 60 and used % 60 == 0 else f'{st:%b %-d %H:%M} for {used} min'
         elif timed:
             a, b = stamps[g[0]], stamps[g[-1]]
             label = f'Incident {k + 1}'
-            span = f'{a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if len(g) > 1 and a.date() == b.date() else (f' to {b:%b %-d %H:%M}' if len(g) > 1 else ''))
+            span = f'{a:%b %-d}' if hide else f'{a:%b %-d %H:%M}' + (f' to {b:%H:%M}' if len(g) > 1 and a.date() == b.date() else (f' to {b:%b %-d %H:%M}' if len(g) > 1 else ''))
         else:
             label = f'Incident {k + 1}'
             span = f'messages {g[0] + 1} to {g[-1] + 1}' if len(g) > 1 else f'message {g[0] + 1}'
@@ -389,26 +405,30 @@ def stories(aid, hr) -> dict:
     units = store.rated_text_units(aid)
     by_uid = hr['by_uid']
     rated = {u['id']: u['ratings'] for u in units}
-    placed, cards = set(), []
+    hide = _incognito(aid)
+    placed, shown, cards = set(), set(), []
     for inc in incidents.find(units):
         timed, start = inc['timed'], inc['start']
         offset = (lambda r: round((r['when'] - start['when']).total_seconds() / 60.0)) if timed else (lambda r: r['i'] - start['i'])
         nodes, first_held, first_match = [], None, None
         for r in inc['rows']:
             uid = r.get('uid')
+            if not r.get('inside') and uid in shown:                  # context around this incident that an earlier incident already shows
+                continue
             types = list(by_uid.get(uid, []))
             flags = (['Y'] if r.get('role') in ('start', 'start-turn') else []) + (['R'] if r.get('role') in ('turn', 'start-turn') else []) + (['D'] if r.get('calm_mark') else [])
             if not (types or flags):
                 continue
             ok = uid in held
             pos = [t for t in BANTER_TONES if int((rated.get(uid) or {}).get(t) or 0) >= 2]
+            shown.add(uid)
             if types:
                 placed.add(uid)
                 first_match = offset(r) if first_match is None else first_match
                 if ok and first_held is None:
                     first_held = offset(r)
             nodes.append({'flags': flags, 'tones': (list(r.get('tags') or []) if not r.get('calm_mark') else list(r.get('calm_tags') or [])) if flags else [], 'types': types, 'held': ok,
-                          'banter': bool(types and int((rated.get(uid) or {}).get('Funny') or 0) >= 2), 'positive': pos, 'text': r['text'], 'when': r['when'].strftime('%H:%M') if timed else ''})
+                          'banter': bool(types and int((rated.get(uid) or {}).get('Funny') or 0) >= 2), 'positive': pos, 'text': r['text'], 'when': r['when'].strftime('%H:%M') if timed and not hide else ''})
         found_nodes = nodes
         nodes = _collapse(nodes)
         facts = []
@@ -423,14 +443,14 @@ def stories(aid, hr) -> dict:
             facts.append(('Calmed', ('right after' if int(after) <= 0 else _span(after, timed) + ' after') + ' the last heated message' + (', and it held' if c['held'] else ', but the heat came back')))
         else:
             facts.append(('Calmed', 'not yet'))
-        cards.append({'n': inc['n'], 'when': inc['when'], 'level': inc['level'], 'nodes': nodes, 'facts': facts, 'matches': sum(1 for x in found_nodes if x['types']), 'held': sum(1 for x in found_nodes if x['held'])})
+        cards.append({'n': inc['n'], 'when': re.sub(r',?\s*\d{1,2}:\d{2}.*$', '', inc['when']) if hide else inc['when'], 'level': inc['level'], 'nodes': nodes, 'facts': facts, 'matches': sum(1 for x in found_nodes if x['types']), 'held': sum(1 for x in found_nodes if x['held'])})
     outside = None
     rest = []
     for u in store.units_for(aid):
         if u['id'] in by_uid and u['id'] not in placed:
             pos = [t for t in BANTER_TONES if int((rated.get(u['id']) or {}).get(t) or 0) >= 2]
             rest.append({'flags': [], 'tones': [], 'types': list(by_uid[u['id']]), 'held': u['id'] in held, 'banter': int((rated.get(u['id']) or {}).get('Funny') or 0) >= 2, 'positive': pos,
-                         'text': ' '.join(str(u['text'] or '').split()), 'when': _when(u)})
+                         'text': ' '.join(str(u['text'] or '').split()), 'when': _when(u, hide)})
     if rest:
         outside = {'nodes': rest, 'matches': len(rest), 'held': sum(1 for x in rest if x['held'])}
     best = max(cards, key=lambda c: (c['held'], c['matches'], -c['n']), default=None)

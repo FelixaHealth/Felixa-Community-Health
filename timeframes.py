@@ -154,6 +154,8 @@ def rebase(m, units, by='time', tf=0, gap=incidents.DEFAULT_GAP, flagged=()) -> 
             first = last = head
             axis, label = _label(head, out['used'], incognito, multi)
         stretches.append(_bar(i, positions, flags, label, axis, first, last, incognito, timed))
+        if by == 'time' and i and head - groups[i - 1][0] > _dt.timedelta(minutes=out['used']):
+            stretches[-1]['after_gap'] = True               # quiet stretches are left out of the bars: the level before the gap is not "recent" for the bar after it
     if by == 'time':
         _thin(stretches)
     hit = deescalation._reacting(msgs, timed)

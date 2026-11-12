@@ -44,6 +44,21 @@ CASES = [
     ("Thanks for the update", set()),
     ("That sounds really hard", set()),
     ("", set()),
+    # found by probing: real apologies and excuses are not fake; a mention that also insults the reader is not a mention
+    ("Sorry, but I can't join the call today", set()),
+    ("Sorry for the delay, but thanks for waiting", set()),
+    ("I'm sorry you got hurt", set()),
+    ("I'm sorry you feel hurt, that was my fault", set()),
+    ("Sorry not sorry, you are an idiot", {'fake_apology'}),
+    ("Sorry but you are wrong about everything", {'fake_apology'}),
+    ("Sorry if you were offended", {'fake_apology'}),
+    ("He called me an idiot and you're one too", set()),
+    ("sorry I said you're pathetic", {'mention'}),
+    ("Don't call me an idiot", {'mention'}),
+    ("Stop calling him stupid", {'mention'}),
+    ("Why did you call him an idiot?", {'mention'}),
+    ("He said: 'you are pathetic'", {'mention'}),
+    ("I said you were an idiot and I meant it", set()),
 ]
 
 
